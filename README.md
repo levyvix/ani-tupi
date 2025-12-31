@@ -50,7 +50,7 @@ Instala `ani-tupi` e `manga-tupi` como comandos globais - use em qualquer lugar 
 
 ```bash
 # Clone o repositório
-git clone https://github.com/eduardonery1/ani-tupi
+git clone https://github.com/levyvix/ani-tupi
 cd ani-tupi
 
 # Execute o instalador
@@ -80,7 +80,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh         # Linux/macOS
 # ou: irm https://astral.sh/uv/install.ps1 | iex        # Windows PowerShell
 
 # 2. Clone e instale
-git clone https://github.com/eduardonery1/ani-tupi
+git clone https://github.com/levyvix/ani-tupi
 cd ani-tupi
 uv tool install .
 ```
@@ -90,7 +90,7 @@ uv tool install .
 Para desenvolvedores - roda sem instalar globalmente:
 
 ```bash
-git clone https://github.com/eduardonery1/ani-tupi
+git clone https://github.com/levyvix/ani-tupi
 cd ani-tupi
 uv sync                # Instala dependências
 uv run ani-tupi        # Executa sem instalar
