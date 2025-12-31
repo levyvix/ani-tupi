@@ -88,13 +88,13 @@ class MenuScreen(Screen):
         border: solid #cba6f7;
     }
 
-    #menu-title {
-        background: #cba6f7;
-        color: #1e1e2e;
-        text-align: center;
-        text-style: bold;
+    #menu-subtitle {
+        background: #181825;
+        color: #cdd6f4;
+        text-align: left;
         padding: 1;
-        dock: top;
+        border: solid #6c7086;
+        margin-bottom: 1;
     }
 
     #menu-options {
@@ -181,14 +181,16 @@ class MenuScreen(Screen):
         if self.show_preview:
             with Horizontal():
                 with Container(id="menu-container"):
-                    yield Static(self.title_text, id="menu-title")
+                    if self.title_text and self.title_text != "Menu":
+                        yield Static(self.title_text, id="menu-subtitle")
                     yield self._create_option_list()
                     yield SearchInput()
 
                 yield PreviewPanel(id="preview-panel")
         else:
             with Container(id="menu-container"):
-                yield Static(self.title_text, id="menu-title")
+                if self.title_text and self.title_text != "Menu":
+                    yield Static(self.title_text, id="menu-subtitle")
                 yield self._create_option_list()
                 yield SearchInput()
 
@@ -253,11 +255,8 @@ class MenuScreen(Screen):
             self.app.exit(None)
 
     def action_quit(self) -> None:
-        """Handle quit action (Q key)"""
-        if self.mode == "exit_on_sair":
-            sys.exit(0)
-        else:
-            self.app.exit(None)
+        """Handle quit action (q key) - always exit to terminal"""
+        sys.exit(0)
 
     def action_toggle_search(self) -> None:
         """Toggle search input visibility"""
@@ -275,6 +274,14 @@ class MenuScreen(Screen):
             search_input.styles.display = "block"
             self.search_active = True
             search_input.focus()
+
+    def on_key(self, event) -> None:
+        """Handle key presses - allow arrow navigation during search"""
+        if self.search_active and event.key in ["down", "up"]:
+            # If search is active and user presses arrow keys, focus the option list
+            self.query_one("#menu-options", OptionList).focus()
+            # Don't prevent default - let the option list handle the arrow key
+            return
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle search input changes"""
@@ -338,6 +345,9 @@ class MenuScreen(Screen):
 
 class MenuApp(App):
     """Main menu application"""
+
+    # Set app title for header display
+    TITLE = "ani-tupi"
 
     # Disable animations for smoother transitions
     ENABLE_COMMAND_PALETTE = False
