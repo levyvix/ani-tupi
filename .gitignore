@@ -35,6 +35,7 @@ log.txt
 
 # Development
 .python-version
+.env
 
 # Build artifacts
 dist/
