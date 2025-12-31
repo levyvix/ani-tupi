@@ -1,7 +1,7 @@
 import importlib
 import sys
 from abc import ABC, abstractstaticmethod
-from os.path import isfile, join, abspath
+from os.path import isfile, join, abspath, dirname
 from os import listdir
 
 
@@ -22,8 +22,10 @@ class PluginInterface(ABC):
 def get_resource_path(relative_path):
     """Get the path to resources, whether running as script or executable."""
     if hasattr(sys, "_MEIPASS"):
+        # PyInstaller executable
         return join(sys._MEIPASS, relative_path)
-    return join(abspath("."), relative_path)
+    # Use directory where this file is located (works for both dev and installed)
+    return join(dirname(abspath(__file__)), relative_path)
 
 
 def load_plugins(languages: dict, plugins=None) -> None:

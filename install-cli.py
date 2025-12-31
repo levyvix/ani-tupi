@@ -95,8 +95,8 @@ def install_as_cli():
     print("🚀 Instalando ani-tupi como CLI global...")
     print("=" * 60)
 
-    # Instala usando uv tool install
-    if not run_command(["uv", "tool", "install", "."]):
+    # Instala usando uv tool install --reinstall (força rebuild mesmo se já instalado)
+    if not run_command(["uv", "tool", "install", "--reinstall", "."]):
         print("\n❌ Erro ao instalar CLI")
         return False
 

@@ -57,7 +57,18 @@ ani-tupi                             # Use globally after install
 
 # Uninstall
 uv tool uninstall ani-tupi
+
+# Force reinstall (after code changes)
+uv tool install --reinstall .        # Required to pick up source code changes
 ```
+
+### Common Issues
+
+**FileNotFoundError when running from outside project directory:**
+- **Problem**: `loader.py` uses `get_resource_path()` to locate plugins
+- **Root cause**: Using `abspath(".")` returns current working directory, not installation path
+- **Solution**: Changed to `dirname(abspath(__file__))` which returns the module's install location
+- **After fixing**: Must use `uv tool install --reinstall .` to rebuild the package (UV caches builds)
 
 ## Architecture Deep Dive
 
