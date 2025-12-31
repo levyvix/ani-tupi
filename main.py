@@ -329,7 +329,7 @@ def anilist_anime_flow(
         if args.debug:
             print(player_url)
         play_video(player_url, args.debug)
-        save_history(selected_anime, episode_idx)
+        save_history(selected_anime, episode_idx, anilist_id)
 
         # Ask if watched until the end before updating AniList
         if anilist_client.is_authenticated() and anilist_id:
@@ -420,10 +420,14 @@ def search_anime_flow(args):
 def main(args):
     loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
 
+    # Variables for AniList integration
+    anilist_id = None
+    anilist_title = None
+
     # If command-line args provided, skip main menu
     if args.query or args.continue_watching or args.manga:
         if args.continue_watching:
-            selected_anime, episode_idx = load_history()
+            selected_anime, episode_idx, anilist_id, anilist_title = load_history()
             # Episodes already loaded by load_history()
         else:
             selected_anime, episode_idx = search_anime_flow(args)
@@ -438,7 +442,7 @@ def main(args):
             if not selected_anime:
                 return
         elif choice == "▶️  Continuar Assistindo":
-            selected_anime, episode_idx = load_history()
+            selected_anime, episode_idx, anilist_id, anilist_title = load_history()
             # Episodes already loaded by load_history()
         elif choice == "📺 AniList":
             from anilist_menu import anilist_main_menu
@@ -463,7 +467,25 @@ def main(args):
         if args.debug:
             print(player_url)
         play_video(player_url, args.debug)
-        save_history(selected_anime, episode_idx)
+        save_history(selected_anime, episode_idx, anilist_id)
+
+        # AniList sync (if coming from continue watching with anilist_id)
+        if anilist_id:
+            from anilist import anilist_client
+            from menu import menu_navigate
+
+            if anilist_client.is_authenticated():
+                confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
+                confirm = menu_navigate(
+                    confirm_options, msg=f"Você assistiu o episódio {episode} até o final?"
+                )
+
+                if confirm == "✅ Sim, assisti até o final":
+                    success = anilist_client.update_progress(anilist_id, episode)
+                    if success:
+                        print(f"✅ AniList atualizado: episódio {episode}")
+                    else:
+                        print("⚠️  Não foi possível atualizar AniList")
 
         opts = []
         if episode_idx < num_episodes - 1:
@@ -495,22 +517,32 @@ def load_history():
     """
     Load watch history and let user choose episode (-1/0/+1 from last watched)
 
-    Old format: {"anime_name": [episodes_urls, episode_idx], ...}
-    New format: {"anime_name": [timestamp, episode_idx], ...}
+    Old formats:
+    - v1: {"anime_name": [episodes_urls, episode_idx], ...}
+    - v2: {"anime_name": [timestamp, episode_idx], ...}
+    New format:
+    - v3: {"anime_name": [timestamp, episode_idx, anilist_id], ...}
+
+    Returns: (anime_name, episode_idx, anilist_id, anilist_title)
     """
     file_path = HISTORY_PATH + "history.json"
     try:
         with open(file_path, "r") as f:
             data = load(f)
 
-            # Migrate old format to new format if needed
+            # Migrate old formats to new format if needed
             needs_migration = False
             for anime_name, info in data.items():
-                # Check if first element is a list (old format)
+                # Check if first element is a list (v1 format)
                 if isinstance(info[0], list):
                     needs_migration = True
-                    # Migrate: [episodes_urls, episode_idx] → [timestamp, episode_idx]
-                    data[anime_name] = [int(time.time()), info[1]]
+                    # Migrate: [episodes_urls, episode_idx] → [timestamp, episode_idx, None]
+                    data[anime_name] = [int(time.time()), info[1], None]
+                # Check if missing anilist_id (v2 format)
+                elif len(info) == 2:
+                    needs_migration = True
+                    # Migrate: [timestamp, episode_idx] → [timestamp, episode_idx, None]
+                    data[anime_name] = [info[0], info[1], None]
 
             # Save migrated data
             if needs_migration:
@@ -533,6 +565,21 @@ def load_history():
 
             anime = selected[: -titles[selected]]
             last_episode_idx = data[anime][1]
+            anilist_id = data[anime][2] if len(data[anime]) > 2 else None
+
+            # If we have anilist_id, get the original AniList title
+            anilist_title = None
+            if anilist_id:
+                from anilist import anilist_client
+
+                print(f"\n🔍 Buscando info do AniList (ID: {anilist_id})...")
+                anime_info = anilist_client.get_anime_by_id(anilist_id)
+                if anime_info:
+                    # Use romaji title as primary
+                    anilist_title = anime_info.get("title", {}).get("romaji")
+                    print(f"✅ Encontrado no AniList: {anilist_title}")
+                else:
+                    print(f"⚠️  Anime não encontrado no AniList (ID: {anilist_id})")
 
             # Search for episodes to offer -1/0/+1 options
             print(f"\n🔍 Buscando episódios de '{anime}'...")
@@ -586,7 +633,7 @@ def load_history():
             else:
                 episode_idx = option_to_idx[choice]
 
-        return anime, episode_idx
+        return anime, episode_idx, anilist_id, anilist_title
     except FileNotFoundError:
         print("Sem histórico de animes")
         exit()
@@ -595,18 +642,19 @@ def load_history():
         return
 
 
-def save_history(anime, episode):
+def save_history(anime, episode, anilist_id=None):
     """
-    Save watch history with timestamp
+    Save watch history with timestamp and optional AniList ID
 
-    Format: {"anime_name": [timestamp, episode_idx], ...}
+    Format: {"anime_name": [timestamp, episode_idx, anilist_id], ...}
+    anilist_id can be None for anime not from AniList
     """
     file_path = HISTORY_PATH + "history.json"
     try:
         with open(file_path, "r+") as f:
             data = load(f)
-            # Save with timestamp (new format)
-            data[anime] = [int(time.time()), episode]
+            # Save with timestamp and anilist_id (new format)
+            data[anime] = [int(time.time()), episode, anilist_id]
 
         with open(file_path, "w") as f:
             dump(data, f)
@@ -616,8 +664,8 @@ def save_history(anime, episode):
 
         with open(file_path, "w") as f:
             data = dict()
-            # Save with timestamp (new format)
-            data[anime] = [int(time.time()), episode]
+            # Save with timestamp and anilist_id (new format)
+            data[anime] = [int(time.time()), episode, anilist_id]
             dump(data, f)
 
     except PermissionError:

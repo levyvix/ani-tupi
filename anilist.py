@@ -373,6 +373,44 @@ class AniListClient:
             print(f"Erro ao buscar anime: {e}")
             return []
 
+    def get_anime_by_id(self, anime_id: int) -> Optional[dict]:
+        """
+        Get anime info by AniList ID
+
+        Args:
+            anime_id: AniList anime ID
+
+        Returns:
+            Anime data with id, title, episodes, etc. or None if not found
+        """
+        query = """
+        query ($id: Int) {
+            Media(id: $id, type: ANIME) {
+                id
+                title {
+                    romaji
+                    english
+                    native
+                }
+                episodes
+                coverImage {
+                    medium
+                }
+                averageScore
+                seasonYear
+            }
+        }
+        """
+
+        variables = {"id": anime_id}
+
+        try:
+            result = self._query(query, variables)
+            return result.get("Media") if result else None
+        except Exception as e:
+            print(f"Erro ao buscar anime por ID: {e}")
+            return None
+
     def add_to_list(self, anime_id: int, status: str = "CURRENT") -> bool:
         """
         Add anime to user's list
