@@ -201,11 +201,9 @@ class MenuScreen(Screen):
         option_list = OptionList(id="menu-options")
 
         for opt in self.options:
-            # Handle separators - add as disabled option with dim styling
-            if opt.startswith("─"):
-                option_list.add_option(opt, disabled=True)
-            else:
-                option_list.add_option(opt)
+            # Handle separators - just add as regular option
+            # They will be styled via CSS with .option-list--option-disabled
+            option_list.add_option(opt)
 
         return option_list
 
@@ -230,9 +228,13 @@ class MenuScreen(Screen):
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         """Called when an option is selected"""
         # Get the selected option prompt (text)
-        selected = str(event.option.prompt)
+        try:
+            selected = str(event.option.prompt)
+        except:
+            # Fallback if prompt doesn't exist
+            selected = str(event.option_id)
 
-        # Skip separators
+        # Skip separators and empty options
         if selected.startswith("─") or not selected.strip():
             return
 
@@ -308,10 +310,7 @@ class MenuScreen(Screen):
         option_list.clear_options()
 
         for opt in options:
-            if opt.startswith("─"):
-                option_list.add_option(opt, disabled=True)
-            else:
-                option_list.add_option(opt)
+            option_list.add_option(opt)
 
     def action_toggle_theme(self) -> None:
         """Cycle through available themes"""
