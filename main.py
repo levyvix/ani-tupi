@@ -19,46 +19,61 @@ HISTORY_PATH = (
 )
 
 
-def normalize_anime_title(title: str) -> list[str]:
+def normalize_and_vary_anime_title(title: str):
     """
-    Generate title variations for better scraper matching
-    Returns list of possible titles to try
+    Gera variações progressivas do título em lowercase, removendo palavras do final.
+    Exemplo: "Attack on Titan Season 2" → ["attack on titan", "attack on", "attack"]
+    Todas as saídas são sempre minúsculas.
     """
     import re
 
-    # Remove "Season N" / "2nd Season" etc
+    # 1. Remove partes de temporada / cour / part / etc
     season_patterns = [
         r"\s+Season\s+\d+",
         r"\s+\d+(?:st|nd|rd|th)\s+Season",
         r"\s+S\d+",
         r"\s+Part\s+\d+",
+        r"\s+Cour\s+\d+",
+        r"\s+Arc\s+[^:]+",
+        r"\s+Final\s+Season",
+        r"\s+2nd\s+Season",
+        r"[:−-]\s*Season\s+\d+",
     ]
 
-    base_variations = [title]  # Start with original
-
+    cleaned = title
     for pattern in season_patterns:
-        cleaned = re.sub(pattern, "", title, flags=re.IGNORECASE).strip()
-        if cleaned and cleaned not in base_variations:
-            base_variations.append(cleaned)
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
 
-    # For each base variation, create case variations
-    all_variations = []
-    for variant in base_variations:
-        # Original
-        if variant not in all_variations:
-            all_variations.append(variant)
+    # 2. Mantém apenas letras, números e espaços — remove tudo o mais
+    cleaned = re.sub(r"[^A-Za-z0-9\s]", " ", cleaned)
+    # Remove espaços múltiplos e trim
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
-        # Lowercase
-        lower = variant.lower()
-        if lower != variant and lower not in all_variations:
-            all_variations.append(lower)
+    if not cleaned:
+        return [title.strip().lower()]  # fallback em minúsculas
 
-        # Title Case (Each Word Capitalized)
-        title_case = variant.title()
-        if title_case != variant and title_case not in all_variations:
-            all_variations.append(title_case)
+    # 3. Converte tudo para lowercase desde o início
+    cleaned = cleaned.lower()
 
-    return all_variations
+    # 4. Divide em palavras
+    words = cleaned.split()
+
+    # 5. Gera as variações (da mais longa para a mais curta)
+    variations = []
+    for i in range(len(words), 0, -1):
+        variant = " ".join(words[:i])
+        if variant and variant not in variations:
+            variations.append(variant)
+
+    # Remove duplicatas (embora improvável com essa lógica) e mantém ordem
+    seen = set()
+    result = []
+    for v in variations:
+        if v not in seen:
+            seen.add(v)
+            result.append(v)
+
+    return result
 
 
 def anilist_anime_flow(anime_title: str, anilist_id: int, args):
