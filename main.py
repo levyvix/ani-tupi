@@ -481,6 +481,7 @@ def anilist_anime_flow(
         if episode_idx > 0:
             opts.append("◀️  Anterior")
         opts.append("📋 Escolher outro episódio")
+        opts.append("🔄 Trocar fonte")
         opts.append("🔙 Voltar")
 
         from menu import menu_navigate
@@ -499,6 +500,86 @@ def anilist_anime_flow(
             if not selected_episode:
                 continue  # Stay in current episode menu
             episode_idx = episode_list.index(selected_episode)
+        elif selected_opt == "🔄 Trocar fonte":
+            new_anime, new_episode_idx = switch_anime_source(selected_anime, args)
+            if new_anime:
+                selected_anime = new_anime
+                episode_idx = new_episode_idx
+                num_episodes = len(rep.get_episode_list(selected_anime))
+                # Continue loop with new anime/episode
+
+
+def switch_anime_source(current_anime: str, args) -> tuple[str, int] | tuple[None, None]:
+    """Allow user to switch to a different anime source/title.
+
+    Args:
+        current_anime: Current anime title being watched
+        args: CLI arguments
+
+    Returns: (new_anime_title, episode_idx) or (None, None) if cancelled
+    """
+    from menu import menu_navigate
+
+    # 1. Extract base search query from current anime title
+    #    (remove " (Dublado)", " (Legendado)", " 2nd Season", etc to get broader results)
+    query = current_anime.split("(")[0].strip()
+
+    # 2. Perform fresh search (use temporary search results)
+    temp_rep_backup = {
+        "anime_to_urls": rep.anime_to_urls.copy(),
+        "anime_episodes_titles": rep.anime_episodes_titles.copy(),
+        "anime_episodes_urls": rep.anime_episodes_urls.copy(),
+    }
+
+    try:
+        rep.clear_search_results()
+        with loading(f"Buscando fontes alternativas para '{query}'..."):
+            rep.search_anime(query)
+
+        # 3. Get all available titles
+        titles = rep.get_anime_titles(filter_by_query=query, min_score=70)
+
+        if not titles:
+            print("⚠️  Nenhuma fonte alternativa encontrada")
+            # Restore previous state on failure
+            rep.anime_to_urls = temp_rep_backup["anime_to_urls"]
+            rep.anime_episodes_titles = temp_rep_backup["anime_episodes_titles"]
+            rep.anime_episodes_urls = temp_rep_backup["anime_episodes_urls"]
+            return None, None
+
+        # 4. Show selection menu
+        selected_anime = menu_navigate(titles, msg="Escolha a nova fonte.")
+
+        if not selected_anime:
+            # User cancelled - restore previous state
+            rep.anime_to_urls = temp_rep_backup["anime_to_urls"]
+            rep.anime_episodes_titles = temp_rep_backup["anime_episodes_titles"]
+            rep.anime_episodes_urls = temp_rep_backup["anime_episodes_urls"]
+            return None, None
+
+        # 5. Load episodes from new source
+        with loading("Carregando episódios..."):
+            rep.search_episodes(selected_anime)
+
+        # 6. Show episode selection menu
+        episode_list = rep.get_episode_list(selected_anime)
+        selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+
+        if not selected_episode:
+            # User cancelled - restore previous state
+            rep.anime_to_urls = temp_rep_backup["anime_to_urls"]
+            rep.anime_episodes_titles = temp_rep_backup["anime_episodes_titles"]
+            rep.anime_episodes_urls = temp_rep_backup["anime_episodes_urls"]
+            return None, None
+
+        episode_idx = episode_list.index(selected_episode)
+        return selected_anime, episode_idx
+    except Exception:
+        # If anything goes wrong, restore previous search results
+        rep.anime_to_urls = temp_rep_backup["anime_to_urls"]
+        rep.anime_episodes_titles = temp_rep_backup["anime_episodes_titles"]
+        rep.anime_episodes_urls = temp_rep_backup["anime_episodes_urls"]
+        raise
 
 
 def show_main_menu():
@@ -654,6 +735,7 @@ def main(args) -> None:
         if episode_idx > 0:
             opts.append("◀️  Anterior")
         opts.append("📋 Escolher outro episódio")
+        opts.append("🔄 Trocar fonte")
         opts.append("🔙 Voltar")
 
         from menu import menu_navigate
@@ -672,6 +754,13 @@ def main(args) -> None:
             if not selected_episode:
                 continue  # Stay in current episode menu
             episode_idx = episode_list.index(selected_episode)
+        elif selected_opt == "🔄 Trocar fonte":
+            new_anime, new_episode_idx = switch_anime_source(selected_anime, args)
+            if new_anime:
+                selected_anime = new_anime
+                episode_idx = new_episode_idx
+                num_episodes = len(rep.get_episode_list(selected_anime))
+                # Continue loop with new anime/episode
 
 
 def load_history():
