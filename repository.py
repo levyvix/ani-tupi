@@ -214,7 +214,7 @@ class Repository:
         self.anime_episodes_urls[anime].append((episode_data.episode_urls, source))
 
     def get_episode_list(self, anime: str):
-        return sorted(self.anime_episodes_titles[anime], key=lambda title_list: len(title_list))[0]
+        return sorted(self.anime_episodes_titles[anime], key=lambda title_list: len(title_list))[-1]
 
     def search_player(self, anime: str, episode_num: int) -> None:
         """This method assumes all episode lists to be the same size, plugin devs should guarantee that OVA's are not considered."""
