@@ -244,10 +244,14 @@ def anilist_anime_flow(
     scraper_episode_count = None
 
     if cache_data:
-        # Use cached data
+        # Use cached data for episode list
         episode_list = cache_data.get("episode_urls", [])
         scraper_episode_count = cache_data.get("episode_count", len(episode_list))
         print(f"ℹ️  Usando cache ({scraper_episode_count} eps disponíveis)")
+
+        # Still need to populate repository for video URL search
+        # (cache only stores episode titles, not the URLs needed for playback)
+        rep.search_episodes(selected_anime)
     else:
         # Fetch from scrapers
         with loading("Carregando episódios..."):
@@ -353,7 +357,7 @@ def anilist_anime_flow(
             return  # User cancelled, go back
 
         episode_idx = episode_list.index(selected_episode)
-    num_episodes = len(rep.anime_episodes_urls[selected_anime][0][0])
+    num_episodes = len(episode_list)
 
     # Playback loop (with AniList sync)
     while True:
@@ -503,7 +507,7 @@ def main(args) -> None:
             manga_tupi()
             return
 
-    num_episodes = len(rep.anime_episodes_urls[selected_anime][0][0])
+    num_episodes = len(episode_list)
     while True:
         episode = episode_idx + 1
         with loading("Buscando vídeo..."):
