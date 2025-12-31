@@ -227,11 +227,16 @@ def _show_recent_history() -> Optional[tuple[str, int]]:
     options = []
     anime_map = {}
 
-    for anime_name, (timestamp, episode_idx) in sorted_history[:20]:  # Show last 20
+    for anime_name, data in sorted_history[:20]:  # Show last 20
+        # Handle both old and new format
+        timestamp = data[0]
+        episode_idx = data[1]
+        anilist_id = data[2] if len(data) > 2 else None
+
         episode_num = episode_idx + 1
         display = f"{anime_name} (Ep {episode_num})"
         options.append(display)
-        anime_map[display] = anime_name
+        anime_map[display] = (anime_name, anilist_id)
 
     # Show menu
     selection = menu_navigate(options, "Animes Recentes (Local)")
@@ -239,9 +244,19 @@ def _show_recent_history() -> Optional[tuple[str, int]]:
     if selection is None:
         return anilist_main_menu()
 
-    anime_name = anime_map[selection]
+    anime_name, saved_anilist_id = anime_map[selection]
 
-    # Search this anime on AniList to get the ID
+    # If we already have anilist_id saved, use it
+    if saved_anilist_id:
+        print(f"\n✅ Usando AniList ID salvo: {saved_anilist_id}")
+        # Get anime info to show the correct title
+        anime_info = anilist_client.get_anime_by_id(saved_anilist_id)
+        if anime_info:
+            anilist_title = anilist_client.format_title(anime_info["title"])
+            print(f"📺 {anilist_title}")
+        return (anime_name, saved_anilist_id)
+
+    # No saved anilist_id - search for it
     print(f"\n🔍 Buscando '{anime_name}' no AniList...")
     search_results = anilist_client.search_anime(anime_name)
 
