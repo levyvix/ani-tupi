@@ -303,6 +303,38 @@ class AniListClient:
         except Exception:
             return []
 
+    def change_status(self, anime_id: int, status: str) -> bool:
+        """Change anime list status.
+
+        Args:
+            anime_id: AniList anime ID
+            status: New status (CURRENT, PLANNING, COMPLETED, PAUSED, DROPPED, REPEATING)
+
+        Returns:
+            True if successful
+        """
+        if not self.is_authenticated():
+            return False
+
+        mutation = """
+        mutation ($mediaId: Int, $status: MediaListStatus) {
+            SaveMediaListEntry(mediaId: $mediaId, status: $status) {
+                id
+                status
+            }
+        }
+        """
+
+        variables = {"mediaId": anime_id, "status": status}
+
+        try:
+            result = self._query(mutation, variables)
+            if result and "SaveMediaListEntry" in result:
+                return True
+            return False
+        except Exception:
+            return False
+
     def update_progress(self, anime_id: int, episode: int) -> bool:
         """Update anime progress.
 
@@ -329,9 +361,17 @@ class AniListClient:
         variables = {"mediaId": anime_id, "progress": episode}
 
         try:
-            self._query(query, variables)
-            return True
-        except Exception:
+            result = self._query(query, variables)
+            # Check if mutation succeeded
+            if result and "SaveMediaListEntry" in result:
+                return True
+            return False
+        except Exception as e:
+            # Log error for debugging (might be COMPLETED status issue)
+            error_msg = str(e).lower()
+            if "completed" in error_msg or "finished" in error_msg:
+                # Silently handle COMPLETED status - user needs to change status manually
+                return False
             return False
 
     def search_anime(self, query_text: str) -> list[dict]:

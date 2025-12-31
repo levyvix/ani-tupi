@@ -447,11 +447,15 @@ def anilist_anime_flow(
                     print("\n📝 Adicionando à sua lista do AniList...")
                     anilist_client.add_to_list(anilist_id, "CURRENT")
                 else:
-                    # Auto-promote from PLANNING to CURRENT if needed
+                    # Auto-promote from PLANNING to CURRENT, or COMPLETED to REPEATING
                     entry = anilist_client.get_media_list_entry(anilist_id)
-                    if entry and entry.get("status") == "PLANNING":
-                        print("\n📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
-                        anilist_client.add_to_list(anilist_id, "CURRENT")
+                    if entry:
+                        if entry.get("status") == "PLANNING":
+                            print("\n📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
+                            anilist_client.add_to_list(anilist_id, "CURRENT")
+                        elif entry.get("status") == "COMPLETED":
+                            print("\n🔄 Mudando para 'Recomassistindo'...")
+                            anilist_client.change_status(anilist_id, "REPEATING")
 
                 print(f"\n🔄 Sincronizando progresso com AniList (Ep {episode})...")
                 success = anilist_client.update_progress(anilist_id, episode)
@@ -616,11 +620,15 @@ def main(args) -> None:
                         print("\n📝 Adicionando à sua lista do AniList...")
                         anilist_client.add_to_list(anilist_id, "CURRENT")
                     else:
-                        # Auto-promote from PLANNING to CURRENT if needed
+                        # Auto-promote from PLANNING to CURRENT, or COMPLETED to REPEATING
                         entry = anilist_client.get_media_list_entry(anilist_id)
-                        if entry and entry.get("status") == "PLANNING":
-                            print("\n📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
-                            anilist_client.add_to_list(anilist_id, "CURRENT")
+                        if entry:
+                            if entry.get("status") == "PLANNING":
+                                print("\n📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
+                                anilist_client.add_to_list(anilist_id, "CURRENT")
+                            elif entry.get("status") == "COMPLETED":
+                                print("\n🔄 Mudando para 'Recomassistindo'...")
+                                anilist_client.change_status(anilist_id, "REPEATING")
 
                     print(f"\n🔄 Sincronizando progresso com AniList (Ep {episode})...")
                     success = anilist_client.update_progress(anilist_id, episode)
