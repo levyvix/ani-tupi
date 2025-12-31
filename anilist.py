@@ -1,12 +1,12 @@
-"""
-AniList API integration for ani-tupi
-GraphQL client for tracking anime progress and fetching lists
+"""AniList API integration for ani-tupi.
+
+GraphQL client for tracking anime progress and fetching lists.
 """
 
 import json
 import webbrowser
 from pathlib import Path
-from typing import Optional
+
 import requests
 
 # AniList API endpoints
@@ -22,61 +22,50 @@ TOKEN_FILE = Path.home() / ".local/state/ani-tupi/anilist_token.json"
 
 
 class AniListClient:
-    """GraphQL client for AniList API"""
+    """GraphQL client for AniList API."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the AniList client."""
         self.token = self._load_token()
         self.user_id = None  # Will be set after authentication
 
-    def _load_token(self) -> Optional[str]:
-        """Load access token and user_id from file"""
+    def _load_token(self) -> str | None:
+        """Load access token and user_id from file."""
         if not TOKEN_FILE.exists():
             return None
         try:
-            with open(TOKEN_FILE, "r") as f:
+            with TOKEN_FILE.open() as f:
                 data = json.load(f)
                 self.user_id = data.get("user_id")  # Load user_id if exists
                 return data.get("access_token")
         except Exception:
             return None
 
-    def _save_token(self, token: str, user_id: int = None):
-        """Save access token and user_id to file"""
+    def _save_token(self, token: str, user_id: int | None = None) -> None:
+        """Save access token and user_id to file."""
         TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
         data = {"access_token": token}
         if user_id:
             data["user_id"] = user_id
-        with open(TOKEN_FILE, "w") as f:
+        with TOKEN_FILE.open("w") as f:
             json.dump(data, f)
 
     def is_authenticated(self) -> bool:
-        """Check if user has valid token"""
+        """Check if user has valid token."""
         return self.token is not None
 
-    def authenticate(self):
-        """
-        OAuth authentication flow (same method as viu-media/viu)
-        Opens browser for authorization, user copies token from URL
+    def authenticate(self) -> bool:
+        """OAuth authentication flow (same method as viu-media/viu).
+
+        Opens browser for authorization, user copies token from URL.
         """
         # Build OAuth URL
         auth_url = f"{ANILIST_AUTH_URL}?client_id={CLIENT_ID}&response_type=token"
 
-        print("🔐 Autenticação AniList")
-        print("=" * 60)
-        print("\n1. Abrindo navegador para autenticação...")
-        print("\n   Se não abrir automaticamente, acesse:")
-        print(f"   {auth_url}")
 
         # Open browser
         webbrowser.open(auth_url, new=2)
 
-        print("\n2. Clique em 'Authorize' no navegador")
-        print("\n3. Após autorizar, você será redirecionado.")
-        print("   Copie o token da barra de endereço.")
-        print("\n   O token está DEPOIS do '#access_token=' na URL")
-        print("   Exemplo: .../#access_token=SEU_TOKEN_AQUI&token_type=...")
-        print("\n   Copie apenas a parte do token (entre = e &)")
-        print("\n" + "=" * 60)
 
         # Get token from user
         token_input = input("\nCole o token aqui: ").strip()
@@ -85,32 +74,24 @@ class AniListClient:
         token = self._parse_token(token_input)
 
         if not token:
-            print("❌ Token vazio. Autenticação cancelada.")
             return False
 
         # Validate token
-        print("\n🔍 Validando token...")
         if self._validate_token(token):
             self.token = token
 
             # Get and display user info
             user_info = self.get_viewer_info()
             if user_info:
-                self.user_id = user_info['id']  # Save user ID for queries
+                self.user_id = user_info["id"]  # Save user ID for queries
                 self._save_token(token, self.user_id)  # Save both token and user_id
-                print(f"\n✅ Autenticação bem-sucedida!")
-                print(f"👤 Logado como: {user_info['name']} (ID: {self.user_id})")
-                print(f"\n💾 Token salvo em: {TOKEN_FILE}")
             return True
-        else:
-            print("\n❌ Token inválido.")
-            print("   Certifique-se de copiar apenas o token da URL.")
-            return False
+        return False
 
     def _parse_token(self, token_input: str) -> str:
-        """
-        Parse token from user input
-        Handles: raw token, URL with fragment, or access_token= prefix
+        """Parse token from user input.
+
+        Handles: raw token, URL with fragment, or access_token= prefix.
         """
         token = token_input.strip()
 
@@ -127,7 +108,7 @@ class AniListClient:
         return token.strip()
 
     def _validate_token(self, token: str) -> bool:
-        """Validate token by fetching viewer info"""
+        """Validate token by fetching viewer info."""
         query = """
         query {
             Viewer {
@@ -142,9 +123,8 @@ class AniListClient:
         except Exception:
             return False
 
-    def _query(self, query: str, variables: dict = None, token: str = None) -> dict:
-        """
-        Execute GraphQL query
+    def _query(self, query: str, variables: dict | None = None, token: str | None = None) -> dict:
+        """Execute GraphQL query.
 
         Args:
             query: GraphQL query string
@@ -153,6 +133,7 @@ class AniListClient:
 
         Returns:
             Query result data
+
         """
         headers = {}
         use_token = token if token else self.token
@@ -167,17 +148,19 @@ class AniListClient:
         )
 
         if response.status_code != 200:
-            raise Exception(f"Query failed with status {response.status_code}")
+            msg = f"Query failed with status {response.status_code}"
+            raise Exception(msg)
 
         result = response.json()
 
         if "errors" in result:
-            raise Exception(f"GraphQL error: {result['errors']}")
+            msg = f"GraphQL error: {result['errors']}"
+            raise Exception(msg)
 
         return result.get("data")
 
-    def get_viewer_info(self) -> Optional[dict]:
-        """Get authenticated user info"""
+    def get_viewer_info(self) -> dict | None:
+        """Get authenticated user info."""
         if not self.is_authenticated():
             return None
 
@@ -200,8 +183,7 @@ class AniListClient:
             return None
 
     def get_trending(self, page: int = 1, per_page: int = 20) -> list[dict]:
-        """
-        Get trending anime
+        """Get trending anime.
 
         Returns list of anime with: id, title, episodes, coverImage
         """
@@ -231,13 +213,11 @@ class AniListClient:
         try:
             result = self._query(query, variables)
             return result["Page"]["media"] if result else []
-        except Exception as e:
-            print(f"Erro ao buscar trending: {e}")
+        except Exception:
             return []
 
     def get_user_list(self, status: str, page: int = 1, per_page: int = 50) -> list[dict]:
-        """
-        Get authenticated user's anime list by status
+        """Get authenticated user's anime list by status.
 
         Args:
             status: CURRENT, PLANNING, COMPLETED, DROPPED, PAUSED, REPEATING
@@ -245,6 +225,7 @@ class AniListClient:
             per_page: Items per page
 
         Returns list with: anime data + progress
+
         """
         if not self.is_authenticated():
             return []
@@ -253,7 +234,7 @@ class AniListClient:
         if not self.user_id:
             user_info = self.get_viewer_info()
             if user_info:
-                self.user_id = user_info['id']
+                self.user_id = user_info["id"]
             else:
                 return []
 
@@ -301,13 +282,11 @@ class AniListClient:
 
                 return entries
             return []
-        except Exception as e:
-            print(f"Erro ao buscar lista {status}: {e}")
+        except Exception:
             return []
 
     def update_progress(self, anime_id: int, episode: int) -> bool:
-        """
-        Update anime progress
+        """Update anime progress.
 
         Args:
             anime_id: AniList anime ID
@@ -315,6 +294,7 @@ class AniListClient:
 
         Returns:
             True if successful
+
         """
         if not self.is_authenticated():
             return False
@@ -333,13 +313,11 @@ class AniListClient:
         try:
             self._query(query, variables)
             return True
-        except Exception as e:
-            print(f"Erro ao atualizar progresso: {e}")
+        except Exception:
             return False
 
     def search_anime(self, query_text: str) -> list[dict]:
-        """
-        Search anime by title
+        """Search anime by title.
 
         Returns list of anime matching query
         """
@@ -369,19 +347,18 @@ class AniListClient:
         try:
             result = self._query(query, variables)
             return result["Page"]["media"] if result else []
-        except Exception as e:
-            print(f"Erro ao buscar anime: {e}")
+        except Exception:
             return []
 
-    def get_anime_by_id(self, anime_id: int) -> Optional[dict]:
-        """
-        Get anime info by AniList ID
+    def get_anime_by_id(self, anime_id: int) -> dict | None:
+        """Get anime info by AniList ID.
 
         Args:
             anime_id: AniList anime ID
 
         Returns:
             Anime data with id, title, episodes, etc. or None if not found
+
         """
         query = """
         query ($id: Int) {
@@ -407,19 +384,18 @@ class AniListClient:
         try:
             result = self._query(query, variables)
             return result.get("Media") if result else None
-        except Exception as e:
-            print(f"Erro ao buscar anime por ID: {e}")
+        except Exception:
             return None
 
     def is_in_any_list(self, anime_id: int) -> bool:
-        """
-        Check if anime is in any of the user's lists
+        """Check if anime is in any of the user's lists.
 
         Args:
             anime_id: AniList anime ID
 
         Returns:
             True if anime is in any list, False otherwise
+
         """
         if not self.is_authenticated():
             return False
@@ -428,7 +404,7 @@ class AniListClient:
         if not self.user_id:
             user_info = self.get_viewer_info()
             if user_info:
-                self.user_id = user_info['id']
+                self.user_id = user_info["id"]
             else:
                 return False
 
@@ -450,8 +426,7 @@ class AniListClient:
             return False
 
     def add_to_list(self, anime_id: int, status: str = "CURRENT") -> bool:
-        """
-        Add anime to user's list
+        """Add anime to user's list.
 
         Args:
             anime_id: AniList anime ID
@@ -459,6 +434,7 @@ class AniListClient:
 
         Returns:
             True if successful
+
         """
         mutation = """
         mutation ($mediaId: Int, $status: MediaListStatus) {
@@ -482,18 +458,15 @@ class AniListClient:
         try:
             result = self._query(mutation, variables)
             if result and "SaveMediaListEntry" in result:
-                anime_title = result["SaveMediaListEntry"]["media"]["title"]["romaji"]
-                print(f"✅ '{anime_title}' adicionado à sua lista como {status}")
+                result["SaveMediaListEntry"]["media"]["title"]["romaji"]
                 return True
             return False
-        except Exception as e:
-            print(f"❌ Erro ao adicionar à lista: {e}")
+        except Exception:
             return False
 
     def format_title(self, title_obj: dict) -> str:
-        """
-        Format title object to single string
-        Shows romaji + english when both available
+        """Format title object to single string
+        Shows romaji + english when both available.
         """
         romaji = title_obj.get("romaji")
         english = title_obj.get("english")
@@ -503,14 +476,13 @@ class AniListClient:
         if romaji and english and romaji != english:
             return f"{romaji} / {english}"
         # If only romaji
-        elif romaji:
+        if romaji:
             return romaji
         # If only english
-        elif english:
+        if english:
             return english
         # Fallback to native
-        else:
-            return native or "Unknown"
+        return native or "Unknown"
 
 
 # Global client instance

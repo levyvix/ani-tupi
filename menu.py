@@ -1,16 +1,14 @@
-"""
-Rich + InquirerPy based menu system for ani-tupi
-Modern, responsive TUI with Catppuccin theme
+"""Rich + InquirerPy based menu system for ani-tupi
+Modern, responsive TUI with Catppuccin theme.
 """
 
+import sys
+from collections.abc import Callable
+
 from InquirerPy import inquirer
-from InquirerPy.base.control import Choice
 from InquirerPy.separator import Separator
 from rich.console import Console
 from rich.theme import Theme
-from typing import Optional, Callable
-import sys
-
 
 # Catppuccin Mocha Theme
 CATPPUCCIN_MOCHA = Theme(
@@ -34,16 +32,17 @@ def menu(
     opts: list[str],
     msg: str = "",
     show_preview: bool = False,
-    preview_callback: Optional[Callable] = None,
+    preview_callback: Callable | None = None,
+    enable_search: bool = True,
 ) -> str:
-    """
-    Display interactive menu with automatic "Sair" option
+    """Display interactive menu with automatic "Sair" option.
 
     Args:
         opts: List of menu options
         msg: Title message
         show_preview: Ignored (preview feature removed in refactor)
         preview_callback: Ignored (preview feature removed in refactor)
+        enable_search: Enable fuzzy search (default: True)
 
     Returns:
         Selected option (without "Sair")
@@ -54,6 +53,8 @@ def menu(
         - Returns selected option
         - Q key exits to terminal immediately
         - ESC or Ctrl+C also exits to terminal
+        - Fuzzy search enabled by default
+
     """
     # Add "Sair" to options
     opts_copy = opts.copy()
@@ -64,25 +65,51 @@ def menu(
     for opt in opts_copy:
         # Handle separators (lines starting with ─)
         if opt.startswith("─"):
-            choices.append(Separator())
+            # Fuzzy search doesn't support separators, skip them
+            if not enable_search:
+                choices.append(Separator())
         else:
             choices.append(opt)
 
     # Display menu
     try:
-        answer = inquirer.select(
-            message=msg or "Menu",
-            choices=choices,
-            default=None,
-            qmark="",  # Remove question mark prefix
-            amark="►",  # Arrow for selected item
-            pointer="►",  # Pointer for highlighted item
-            instruction="(Use arrow keys, Q to quit, ESC to back)",
-            mandatory=False,  # Allow None as answer (for Q key)
-            keybindings={
-                "skip": [{"key": "q"}, {"key": "Q"}],  # Q to quit (returns None via skip)
-            },
-        ).execute()
+        if enable_search:
+            # Use fuzzy search for large menus
+            answer = inquirer.fuzzy(
+                message=msg or "Menu",
+                choices=choices,
+                default="",
+                qmark="",  # Remove question mark prefix
+                amark="►",  # Arrow for selected item
+                pointer="►",  # Pointer for highlighted item
+                instruction="(Type to search, Q to quit, ESC to back)",
+                mandatory=False,  # Allow None as answer (for Q key)
+                keybindings={
+                    "skip": [
+                        {"key": "q"},
+                        {"key": "Q"},
+                    ],  # Q to quit (returns None via skip)
+                },
+                max_height="70%",  # Show more items
+            ).execute()
+        else:
+            # Use simple select for small menus
+            answer = inquirer.select(
+                message=msg or "Menu",
+                choices=choices,
+                default=None,
+                qmark="",  # Remove question mark prefix
+                amark="►",  # Arrow for selected item
+                pointer="►",  # Pointer for highlighted item
+                instruction="(Use arrow keys, Q to quit, ESC to back)",
+                mandatory=False,  # Allow None as answer (for Q key)
+                keybindings={
+                    "skip": [
+                        {"key": "q"},
+                        {"key": "Q"},
+                    ],  # Q to quit (returns None via skip)
+                },
+            ).execute()
     except KeyboardInterrupt:
         # ESC or Ctrl+C pressed - also quit for main menu
         sys.exit(0)
@@ -99,16 +126,17 @@ def menu_navigate(
     opts: list[str],
     msg: str = "",
     show_preview: bool = False,
-    preview_callback: Optional[Callable] = None,
-) -> Optional[str]:
-    """
-    Display interactive menu for navigation (returns None instead of exit)
+    preview_callback: Callable | None = None,
+    enable_search: bool = True,
+) -> str | None:
+    """Display interactive menu for navigation (returns None instead of exit).
 
     Args:
         opts: List of menu options (can include separators "─")
         msg: Title message
         show_preview: Ignored (preview feature removed in refactor)
         preview_callback: Ignored (preview feature removed in refactor)
+        enable_search: Enable fuzzy search (default: True)
 
     Returns:
         Selected option or None if user cancels
@@ -119,31 +147,59 @@ def menu_navigate(
         - Q key exits to terminal immediately
         - Ctrl+C also exits to terminal
         - Allows navigation without exiting program
+        - Fuzzy search enabled by default
+
     """
     # Convert options to InquirerPy choices
     choices = []
     for opt in opts:
         # Handle separators (lines starting with ─)
         if opt.startswith("─"):
-            choices.append(Separator())
+            # Fuzzy search doesn't support separators, skip them
+            if not enable_search:
+                choices.append(Separator())
         else:
             choices.append(opt)
 
     # Display menu
     try:
-        answer = inquirer.select(
-            message=msg or "Menu",
-            choices=choices,
-            default=None,
-            qmark="",  # Remove question mark prefix
-            amark="►",  # Arrow for selected item
-            pointer="►",  # Pointer for highlighted item
-            instruction="(Use arrow keys, Q to quit, ESC to back)",
-            mandatory=False,  # Allow None as answer (for Q key)
-            keybindings={
-                "skip": [{"key": "q"}, {"key": "Q"}],  # Q to quit (returns None via skip)
-            },
-        ).execute()
+        if enable_search:
+            # Use fuzzy search for large menus
+            answer = inquirer.fuzzy(
+                message=msg or "Menu",
+                choices=choices,
+                default="",
+                qmark="",  # Remove question mark prefix
+                amark="►",  # Arrow for selected item
+                pointer="►",  # Pointer for highlighted item
+                instruction="(Type to search, Q to quit, ESC to back)",
+                mandatory=False,  # Allow None as answer (for Q key)
+                keybindings={
+                    "skip": [
+                        {"key": "q"},
+                        {"key": "Q"},
+                    ],  # Q to quit (returns None via skip)
+                },
+                max_height="70%",  # Show more items
+            ).execute()
+        else:
+            # Use simple select for small menus
+            answer = inquirer.select(
+                message=msg or "Menu",
+                choices=choices,
+                default=None,
+                qmark="",  # Remove question mark prefix
+                amark="►",  # Arrow for selected item
+                pointer="►",  # Pointer for highlighted item
+                instruction="(Use arrow keys, Q to quit, ESC to back)",
+                mandatory=False,  # Allow None as answer (for Q key)
+                keybindings={
+                    "skip": [
+                        {"key": "q"},
+                        {"key": "Q"},
+                    ],  # Q to quit (returns None via skip)
+                },
+            ).execute()
     except KeyboardInterrupt:
         # ESC or Ctrl+C pressed - go back (return None for navigation)
         return None

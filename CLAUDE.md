@@ -67,6 +67,28 @@ uv add package-name                  # NEVER edit pyproject.toml directly
 uv add --dev package-name
 ```
 
+### Code Linting
+
+```bash
+# Run ruff linter
+uvx ruff check .
+
+# Auto-fix issues
+uvx ruff check --fix .
+
+# Format code
+uvx ruff format .
+```
+
+**Ruff Configuration:**
+The project uses a custom ruff configuration in `pyproject.toml` that ignores less critical rules while maintaining code quality. The configuration is tailored for this codebase's pragmatic approach to linting:
+
+- **Ignored rules include**: Overly strict docstring requirements (D107, D205, D401), complexity metrics (C901, PLR*), type annotation requirements (ANN*), and security checks that don't apply to this use case (S603, S607 for mpv subprocess calls).
+- **Line length**: Set to 100 characters (more flexible than the default 88).
+- **Key fixes applied**: Changed `open()` to `Path.open()` where practical, removed commented-out code, improved docstring formatting.
+
+If you encounter new lint errors, consider whether they represent real issues or if the rule should be added to the ignore list in `pyproject.toml`.
+
 ### Installing as CLI Tool
 
 ```bash
@@ -105,6 +127,7 @@ uv tool install --reinstall .        # Required to pick up source code changes
 - **Loading Indicators**: Spinners show during API calls (search, episode fetch, video URL discovery)
 - **Catppuccin Mocha Theme**: Purple (#cba6f7) highlights, dark background (#1e1e2e)
 - **Keyboard Navigation**: Arrows to navigate, Enter to select, ESC to go back, Q to quit
+- **Fuzzy Search**: Always enabled - type to filter options instantly in any menu
 
 **Performance:**
 - Menu transitions: ~50ms (was ~500ms with Textual)
@@ -120,6 +143,25 @@ with loading("Buscando animes..."):
     rep.search_anime(query)
 
 # Spinner automatically disappears when done
+```
+
+**Using Menus with Search:**
+```python
+from menu import menu, menu_navigate
+
+# Basic menu (fuzzy search enabled by default)
+selected = menu(["Option 1", "Option 2"], "Choose")
+
+# Navigation menu (fuzzy search enabled by default)
+selected = menu_navigate(["Item 1", "Item 2"], "Select")
+
+# Disable search if needed (use arrow keys only)
+selected = menu(options, "Choose", enable_search=False)
+
+# Fuzzy search is ALWAYS enabled by default:
+# - Type to filter options (fuzzy matching)
+# - Arrow keys to navigate filtered results
+# - ESC to go back, Q to quit
 ```
 
 ### Application Flow (Anime Mode)

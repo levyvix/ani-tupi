@@ -1,15 +1,15 @@
 """Loading indicators for API calls using Rich spinners."""
 
 from contextlib import contextmanager
+
 from rich.console import Console
-from rich.spinner import Spinner
 from rich.live import Live
+from rich.spinner import Spinner
 
 
 @contextmanager
 def loading(msg: str = "Carregando..."):
-    """
-    Context manager for displaying loading indicators during operations.
+    """Context manager for displaying loading indicators during operations.
 
     Args:
         msg: The message to display alongside the spinner
@@ -17,6 +17,7 @@ def loading(msg: str = "Carregando..."):
     Usage:
         with loading("Buscando animes..."):
             results = fetch_anime()
+
     """
     console = Console()
 

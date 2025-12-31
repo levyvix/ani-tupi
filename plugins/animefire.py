@@ -1,11 +1,13 @@
 import requests
 from bs4 import BeautifulSoup
-from repository import rep
-from loader import PluginInterface
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.wait import WebDriverWait
+
+from loader import PluginInterface
+from repository import rep
+
 from .utils import is_firefox_installed_as_snap
 
 
@@ -14,7 +16,7 @@ class AnimeFire(PluginInterface):
     name = "animefire"
 
     @staticmethod
-    def search_anime(query):
+    def search_anime(query) -> None:
         url = "https://animefire.plus/pesquisar/" + "-".join(query.split())
         html_content = requests.get(url)
         soup = BeautifulSoup(html_content.text, "html.parser")
@@ -27,11 +29,11 @@ class AnimeFire(PluginInterface):
             if "title" in div.attrs
         ]
         titles = [h3.get_text() for h3 in soup.find_all("h3", class_="animeTitle")]
-        for title, url in zip(titles, titles_urls):
+        for title, url in zip(titles, titles_urls, strict=False):
             rep.add_anime(title, url, AnimeFire.name)
 
     @staticmethod
-    def search_episodes(anime, url, params):
+    def search_episodes(anime, url, params) -> None:
         html_episodes_page = requests.get(url)
         soup = BeautifulSoup(html_episodes_page.text, "html.parser")
         episode_links = [
@@ -49,7 +51,7 @@ class AnimeFire(PluginInterface):
         rep.add_episode_list(anime, opts, episode_links, AnimeFire.name)
 
     @staticmethod
-    def search_player_src(url_episode, container, event):
+    def search_player_src(url_episode, container, event) -> None:
         options = webdriver.FirefoxOptions()
         options.add_argument("--headless")
 
@@ -62,24 +64,26 @@ class AnimeFire(PluginInterface):
             else:
                 driver = webdriver.Firefox(options=options)
         except:
-            raise Exception("Firefox not installed.")
+            msg = "Firefox not installed."
+            raise Exception(msg)
 
         driver.get(url_episode)
         try:
             params = (By.ID, "my-video_html5_api")
-            element = WebDriverWait(driver, 7).until(
+            WebDriverWait(driver, 7).until(
                 EC.visibility_of_all_elements_located(params)
             )
         except:
             try:
                 xpath = "/html/body/div[2]/div[2]/div/div[1]/div[1]/div/div/div[2]/div[4]/iframe"
                 params = (By.XPATH, xpath)
-                element = WebDriverWait(driver, 7).until(
+                WebDriverWait(driver, 7).until(
                     EC.visibility_of_all_elements_located(params)
                 )
             except:
                 driver.quit()
-                raise Exception("nor iframe nor video tags were found in animefire.")
+                msg = "nor iframe nor video tags were found in animefire."
+                raise Exception(msg)
 
         product = driver.find_element(params[0], params[1])
         link = product.get_property("src")
@@ -90,7 +94,7 @@ class AnimeFire(PluginInterface):
             event.set()
 
 
-def load(languages_dict):
+def load(languages_dict) -> None:
     can_load = False
     for language in AnimeFire.languages:
         if language in languages_dict:

@@ -53,3 +53,60 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Ignore less critical rules for this codebase
+ignore = [
+    "D107",      # Missing docstring in __init__
+    "D205",      # 1 blank line required between summary and description
+    "D401",      # First line should be in imperative mood
+    "D404",      # First word should not be "This"
+    "BLE001",    # Blind except Exception - acceptable in this codebase
+    "E722",      # Bare except - acceptable in this codebase
+    "TRY002",    # Create your own exception
+    "TRY003",    # Avoid specifying long messages outside exception class
+    "TRY300",    # Consider moving to else block
+    "EM101",     # Exception must not use string literal
+    "S105",      # Possible hardcoded password (false positive for URLs)
+    "S113",      # Missing timeout in requests (can be added later)
+    "S603",      # subprocess call - needed for mpv
+    "S607",      # Starting process with partial path - needed for mpv
+    "PLR0911",   # Too many return statements
+    "PLR0912",   # Too many branches
+    "PLR0915",   # Too many statements
+    "PLR2004",   # Magic value in comparison
+    "C901",      # Function too complex
+    "FBT001",    # Boolean positional arg
+    "FBT002",    # Boolean default arg
+    "PLC0415",   # Import outside top-level
+    "ANN001",    # Missing type annotation for function argument
+    "ANN002",    # Missing type annotation for *args
+    "ANN003",    # Missing type annotation for **kwargs
+    "ANN201",    # Missing return type annotation
+    "ANN202",    # Missing return type annotation for private function
+    "ANN204",    # Missing return type annotation for __init__
+    "ARG001",    # Unused function argument
+    "ARG002",    # Unused method argument
+    "ARG004",    # Unused static method argument
+    "PTH100",    # os.path.abspath - pathlib preferred but not critical
+    "PTH113",    # os.path.isfile - pathlib preferred but not critical
+    "PTH118",    # os.path.join - pathlib preferred but not critical
+    "PTH120",    # os.path.dirname - pathlib preferred but not critical
+    "PTH123",    # open() - using Path.open() where practical
+    "PTH208",    # os.listdir - pathlib preferred but not critical
+    "RUF001",    # Ambiguous unicode character
+    "RUF012",    # Mutable class attributes
+    "RUF059",    # Unpacked variable never used
+    "PLW2901",   # Redefining loop variable
+    "SLF001",    # Private member access
+    "N812",      # Lowercase imported as non-lowercase
+    "A004",      # Import shadows builtin
+    "F821",      # Undefined name
+    "S110",      # Log without exc_info
+    "S112",      # Log without exc_info
+    "B904",      # raise within except without from
+]

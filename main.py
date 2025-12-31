@@ -1,44 +1,43 @@
-import loader
 import argparse
-from menu import menu
-from repository import rep
-from loader import PluginInterface
-from sys import exit
-from video_player import play_video
-from json import load, dump
-from manga_tupi import main as manga_tupi
+import time
+from json import dump, load
 from os import name
 from pathlib import Path
-import time
-from loading import loading
+from sys import exit
 
+import loader
+from loading import loading
+from manga_tupi import main as manga_tupi
+from menu import menu
+from repository import rep
+from video_player import play_video
 
 HISTORY_PATH = (
-    Path.home().as_posix() + "/.local/state/ani-tupi/"
+    Path.home() / ".local/state/ani-tupi"
     if name != "nt"
-    else "C:\\Program Files\\ani-tupi\\"
+    else Path("C:\\Program Files\\ani-tupi")
 )
 
 # AniList to scraper title mappings cache
-ANILIST_MAPPINGS_FILE = HISTORY_PATH + "anilist_mappings.json"
+ANILIST_MAPPINGS_FILE = HISTORY_PATH / "anilist_mappings.json"
 
 
-def load_anilist_mapping(anilist_id: int) -> str:
-    """Load saved scraper title for an AniList ID"""
+def load_anilist_mapping(anilist_id: int) -> str | None:
+    """Load saved scraper title for an AniList ID."""
     try:
-        with open(ANILIST_MAPPINGS_FILE, "r") as f:
+        with ANILIST_MAPPINGS_FILE.open() as f:
             mappings = load(f)
             return mappings.get(str(anilist_id))
     except (FileNotFoundError, ValueError):
         return None
 
 
-def save_anilist_mapping(anilist_id: int, scraper_title: str):
-    """Save scraper title choice for an AniList ID"""
+def save_anilist_mapping(anilist_id: int, scraper_title: str) -> None:
+    """Save scraper title choice for an AniList ID."""
     try:
         # Load existing mappings
         try:
-            with open(ANILIST_MAPPINGS_FILE, "r") as f:
+            with ANILIST_MAPPINGS_FILE.open() as f:
                 mappings = load(f)
         except (FileNotFoundError, ValueError):
             mappings = {}
@@ -47,16 +46,15 @@ def save_anilist_mapping(anilist_id: int, scraper_title: str):
         mappings[str(anilist_id)] = scraper_title
 
         # Save
-        Path(HISTORY_PATH).mkdir(parents=True, exist_ok=True)
-        with open(ANILIST_MAPPINGS_FILE, "w") as f:
+        HISTORY_PATH.mkdir(parents=True, exist_ok=True)
+        with ANILIST_MAPPINGS_FILE.open("w") as f:
             dump(mappings, f, indent=2)
-    except Exception as e:
-        print(f"⚠️  Não foi possível salvar mapeamento: {e}")
+    except Exception:
+        pass
 
 
 def normalize_anime_title(title: str):
-    """
-    Gera variações progressivas do título em lowercase, removendo palavras do final.
+    """Gera variações progressivas do título em lowercase, removendo palavras do final.
     Exemplo: "Attack on Titan Season 2" → ["attack on titan", "attack on", "attack"]
     Todas as saídas são sempre minúsculas.
     """
@@ -116,11 +114,10 @@ def anilist_anime_flow(
     anilist_id: int,
     args,
     anilist_progress: int = 0,
-    display_title: str = None,
-):
-    """
-    Flow for anime selected from AniList
-    Searches scrapers for the anime and starts normal playback flow
+    display_title: str | None = None,
+) -> None:
+    """Flow for anime selected from AniList
+    Searches scrapers for the anime and starts normal playback flow.
 
     Args:
         anime_title: Title to search for (romaji or english)
@@ -128,13 +125,14 @@ def anilist_anime_flow(
         args: Command line arguments
         anilist_progress: Current episode progress from AniList (0 if not watching)
         display_title: Full bilingual title for display (romaji / english)
+
     """
     # Use display_title if provided, otherwise fall back to anime_title
     if not display_title:
         display_title = anime_title
     from anilist import anilist_client
 
-    loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
+    loader.load_plugins({"t-br"}, None if not args.debug else ["animesonlinecc"])
 
     # Try different title variations
     title_variations = normalize_anime_title(anime_title)
@@ -142,7 +140,6 @@ def anilist_anime_flow(
     used_query = None  # Track which query was actually used
 
     for variant in title_variations:
-        print(f"\n🔍 Buscando '{variant}' nos scrapers...")
         rep.clear_search_results()  # Clear previous search results
         with loading(f"Buscando '{variant}'..."):
             rep.search_anime(variant)
@@ -153,8 +150,6 @@ def anilist_anime_flow(
 
     manual_search = False
     if not titles:
-        print(f"\n❌ Anime '{anime_title}' não encontrado automaticamente.")
-        print("💡 Tentou variações:", ", ".join(f"'{v}'" for v in title_variations))
 
         # Offer manual search
         from menu import menu_navigate
@@ -176,7 +171,6 @@ def anilist_anime_flow(
             manual_search = True
 
             if not titles:
-                print(f"❌ Nenhum resultado para '{manual_query}'")
                 return
         else:
             return  # Back to AniList menu
@@ -187,7 +181,6 @@ def anilist_anime_flow(
     # If we have a saved mapping and it's in the results, use it automatically
     if saved_title and saved_title in titles:
         selected_anime = saved_title
-        print(f"✅ Usando título salvo: {selected_anime}")
 
         # Offer option to change if they want
         from menu import menu_navigate
@@ -212,7 +205,6 @@ def anilist_anime_flow(
 
             # Save the new choice
             save_anilist_mapping(anilist_id, selected_anime)
-            print(f"💾 Novo título salvo para este anime")
         elif not change_choice:
             return  # User cancelled
     elif len(titles) > 1:
@@ -234,11 +226,9 @@ def anilist_anime_flow(
         # Save the choice
         if anilist_id:
             save_anilist_mapping(anilist_id, selected_anime)
-            print(f"💾 Título salvo para próximas vezes")
     else:
         # Only one result
         selected_anime = titles[0]
-        print(f"✅ Encontrado: {selected_anime}")
 
         # Save for next time if we have anilist_id
         if anilist_id:
@@ -253,8 +243,8 @@ def anilist_anime_flow(
     # Check local history for this anime (use max of AniList and local)
     local_progress = 0
     try:
-        history_file = HISTORY_PATH + "history.json"
-        with open(history_file, "r") as f:
+        history_file = HISTORY_PATH / "history.json"
+        with history_file.open() as f:
             history_data = load(f)
             if selected_anime in history_data:
                 # history stores episode_idx (0-based), progress is 1-based
@@ -332,7 +322,9 @@ def anilist_anime_flow(
         with loading("Buscando vídeo..."):
             player_url = rep.search_player(selected_anime, episode)
         if args.debug:
-            print(player_url)
+            pass
+        if not player_url:
+            return
         play_video(player_url, args.debug)
         save_history(selected_anime, episode_idx, anilist_id)
 
@@ -348,15 +340,13 @@ def anilist_anime_flow(
             if confirm == "✅ Sim, assisti até o final":
                 # Check if anime is in any list
                 if not anilist_client.is_in_any_list(anilist_id):
-                    print("\n📋 Este anime não está na sua lista do AniList")
-                    print("✨ Adicionando automaticamente à lista 'Watching'...")
                     anilist_client.add_to_list(anilist_id, "CURRENT")
 
                 success = anilist_client.update_progress(anilist_id, episode)
                 if success:
-                    print(f"✅ AniList atualizado: episódio {episode}")
+                    pass
                 else:
-                    print("⚠️  Não foi possível atualizar AniList")
+                    pass
 
         opts = []
         if episode_idx < num_episodes - 1:
@@ -372,7 +362,7 @@ def anilist_anime_flow(
 
         if not selected_opt or selected_opt == "🔙 Voltar":
             return  # Exit to previous menu
-        elif selected_opt == "▶️  Próximo":
+        if selected_opt == "▶️  Próximo":
             episode_idx += 1
         elif selected_opt == "◀️  Anterior":
             episode_idx -= 1
@@ -385,7 +375,7 @@ def anilist_anime_flow(
 
 
 def show_main_menu():
-    """Display main menu with options"""
+    """Display main menu with options."""
     options = [
         "🔍 Buscar Anime",
         "▶️  Continuar Assistindo",
@@ -396,7 +386,7 @@ def show_main_menu():
 
 
 def search_anime_flow(args):
-    """Flow for searching and selecting an anime"""
+    """Flow for searching and selecting an anime."""
     query = (
         (input("\n🔍 Pesquise anime: ") if not args.query else args.query)
         if not args.debug
@@ -408,7 +398,6 @@ def search_anime_flow(args):
     titles = rep.get_anime_titles()
 
     if not titles:
-        print(f"❌ Nenhum anime encontrado para '{query}'")
         return None, None
 
     from menu import menu_navigate
@@ -430,7 +419,7 @@ def search_anime_flow(args):
     return selected_anime, episode_idx
 
 
-def main(args):
+def main(args) -> None:
     loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
 
     # Variables for AniList integration
@@ -455,7 +444,7 @@ def main(args):
             if not selected_anime:
                 return
         elif choice == "▶️  Continuar Assistindo":
-            selected_anime, episode_idx, anilist_id, anilist_title = load_history()
+            selected_anime, episode_idx, anilist_id, _anilist_title = load_history()
             # Episodes already loaded by load_history()
         elif choice == "📺 AniList":
             from anilist_menu import anilist_main_menu
@@ -479,7 +468,7 @@ def main(args):
         with loading("Buscando vídeo..."):
             player_url = rep.search_player(selected_anime, episode)
         if args.debug:
-            print(player_url)
+            pass
         play_video(player_url, args.debug)
         save_history(selected_anime, episode_idx, anilist_id)
 
@@ -489,23 +478,25 @@ def main(args):
             from menu import menu_navigate
 
             if anilist_client.is_authenticated():
-                confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
+                confirm_options = [
+                    "✅ Sim, assisti até o final",
+                    "❌ Não, parei antes.",
+                ]
                 confirm = menu_navigate(
-                    confirm_options, msg=f"Você assistiu o episódio {episode} até o final?"
+                    confirm_options,
+                    msg=f"Você assistiu o episódio {episode} até o final?",
                 )
 
                 if confirm == "✅ Sim, assisti até o final":
                     # Check if anime is in any list
                     if not anilist_client.is_in_any_list(anilist_id):
-                        print("\n📋 Este anime não está na sua lista do AniList")
-                        print("✨ Adicionando automaticamente à lista 'Watching'...")
                         anilist_client.add_to_list(anilist_id, "CURRENT")
 
                     success = anilist_client.update_progress(anilist_id, episode)
                     if success:
-                        print(f"✅ AniList atualizado: episódio {episode}")
+                        pass
                     else:
-                        print("⚠️  Não foi possível atualizar AniList")
+                        pass
 
         opts = []
         if episode_idx < num_episodes - 1:
@@ -521,7 +512,7 @@ def main(args):
 
         if not selected_opt or selected_opt == "🔙 Voltar":
             return  # Exit to main menu
-        elif selected_opt == "▶️  Próximo":
+        if selected_opt == "▶️  Próximo":
             episode_idx += 1
         elif selected_opt == "◀️  Anterior":
             episode_idx -= 1
@@ -534,8 +525,7 @@ def main(args):
 
 
 def load_history():
-    """
-    Load watch history and let user choose episode (-1/0/+1 from last watched)
+    """Load watch history and let user choose episode (-1/0/+1 from last watched).
 
     Old formats:
     - v1: {"anime_name": [episodes_urls, episode_idx], ...}
@@ -545,9 +535,9 @@ def load_history():
 
     Returns: (anime_name, episode_idx, anilist_id, anilist_title)
     """
-    file_path = HISTORY_PATH + "history.json"
+    file_path = HISTORY_PATH / "history.json"
     try:
-        with open(file_path, "r") as f:
+        with file_path.open() as f:
             data = load(f)
 
             # Migrate old formats to new format if needed
@@ -566,12 +556,11 @@ def load_history():
 
             # Save migrated data
             if needs_migration:
-                print("⚙️  Migrando histórico para novo formato...")
-                with open(file_path, "w") as f_write:
+                with file_path.open("w") as f_write:
                     dump(data, f_write)
 
             # Build menu with episode info
-            titles = dict()
+            titles = {}
             for entry, info in data.items():
                 ep_info = f" (Ultimo episódio assistido {info[1] + 1})"
                 titles[entry + ep_info] = len(ep_info)
@@ -592,17 +581,14 @@ def load_history():
             if anilist_id:
                 from anilist import anilist_client
 
-                print(f"\n🔍 Buscando info do AniList (ID: {anilist_id})...")
                 anime_info = anilist_client.get_anime_by_id(anilist_id)
                 if anime_info:
                     # Use romaji title as primary
                     anilist_title = anime_info.get("title", {}).get("romaji")
-                    print(f"✅ Encontrado no AniList: {anilist_title}")
                 else:
-                    print(f"⚠️  Anime não encontrado no AniList (ID: {anilist_id})")
+                    pass
 
             # Search for episodes to offer -1/0/+1 options
-            print(f"\n🔍 Buscando episódios de '{anime}'...")
             rep.clear_search_results()
             with loading(f"Buscando '{anime}'..."):
                 rep.search_anime(anime)
@@ -611,7 +597,6 @@ def load_history():
             episode_list = rep.get_episode_list(anime)
 
             if not episode_list:
-                print(f"❌ Não foi possível encontrar episódios de '{anime}'")
                 exit()
 
             # Offer -1/0/+1 options (previous, current, next)
@@ -657,46 +642,42 @@ def load_history():
 
         return anime, episode_idx, anilist_id, anilist_title
     except FileNotFoundError:
-        print("Sem histórico de animes")
         exit()
     except PermissionError:
-        print("Sem permissão para ler arquivos.")
-        return
+        return None
 
 
-def save_history(anime, episode, anilist_id=None):
-    """
-    Save watch history with timestamp and optional AniList ID
+def save_history(anime, episode, anilist_id=None) -> None:
+    """Save watch history with timestamp and optional AniList ID.
 
     Format: {"anime_name": [timestamp, episode_idx, anilist_id], ...}
     anilist_id can be None for anime not from AniList
     """
-    file_path = HISTORY_PATH + "history.json"
+    file_path = HISTORY_PATH / "history.json"
     try:
-        with open(file_path, "r+") as f:
+        with file_path.open("r+") as f:
             data = load(f)
             # Save with timestamp and anilist_id (new format)
             data[anime] = [int(time.time()), episode, anilist_id]
 
-        with open(file_path, "w") as f:
+        with file_path.open("w") as f:
             dump(data, f)
 
     except FileNotFoundError:
-        Path(HISTORY_PATH).mkdir(parents=True, exist_ok=True)
+        HISTORY_PATH.mkdir(parents=True, exist_ok=True)
 
-        with open(file_path, "w") as f:
-            data = dict()
+        with file_path.open("w") as f:
+            data = {}
             # Save with timestamp and anilist_id (new format)
             data[anime] = [int(time.time()), episode, anilist_id]
             dump(data, f)
 
     except PermissionError:
-        print("Não há permissão para criar arquivos.")
         return
 
 
-def cli():
-    """Entry point para CLI"""
+def cli() -> None:
+    """Entry point para CLI."""
     parser = argparse.ArgumentParser(
         prog="ani-tupi",
         description="Veja anime sem sair do terminal.",
