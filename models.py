@@ -5,8 +5,13 @@ Defines DTOs (Data Transfer Objects) for:
 - EpisodeData: Episode lists from scrapers
 - SearchResult: Repository search results
 - VideoUrl: Playback URLs with optional headers
+- MangaMetadata: Manga information from MangaDex
+- ChapterData: Chapter information from MangaDex
+- MangaHistoryEntry: Reading progress tracking
 """
 
+from datetime import datetime
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -105,3 +110,80 @@ class VideoUrl(BaseModel):
             # Some sites have dynamic URLs without file extensions
             warnings.warn(f"Video URL may be invalid: {v}", stacklevel=2)
         return v
+
+
+class MangaStatus(str, Enum):
+    """Manga publication status."""
+
+    ONGOING = "ongoing"
+    COMPLETED = "completed"
+    HIATUS = "hiatus"
+    CANCELLED = "cancelled"
+
+
+class MangaMetadata(BaseModel):
+    """Manga metadata from MangaDex.
+
+    Attributes:
+        id: MangaDex UUID
+        title: Manga title
+        description: Optional description
+        status: Publication status (ongoing, completed, etc.)
+        year: Publication year
+        cover_url: Optional cover image URL
+        tags: List of tags/genres
+    """
+
+    id: str = Field(..., min_length=1, description="MangaDex UUID")
+    title: str = Field(..., min_length=1, description="Manga title")
+    description: str | None = Field(None, description="Manga description")
+    status: MangaStatus = Field(..., description="Publication status")
+    year: int | None = Field(None, ge=1900, le=2100, description="Publication year")
+    cover_url: str | None = Field(None, description="Cover image URL")
+    tags: list[str] = Field(default_factory=list, description="Tags/genres")
+
+
+class ChapterData(BaseModel):
+    """Chapter data from MangaDex.
+
+    Attributes:
+        id: Chapter UUID
+        number: Chapter number (supports decimals like "42.5")
+        title: Optional chapter title
+        language: Language code (pt-br, en, ja, etc.)
+        published_at: Optional publication date
+        scanlation_group: Optional scanlation group name
+    """
+
+    id: str = Field(..., min_length=1, description="Chapter UUID")
+    number: str = Field(..., min_length=1, description="Chapter number (e.g., '42', '42.5')")
+    title: str | None = Field(None, description="Chapter title")
+    language: str = Field(..., min_length=1, description="Language code (pt-br, en, ja)")
+    published_at: datetime | None = Field(None, description="Publication date")
+    scanlation_group: str | None = Field(None, description="Scanlation group name")
+
+    def display_name(self) -> str:
+        """Format chapter for display.
+
+        Returns:
+            Formatted string like "Cap. 42 - Título" or "Cap. 42" if no title.
+        """
+        if self.title:
+            return f"Cap. {self.number} - {self.title}"
+        return f"Cap. {self.number}"
+
+
+class MangaHistoryEntry(BaseModel):
+    """Single entry in reading history.
+
+    Attributes:
+        last_chapter: Chapter number (e.g., "42.5")
+        last_chapter_id: Optional MangaDex chapter ID
+        timestamp: When the chapter was read
+        manga_id: Optional MangaDex manga ID
+    """
+
+    last_chapter: str = Field(..., min_length=1, description="Chapter number")
+    last_chapter_id: str | None = Field(None, description="MangaDex chapter ID")
+    timestamp: datetime = Field(default_factory=datetime.now, description="Read timestamp")
+    manga_id: str | None = Field(None, description="MangaDex manga ID")

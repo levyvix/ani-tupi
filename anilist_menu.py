@@ -157,7 +157,9 @@ def _show_account_menu() -> None:
             status = activity.get("status", "").lower()
             progress = activity.get("progress")
             media = activity.get("media", {})
-            title = media.get("title", {}).get("romaji") or media.get("title", {}).get("english", "Unknown")
+            title = media.get("title", {}).get("romaji") or media.get("title", {}).get(
+                "english", "Unknown"
+            )
             episodes = media.get("episodes")
             emoji = status_emoji.get(status, "•")
 
@@ -199,7 +201,7 @@ def _show_account_menu() -> None:
 
         if selection is None:
             # ESC pressed - clear screen and return to main menu
-            os.system('clear' if os_name != 'nt' else 'cls')
+            os.system("clear" if os.name != "nt" else "cls")
             return
 
         if selection == "🌐 Abrir perfil no navegador":
@@ -219,7 +221,7 @@ def _show_account_menu() -> None:
                     token_path.unlink()
                     print("\n✅ Logout realizado com sucesso!")
                     input("\nPressione Enter para continuar...")
-                    os.system('clear' if os_name != 'nt' else 'cls')
+                    os.system("clear" if os.name != "nt" else "cls")
                     return
                 print("\n❌ Token não encontrado")
                 input("\nPressione Enter para continuar...")
@@ -277,6 +279,11 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
             title = f"Your {list_type.title()} List"
 
         if not anime_list:
+            print("\n❌ Nenhum anime encontrado")
+            print("   Possíveis causas:")
+            print("   - Conexão com internet")
+            print("   - API do AniList indisponível")
+            print("   - Nenhum anime nesse filtro")
             input("\nPressione Enter para voltar...")
             return anilist_main_menu()
 
@@ -298,9 +305,7 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
 
             # Get romaji first, then english
             search_title = (
-                media["title"].get("romaji")
-                or media["title"].get("english")
-                or display_title
+                media["title"].get("romaji") or media["title"].get("english") or display_title
             )
 
             anime_id = media["id"]
@@ -523,9 +528,7 @@ def _search_and_add_anime(is_logged_in: bool) -> tuple[str, int] | None:
 
         options.append(display)
         search_title = (
-            anime["title"].get("romaji")
-            or anime["title"].get("english")
-            or display_title
+            anime["title"].get("romaji") or anime["title"].get("english") or display_title
         )
         anime_map[display] = (display_title, search_title, anime_id)
 
@@ -634,18 +637,18 @@ def _choose_season() -> str | None:
     """
     season_options = [
         "🌐 Todas as temporadas",
-        "❄️  Inverno (Winter)",
-        "🌸 Primavera (Spring)",
-        "☀️  Verão (Summer)",
-        "🍂 Outono (Fall)",
+        "Q1 - 🌸 Primavera (Spring)",
+        "Q2 - ☀️  Verão (Summer)",
+        "Q3 - 🍂 Outono (Fall)",
+        "Q4 - ❄️  Inverno (Winter)",
     ]
 
     season_map = {
         "🌐 Todas as temporadas": "ALL",
-        "❄️  Inverno (Winter)": "WINTER",
-        "🌸 Primavera (Spring)": "SPRING",
-        "☀️  Verão (Summer)": "SUMMER",
-        "🍂 Outono (Fall)": "FALL",
+        "Q1 - 🌸 Primavera (Spring)": "SPRING",
+        "Q2 - ☀️  Verão (Summer)": "SUMMER",
+        "Q3 - 🍂 Outono (Fall)": "FALL",
+        "Q4 - ❄️  Inverno (Winter)": "WINTER",
     }
 
     selection = menu_navigate(season_options, "Escolha a temporada")
@@ -661,9 +664,7 @@ def authenticate_flow() -> None:
     if anilist_client.is_authenticated():
         user_info = anilist_client.get_viewer_info()
         if user_info:
-            choice = (
-                input("\nDeseja fazer login com outra conta? (s/N): ").strip().lower()
-            )
+            choice = input("\nDeseja fazer login com outra conta? (s/N): ").strip().lower()
             if choice != "s":
                 return
 

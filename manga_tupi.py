@@ -1,114 +1,253 @@
+"""Manga CLI - read manga from MangaDex.
+
+Command-line interface for searching and reading manga chapters.
+Uses MangaDexClient service layer with Rich menus and loading spinners.
+"""
+
 import os
+import shutil
 import subprocess
-import threading
-from collections import defaultdict
-from pathlib import Path
-from sys import exit
 
-import requests
-from tqdm import tqdm
+from InquirerPy import inquirer
 
-from menu import menu
+from config import settings
+from loading import loading
+from manga_service import (
+    MangaDexClient,
+    MangaDexError,
+    MangaHistory,
+    MangaNotFoundError,
+)
+from menu import menu_navigate
 
-base_url = "https://api.mangadex.org"
 
-def run(dir_path) -> None:
-    subprocess.run(["feh", dir_path, "-R 1", "--fullscreen", "--scale-down"], check=False)
+def _find_image_viewer() -> str | None:
+    """Find an available image viewer on the system.
+
+    Checks (in order of preference):
+    - MANGA_VIEWER env var (custom preference)
+    - yacreader: Dedicated manga/comic reader (BEST for manga!)
+    - eog: Eye of GNOME (standard GNOME viewer)
+    - nomacs: Modern cross-platform viewer
+    - geeqie: Advanced viewer with many features
+    - ristretto: XFCE image viewer
+    - gpicview: Lightweight viewer
+    - viewnior: GTK image viewer
+    - display: ImageMagick (always available)
+    - open: macOS Preview
+
+    Returns:
+        Path to image viewer executable or None if not found
+    """
+    # Check for user override
+    custom_viewer = os.environ.get("MANGA_VIEWER")
+    if custom_viewer and shutil.which(custom_viewer):
+        return custom_viewer
+
+    # List of viewers in order of preference
+    viewers = [
+        "yacreader",  # Dedicated manga/comic reader (BEST!)
+        "eog",  # GNOME default
+        "nomacs",  # Modern and cross-platform
+        "geeqie",  # Feature-rich
+        "ristretto",  # XFCE viewer
+        "gpicview",  # Lightweight
+        "viewnior",  # GTK viewer
+        "display",  # ImageMagick fallback
+        "open",  # macOS Preview
+    ]
+
+    for viewer in viewers:
+        if shutil.which(viewer):
+            return viewer
+    return None
+
+
+def open_viewer(dir_path: str) -> None:
+    """Open image viewer for downloaded chapter.
+
+    Args:
+        dir_path: Path to chapter directory
+    """
+    viewer = _find_image_viewer()
+    if not viewer:
+        print(
+            "⚠️  Nenhum visualizador de imagens encontrado.\n"
+            "   Recomendamos: sxiv (rápido), eog (padrão GNOME), ou nomacs (moderno)\n"
+            "   Ou customize com: export MANGA_VIEWER=seu_viewer"
+        )
+        print(f"   As imagens foram salvas em: {dir_path}")
+        return
+
+    try:
+        if viewer == "open":  # macOS
+            subprocess.Popen(["open", "-a", "Preview", dir_path])
+        elif viewer == "sxiv":
+            # Open sxiv with proper flags for manga reading
+            # -a: auto-fit to window, -s: slideshow mode disabled by default
+            # -i: read file list from stdin (ensures correct order)
+            from pathlib import Path
+
+            files = sorted(Path(dir_path).glob("*.png"))
+            if files:
+                # Start sxiv in a way that accepts keyboard input properly
+                subprocess.run([viewer, "-a", str(dir_path)])
+            else:
+                print(f"⚠️  Nenhuma imagem encontrada em: {dir_path}")
+        else:
+            subprocess.Popen([viewer, dir_path])
+    except Exception as e:
+        print(f"⚠️  Erro ao abrir {viewer}: {e}")
+        print(f"   As imagens foram salvas em: {dir_path}")
+        print("   Customize com: export MANGA_VIEWER=seu_viewer")
+
 
 def main() -> None:
-    res = requests.get(
-                f"{base_url}/manga",
-                params={"title": input("Pesquise mangá: ")}).json()["data"]
+    """Main manga CLI entry point."""
+    # Initialize service with config
+    config = settings.manga
+    service = MangaDexClient(config)
 
-    titles = []
-    for manga in res:
-        if "pt-br" not in manga["attributes"]["altTitles"]:
-            try:
-                titles.append(manga["attributes"]["title"]["en"])
-            except:
-                try:
-                    titles.append(manga["attributes"]["title"]["ja"])
-                except:
-                    continue
-        else:
-            titles.append(manga["attributes"]["altTitles"]["pt-br"])
+    # Get search query
+    query = inquirer.text(message="Pesquise mangá").execute()
+    if not query.strip():
+        print("Pesquisa vazia")
+        return
 
-    title_ids = [manga["id"] for manga in res]
-    selected_title = menu(titles)
+    # Search with loading spinner
+    try:
+        with loading("Buscando mangás..."):
+            results = service.search_manga(query.strip())
+    except MangaNotFoundError:
+        print("❌ Mangá não encontrado. Tente outra pesquisa.")
+        return
+    except MangaDexError as e:
+        print(f"⚠️  {e.user_message}")
+        return
+    except Exception as e:
+        print(f"❌ Erro inesperado: {e}")
+        return
 
-    offset = 0
-    def get(query):
-        return requests.get(f"{base_url}/manga/{title_ids[titles.index(selected_title)]}/feed?{query}").json()["data"]
-    current, chapters = [], []
-    while not current or len(current) == 500:
-        query = "&".join(["limit=500",
-                      "translatedLanguage[]=pt-br",
-                      "translatedLanguage[]=en",
-                      "order[chapter]=asc",
-                      "includeEmptyPages=0",
-                      "includeFuturePublishAt=0",
-                      f"offset={offset}"])
-        current = get(query)
-        chapters.extend(current)
-        offset += 500
-    chapter_sources = defaultdict(list)
-    for chap in chapters:
-        if chap["attributes"]["chapter"] is None:
-            continue
-        chapter_sources[chap["attributes"]["chapter"]].append(chap)
-    chapters_num = [f"{chap:.0f}" if chap == int(chap) else f"{chap:.2f}" for chap in sorted(map(float, chapter_sources.keys()))]
+    # Select manga
+    manga_titles = [m.title for m in results]
+    try:
+        selected_title = menu_navigate(manga_titles, "Selecione mangá")
+    except KeyboardInterrupt:
+        return
 
-    def chapter_selection(selected_chapter = None):
-        nonlocal chapters_num, chapter_sources
-        if not selected_chapter:
-            selected_chapter = menu(chapters_num)
-        else:
-            try:
-                selected_chapter = chapters_num[chapters_num.index(selected_chapter) + 1]
-            except IndexError:
-                exit()
+    selected_manga = next(m for m in results if m.title == selected_title)
 
-        def select_language() -> None:
-            nonlocal selected_chapter
-            chapter_translates = [chap["attributes"]["translatedLanguage"] + " " + str(i + 1) for i, chap in enumerate(chapter_sources[selected_chapter])]
-            chapter_ids = [chap["id"] for chap in chapter_sources[selected_chapter]]
-            selected_opt = menu(chapter_translates)
+    # Load chapters with loading spinner
+    try:
+        with loading("Carregando capítulos..."):
+            chapters = service.get_chapters(selected_manga.id)
+    except MangaDexError as e:
+        print(f"⚠️  {e.user_message}")
+        return
+    except Exception as e:
+        print(f"❌ Erro ao carregar capítulos: {e}")
+        return
 
-            pages = requests.get(f"{base_url}/at-home/server/{chapter_ids[chapter_translates.index(selected_opt)]}").json()
-            home = Path.home().as_posix() if os.name != "nt" else home.as_uri()
-            dirs = [home, "Downloads", selected_title, selected_chapter]
-            dir_path = Path("/".join(dirs) if os.name != "nt" else "\\".join(dirs))
-            dir_path.mkdir(parents=True, exist_ok=True)
-            first = True
-            thread = threading.Thread(target=run, args=(dir_path,))
+    if not chapters:
+        print("❌ Nenhum capítulo disponível")
+        return
 
-            for i in tqdm(range(len(pages["chapter"]["data"]))):
-                url = pages["baseUrl"] + "/data/" + pages["chapter"]["hash"] + "/" + pages["chapter"]["data"][i]
-                img_path = Path(str(dir_path) + f"/{i}.png")
-                if not img_path.is_file():
-                    img_data = requests.get(url).content
-                    with img_path.open("wb") as img:
-                        img.write(img_data)
-                if first:
-                    thread.start()
-                    first = False
-            if not first:
-                thread.join()
-        select_language()
+    # Load reading history
+    history = MangaHistory()
+    last_chapter = history.get_last_chapter(selected_manga.title)
 
-        return selected_chapter
+    # Format chapter labels for display
+    chapter_labels = [ch.display_name() for ch in chapters]
 
-    prev = chapter_selection()
+    # Show resume hint if applicable
+    if last_chapter:
+        chapter_labels[0] = f"⮕ Retomar - {chapter_labels[0]}"
+
+    # Chapter selection loop
+    current_index = 0
     while True:
-        opt = menu(["Próximo"])
-        if opt == "Próximo":
-            prev = chapter_selection(prev)
+        try:
+            selected_label = menu_navigate(chapter_labels, "Selecione capítulo")
+        except KeyboardInterrupt:
+            return
+
+        # Find actual chapter (strip resume hint)
+        display_label = selected_label.replace("⮕ Retomar - ", "")
+        current_index = next(
+            i
+            for i, label in enumerate(chapter_labels)
+            if label.replace("⮕ Retomar - ", "") == display_label
+        )
+        selected_chapter = chapters[current_index]
+
+        # Load chapter pages
+        try:
+            with loading("Carregando páginas..."):
+                pages = service.get_chapter_pages(selected_chapter.id)
+        except MangaDexError as e:
+            print(f"⚠️  {e.user_message}")
+            continue
+        except Exception as e:
+            print(f"❌ Erro ao carregar páginas: {e}")
+            continue
+
+        if not pages:
+            print("❌ Nenhuma página disponível para este capítulo")
+            continue
+
+        # Create output directory
+        output_path = config.output_directory / selected_manga.title / selected_chapter.number
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # Download pages
+        print(f"Baixando {len(pages)} páginas...")
+        try:
+            import requests
+            from tqdm import tqdm
+
+            for i, url in enumerate(tqdm(pages, desc="Download")):
+                img_path = output_path / f"{i:03d}.png"
+                if not img_path.exists():
+                    img_data = requests.get(url, timeout=10).content
+                    img_path.write_bytes(img_data)
+
+            # Open viewer
+            open_viewer(str(output_path))
+
+            # Save reading progress
+            history.update(
+                selected_manga.title,
+                selected_chapter.number,
+                chapter_id=selected_chapter.id,
+                manga_id=selected_manga.id,
+            )
+
+            print(f"✓ Capítulo salvo em: {output_path}")
+
+        except Exception as e:
+            print(f"❌ Erro ao baixar capítulo: {e}")
+            continue
+
+        # Ask for next action
+        try:
+            action = menu_navigate(["Próximo", "Sair"], "O que deseja fazer?")
+        except KeyboardInterrupt:
+            return
+
+        if action == "Sair":
+            return
+
+        # Move to next chapter if available
+        if current_index + 1 < len(chapters):
+            current_index += 1
+            chapter_labels[current_index] = chapter_labels[current_index].replace(
+                "⮕ Retomar - ", ""
+            )
+            # Continue loop to next chapter
         else:
-            break
+            print("Você chegou ao final dos capítulos disponíveis")
+            return
 
 
-
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
-
-

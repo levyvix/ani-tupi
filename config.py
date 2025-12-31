@@ -78,6 +78,29 @@ class SearchSettings(BaseModel):
     )
 
 
+class MangaSettings(BaseModel):
+    """MangaDex manga reader settings."""
+
+    api_url: str = Field(
+        "https://api.mangadex.org",
+        description="MangaDex API base URL",
+    )
+    cache_duration_hours: int = Field(
+        24,
+        ge=1,
+        le=72,
+        description="How long to cache chapter lists (hours)",
+    )
+    output_directory: Path = Field(
+        default_factory=lambda: Path.home() / "Downloads",
+        description="Where to save downloaded manga chapters",
+    )
+    languages: list[str] = Field(
+        default_factory=lambda: ["pt-br", "en"],
+        description="Preferred languages in order (pt-br, en, ja, etc)",
+    )
+
+
 class AppSettings(BaseSettings):
     """Root application settings with environment variable support.
 
@@ -101,6 +124,7 @@ class AppSettings(BaseSettings):
     anilist: AniListSettings = Field(default_factory=AniListSettings)
     cache: CacheSettings = Field(default_factory=CacheSettings)
     search: SearchSettings = Field(default_factory=SearchSettings)
+    manga: MangaSettings = Field(default_factory=MangaSettings)
 
 
 # Singleton instance - import and use throughout the app

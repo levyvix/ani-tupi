@@ -2,7 +2,7 @@ from multiprocessing.pool import ThreadPool
 from os import cpu_count
 
 import requests
-from bs4 import BeautifulSoup
+from selectolax.parser import HTMLParser
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -22,17 +22,17 @@ class AnimesOnlineCC(PluginInterface):
     def search_anime(query) -> None:
         url = "https://animesonlinecc.to/search/" + "+".join(query.split())
         html_content = requests.get(url)
-        soup = BeautifulSoup(html_content.text, "html.parser")
-        divs = soup.find_all("div", class_="data")
-        titles_urls = [div.h3.a["href"] for div in divs]
-        titles = [div.h3.a.get_text() for div in divs]
+        tree = HTMLParser(html_content.text)
+        divs = tree.css("div.data")
+        titles_urls = [div.css_first("h3 a").attributes.get("href") for div in divs]
+        titles = [div.css_first("h3 a").text() for div in divs]
         for title, url in zip(titles, titles_urls, strict=False):
             rep.add_anime(title, url, AnimesOnlineCC.name)
 
         def parse_seasons(title, url) -> None:
             html = requests.get(url)
-            soup = BeautifulSoup(html.text, "html.parser")
-            num_seasons = len(list(soup.find_all("div", class_="se-c")))
+            tree = HTMLParser(html.text)
+            num_seasons = len(tree.css("div.se-c"))
             if num_seasons > 1:
                 for n in range(2, num_seasons + 1):
                     rep.add_anime(
@@ -46,13 +46,13 @@ class AnimesOnlineCC(PluginInterface):
     @staticmethod
     def search_episodes(anime, url, season) -> None:
         html_episodes_page = requests.get(url)
-        soup = BeautifulSoup(html_episodes_page.text, "html.parser")
-        seasons = list(soup.find_all("ul", class_="episodios"))
+        tree = HTMLParser(html_episodes_page.text)
+        seasons = tree.css("ul.episodios")
         season = seasons[season - 1 if season is not None else 0]
         urls, titles = [], []
-        for div in season.find_all("div", class_="episodiotitle"):
-            urls.append(div.a["href"])
-            titles.append(div.a.get_text())
+        for div in season.css("div.episodiotitle"):
+            urls.append(div.css_first("a").attributes.get("href"))
+            titles.append(div.css_first("a").text())
         rep.add_episode_list(anime, titles, urls, AnimesOnlineCC.name)
 
     @staticmethod

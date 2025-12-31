@@ -1,5 +1,5 @@
 import requests
-from bs4 import BeautifulSoup
+from selectolax.parser import HTMLParser
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -19,35 +19,26 @@ class AnimeFire(PluginInterface):
     def search_anime(query) -> None:
         url = "https://animefire.plus/pesquisar/" + "-".join(query.split())
         html_content = requests.get(url)
-        soup = BeautifulSoup(html_content.text, "html.parser")
+        tree = HTMLParser(html_content.text)
         target_class = (
             "col-6 col-sm-4 col-md-3 col-lg-2 mb-1 minWDanime divCardUltimosEps"
         )
         titles_urls = [
-            div.article.a["href"]
-            for div in soup.find_all("div", class_=target_class)
-            if "title" in div.attrs
+            div.css_first("article a").attributes.get("href")
+            for div in tree.css(f"div.{target_class.replace(' ', '.')}")
+            if div.css_first("article a") is not None
         ]
-        titles = [h3.get_text() for h3 in soup.find_all("h3", class_="animeTitle")]
+        titles = [h3.text() for h3 in tree.css("h3.animeTitle")]
         for title, url in zip(titles, titles_urls, strict=False):
             rep.add_anime(title, url, AnimeFire.name)
 
     @staticmethod
     def search_episodes(anime, url, params) -> None:
         html_episodes_page = requests.get(url)
-        soup = BeautifulSoup(html_episodes_page.text, "html.parser")
-        episode_links = [
-            a["href"]
-            for a in soup.find_all(
-                "a", class_="lEp epT divNumEp smallbox px-2 mx-1 text-left d-flex"
-            )
-        ]
-        opts = [
-            a.get_text()
-            for a in soup.find_all(
-                "a", class_="lEp epT divNumEp smallbox px-2 mx-1 text-left d-flex"
-            )
-        ]
+        tree = HTMLParser(html_episodes_page.text)
+        links = tree.css("a.lEp.epT.divNumEp.smallbox.px-2.mx-1.text-left.d-flex")
+        episode_links = [a.attributes.get("href") for a in links]
+        opts = [a.text() for a in links]
         rep.add_episode_list(anime, opts, episode_links, AnimeFire.name)
 
     @staticmethod
