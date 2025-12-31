@@ -341,6 +341,12 @@ def anilist_anime_flow(
             )
 
             if confirm == "✅ Sim, assisti até o final":
+                # Check if anime is in any list
+                if not anilist_client.is_in_any_list(anilist_id):
+                    print("\n📋 Este anime não está na sua lista do AniList")
+                    print("✨ Adicionando automaticamente à lista 'Watching'...")
+                    anilist_client.add_to_list(anilist_id, "CURRENT")
+
                 success = anilist_client.update_progress(anilist_id, episode)
                 if success:
                     print(f"✅ AniList atualizado: episódio {episode}")
@@ -481,6 +487,12 @@ def main(args):
                 )
 
                 if confirm == "✅ Sim, assisti até o final":
+                    # Check if anime is in any list
+                    if not anilist_client.is_in_any_list(anilist_id):
+                        print("\n📋 Este anime não está na sua lista do AniList")
+                        print("✨ Adicionando automaticamente à lista 'Watching'...")
+                        anilist_client.add_to_list(anilist_id, "CURRENT")
+
                     success = anilist_client.update_progress(anilist_id, episode)
                     if success:
                         print(f"✅ AniList atualizado: episódio {episode}")

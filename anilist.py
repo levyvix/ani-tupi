@@ -411,6 +411,44 @@ class AniListClient:
             print(f"Erro ao buscar anime por ID: {e}")
             return None
 
+    def is_in_any_list(self, anime_id: int) -> bool:
+        """
+        Check if anime is in any of the user's lists
+
+        Args:
+            anime_id: AniList anime ID
+
+        Returns:
+            True if anime is in any list, False otherwise
+        """
+        if not self.is_authenticated():
+            return False
+
+        # Ensure we have user_id
+        if not self.user_id:
+            user_info = self.get_viewer_info()
+            if user_info:
+                self.user_id = user_info['id']
+            else:
+                return False
+
+        query = """
+        query ($userId: Int, $mediaId: Int) {
+            MediaList(userId: $userId, mediaId: $mediaId) {
+                id
+                status
+            }
+        }
+        """
+
+        variables = {"userId": self.user_id, "mediaId": anime_id}
+
+        try:
+            result = self._query(query, variables)
+            return result is not None and "MediaList" in result and result["MediaList"] is not None
+        except Exception:
+            return False
+
     def add_to_list(self, anime_id: int, status: str = "CURRENT") -> bool:
         """
         Add anime to user's list
