@@ -44,8 +44,8 @@ build = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pyinstaller>=6.11.1",
 ]
 

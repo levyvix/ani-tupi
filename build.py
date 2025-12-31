@@ -10,6 +10,11 @@ import shutil
 import platform
 from pathlib import Path
 
+# Fix encoding para Windows suportar emojis
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 
 def run_command(cmd, check=True, shell=False):
     """Executa comando e mostra output"""
