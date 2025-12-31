@@ -14,6 +14,49 @@ import time
 
 HISTORY_PATH = Path.home().as_posix() + "/.local/state/ani-tupi/" if name != 'nt' else "C:\\Program Files\\ani-tupi\\"
 
+def normalize_anime_title(title: str) -> list[str]:
+    """
+    Generate title variations for better scraper matching
+    Returns list of possible titles to try
+    """
+    import re
+
+    variations = [title]  # Original title always first
+
+    # Remove "Season N" / "2nd Season" etc
+    season_patterns = [
+        r'\s+Season\s+\d+',
+        r'\s+\d+(?:st|nd|rd|th)\s+Season',
+        r'\s+S\d+',
+        r'\s+Part\s+\d+',
+    ]
+
+    base_variations = [title]  # Start with original
+
+    for pattern in season_patterns:
+        cleaned = re.sub(pattern, '', title, flags=re.IGNORECASE).strip()
+        if cleaned and cleaned not in base_variations:
+            base_variations.append(cleaned)
+
+    # For each base variation, create case variations
+    all_variations = []
+    for variant in base_variations:
+        # Original
+        if variant not in all_variations:
+            all_variations.append(variant)
+
+        # Lowercase
+        lower = variant.lower()
+        if lower != variant and lower not in all_variations:
+            all_variations.append(lower)
+
+        # Title Case (Each Word Capitalized)
+        title_case = variant.title()
+        if title_case != variant and title_case not in all_variations:
+            all_variations.append(title_case)
+
+    return all_variations
+
 def anilist_anime_flow(anime_title: str, anilist_id: int, args):
     """
     Flow for anime selected from AniList
@@ -23,20 +66,50 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args):
 
     loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
 
-    print(f"\n🔍 Buscando '{anime_title}' nos scrapers...")
+    # Try different title variations
+    title_variations = normalize_anime_title(anime_title)
+    titles = []
 
-    # Search anime in scrapers
-    rep.search_anime(anime_title)
-    titles = rep.get_anime_titles()
+    for variant in title_variations:
+        print(f"\n🔍 Buscando '{variant}' nos scrapers...")
+        rep.clear_search_results()  # Clear previous search results
+        rep.search_anime(variant)
+        titles = rep.get_anime_titles()
+        if titles:
+            break  # Found results, stop trying
 
     if not titles:
-        print(f"❌ Anime '{anime_title}' não encontrado nos scrapers.")
-        print("Tente outro anime ou busque manualmente.")
-        return
+        print(f"\n❌ Anime '{anime_title}' não encontrado automaticamente.")
+        print("💡 Tentou variações:", ", ".join(f"'{v}'" for v in title_variations))
+
+        # Offer manual search
+        from menu import menu_navigate
+        choice = menu_navigate(
+            ["🔍 Buscar manualmente", "🔙 Voltar ao AniList"],
+            msg="O que deseja fazer?"
+        )
+
+        if not choice:
+            return  # User cancelled
+
+        if choice == "🔍 Buscar manualmente":
+            manual_query = input("\n🔍 Digite o nome para buscar: ")
+            rep.clear_search_results()  # Clear previous search results
+            rep.search_anime(manual_query)
+            titles = rep.get_anime_titles()
+
+            if not titles:
+                print(f"❌ Nenhum resultado para '{manual_query}'")
+                return
+        else:
+            return  # Back to AniList menu
 
     # If multiple results, let user choose
     if len(titles) > 1:
-        selected_anime = menu(titles, msg=f"Encontrados {len(titles)} resultados. Escolha:")
+        from menu import menu_navigate
+        selected_anime = menu_navigate(titles, msg=f"Encontrados {len(titles)} resultados. Escolha:")
+        if not selected_anime:
+            return  # User cancelled
     else:
         selected_anime = titles[0]
         print(f"✅ Encontrado: {selected_anime}")
@@ -44,7 +117,11 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args):
     # Get episodes
     rep.search_episodes(selected_anime)
     episode_list = rep.get_episode_list(selected_anime)
-    selected_episode = menu(episode_list, msg="Escolha o episódio.")
+    from menu import menu_navigate
+    selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+
+    if not selected_episode:
+        return  # User cancelled, go back
 
     episode_idx = episode_list.index(selected_episode)
     num_episodes = len(rep.anime_episodes_urls[selected_anime][0][0])
@@ -67,38 +144,110 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args):
 
         opts = []
         if episode_idx < num_episodes - 1:
-            opts.append("Próximo")
+            opts.append("▶️  Próximo")
         if episode_idx > 0:
-            opts.append("Anterior")
+            opts.append("◀️  Anterior")
+        opts.append("📋 Escolher outro episódio")
+        opts.append("🔙 Voltar")
 
-        selected_opt = menu(opts, msg="O que quer fazer agora?")
+        from menu import menu_navigate
+        selected_opt = menu_navigate(opts, msg="O que quer fazer agora?")
 
-        if selected_opt == "Próximo":
+        if not selected_opt or selected_opt == "🔙 Voltar":
+            return  # Exit to previous menu
+        elif selected_opt == "▶️  Próximo":
             episode_idx += 1
-        elif selected_opt == "Anterior":
+        elif selected_opt == "◀️  Anterior":
             episode_idx -= 1
+        elif selected_opt == "📋 Escolher outro episódio":
+            episode_list = rep.get_episode_list(selected_anime)
+            selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+            if not selected_episode:
+                continue  # Stay in current episode menu
+            episode_idx = episode_list.index(selected_episode)
+
+def show_main_menu():
+    """Display main menu with options"""
+    options = [
+        "🔍 Buscar Anime",
+        "▶️  Continuar Assistindo",
+        "📺 AniList",
+        "📚 Mangá",
+    ]
+    return menu(options, msg="Ani-Tupi - Menu Principal")
+
+def search_anime_flow(args):
+    """Flow for searching and selecting an anime"""
+    query = (input("\n🔍 Pesquise anime: ") if not args.query else args.query) if not args.debug else "eva"
+    rep.clear_search_results()  # Clear previous search results
+    rep.search_anime(query)
+    titles = rep.get_anime_titles()
+
+    if not titles:
+        print(f"❌ Nenhum anime encontrado para '{query}'")
+        return None, None
+
+    from menu import menu_navigate
+    selected_anime = menu_navigate(titles, msg="Escolha o Anime.")
+
+    if not selected_anime:
+        return None, None  # User cancelled
+
+    rep.search_episodes(selected_anime)
+    episode_list = rep.get_episode_list(selected_anime)
+    selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+
+    if not selected_episode:
+        return None, None  # User cancelled
+
+    episode_idx = episode_list.index(selected_episode)
+    return selected_anime, episode_idx
 
 def main(args):
     loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
 
-    if not args.continue_watching:
-        query = (input("Pesquise anime: ") if not args.query else args.query) if not args.debug else "eva"
-        rep.search_anime(query)
-        titles = rep.get_anime_titles()
-        selected_anime = menu(titles, msg="Escolha o Anime.")
-
-        rep.search_episodes(selected_anime)
-        episode_list = rep.get_episode_list(selected_anime)
-        selected_episode = menu(episode_list, msg="Escolha o episódio.")
-
-        episode_idx = episode_list.index(selected_episode)
+    # If command-line args provided, skip main menu
+    if args.query or args.continue_watching or args.manga:
+        if args.continue_watching:
+            selected_anime, episode_idx = load_history()
+            # Need to search episodes again (history no longer stores URLs)
+            print(f"\n🔍 Buscando episódios de '{selected_anime}'...")
+            rep.clear_search_results()  # Clear previous search results
+            rep.search_anime(selected_anime)
+            rep.search_episodes(selected_anime)
+        else:
+            selected_anime, episode_idx = search_anime_flow(args)
+            if not selected_anime:
+                return
     else:
-        selected_anime, episode_idx = load_history()
+        # Show main menu (no loop here - user can restart if needed)
+        choice = show_main_menu()
 
-        # Need to search episodes again (history no longer stores URLs)
-        print(f"\n🔍 Buscando episódios de '{selected_anime}'...")
-        rep.search_anime(selected_anime)
-        rep.search_episodes(selected_anime)
+        if choice == "🔍 Buscar Anime":
+            selected_anime, episode_idx = search_anime_flow(args)
+            if not selected_anime:
+                return
+        elif choice == "▶️  Continuar Assistindo":
+            selected_anime, episode_idx = load_history()
+            # Need to search episodes again (history no longer stores URLs)
+            print(f"\n🔍 Buscando episódios de '{selected_anime}'...")
+            rep.clear_search_results()  # Clear previous search results
+            rep.search_anime(selected_anime)
+            rep.search_episodes(selected_anime)
+        elif choice == "📺 AniList":
+            from anilist_menu import anilist_main_menu
+            # Loop to allow watching multiple anime
+            while True:
+                result = anilist_main_menu()
+                if not result:
+                    return  # User cancelled, exit to main menu
+
+                anime_title, anilist_id = result
+                anilist_anime_flow(anime_title, anilist_id, args)
+                # After watching, loop back to AniList menu
+        elif choice == "📚 Mangá":
+            manga_tupi()
+            return
 
     num_episodes = len(rep.anime_episodes_urls[selected_anime][0][0])
     while True:
@@ -110,16 +259,27 @@ def main(args):
 
         opts = []
         if episode_idx < num_episodes - 1:
-            opts.append("Próximo")
+            opts.append("▶️  Próximo")
         if episode_idx > 0:
-            opts.append("Anterior")
+            opts.append("◀️  Anterior")
+        opts.append("📋 Escolher outro episódio")
+        opts.append("🔙 Voltar")
 
-        selected_opt = menu(opts, msg="O que quer fazer agora?")
+        from menu import menu_navigate
+        selected_opt = menu_navigate(opts, msg="O que quer fazer agora?")
 
-        if selected_opt == "Próximo":
-            episode_idx += 1 
-        elif selected_opt == "Anterior":
+        if not selected_opt or selected_opt == "🔙 Voltar":
+            return  # Exit to main menu
+        elif selected_opt == "▶️  Próximo":
+            episode_idx += 1
+        elif selected_opt == "◀️  Anterior":
             episode_idx -= 1
+        elif selected_opt == "📋 Escolher outro episódio":
+            episode_list = rep.get_episode_list(selected_anime)
+            selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+            if not selected_episode:
+                continue  # Stay in current episode menu
+            episode_idx = episode_list.index(selected_episode)
 
 def load_history():
     """
@@ -154,7 +314,12 @@ def load_history():
                 ep_info = f" (Ultimo episódio assistido {info[1] + 1})"
                 titles[entry + ep_info] = len(ep_info)
 
-            selected = menu(list(titles.keys()), msg="Continue assistindo.")
+            from menu import menu_navigate
+            selected = menu_navigate(list(titles.keys()), msg="Continue assistindo.")
+
+            if not selected:
+                exit()  # User cancelled continue watching
+
             anime = selected[:-titles[selected]]
             episode_idx = data[anime][1]
 
@@ -228,11 +393,16 @@ def cli():
         if args.action == "auth":
             authenticate_flow()
         else:  # menu
-            result = anilist_main_menu()
-            if result:
+            # Loop to allow watching multiple anime without restarting
+            while True:
+                result = anilist_main_menu()
+                if not result:
+                    break  # User cancelled/exited
+
                 anime_title, anilist_id = result
                 # Start normal flow with selected anime
                 anilist_anime_flow(anime_title, anilist_id, args)
+                # After watching, loop back to AniList menu
     elif args.manga:
         manga_tupi()
     else:

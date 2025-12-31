@@ -368,6 +368,47 @@ class AniListClient:
             print(f"Erro ao buscar anime: {e}")
             return []
 
+    def add_to_list(self, anime_id: int, status: str = "CURRENT") -> bool:
+        """
+        Add anime to user's list
+
+        Args:
+            anime_id: AniList anime ID
+            status: List status (CURRENT, PLANNING, COMPLETED, PAUSED, DROPPED, REPEATING)
+
+        Returns:
+            True if successful
+        """
+        mutation = """
+        mutation ($mediaId: Int, $status: MediaListStatus) {
+            SaveMediaListEntry(mediaId: $mediaId, status: $status) {
+                id
+                status
+                media {
+                    title {
+                        romaji
+                    }
+                }
+            }
+        }
+        """
+
+        variables = {
+            "mediaId": anime_id,
+            "status": status
+        }
+
+        try:
+            result = self._query(mutation, variables)
+            if result and "SaveMediaListEntry" in result:
+                anime_title = result["SaveMediaListEntry"]["media"]["title"]["romaji"]
+                print(f"✅ '{anime_title}' adicionado à sua lista como {status}")
+                return True
+            return False
+        except Exception as e:
+            print(f"❌ Erro ao adicionar à lista: {e}")
+            return False
+
     def format_title(self, title_obj: dict) -> str:
         """
         Format title object to single string

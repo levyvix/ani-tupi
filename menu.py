@@ -62,9 +62,7 @@ class SearchInput(Input):
 
     def __init__(self, **kwargs):
         super().__init__(
-            placeholder="Digite para buscar...",
-            id="search-input",
-            **kwargs
+            placeholder="Digite para buscar...", id="search-input", **kwargs
         )
 
 
@@ -165,7 +163,7 @@ class MenuScreen(Screen):
         show_preview: bool = False,
         preview_callback: Optional[Callable[[str], dict]] = None,
         mode: str = "exit_on_sair",
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.options = options
@@ -212,7 +210,9 @@ class MenuScreen(Screen):
         # Focus the option list
         self.query_one("#menu-options", OptionList).focus()
 
-    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
+    def on_option_list_option_highlighted(
+        self, event: OptionList.OptionHighlighted
+    ) -> None:
         """Called when an option is highlighted"""
         if self.show_preview and self.preview_callback:
             # Get the option text
@@ -279,13 +279,13 @@ class MenuScreen(Screen):
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle search input changes"""
         if event.input.id == "search-input":
-            query = event.value.lower()
+            query = event.value.lower().strip()
 
             if not query:
                 # Empty query - show all
                 self._update_options(self.all_options)
             else:
-                # Filter options using fuzzy matching
+                # Filter options using improved fuzzy matching
                 from fuzzywuzzy import fuzz
 
                 matches = []
@@ -294,15 +294,32 @@ class MenuScreen(Screen):
                     if opt.startswith("─"):
                         continue
 
-                    score = fuzz.ratio(query, opt.lower())
-                    if score > 60:  # Threshold
-                        matches.append((score, opt))
+                    opt_lower = opt.lower()
 
-                # Sort by score
+                    # Calculate multiple scores for better matching
+                    partial_score = fuzz.partial_ratio(
+                        query, opt_lower
+                    )  # Partial match
+                    token_score = fuzz.token_set_ratio(
+                        query, opt_lower
+                    )  # Word-based match
+                    starts_with_bonus = 20 if opt_lower.startswith(query) else 0
+
+                    # Use best score
+                    best_score = max(partial_score, token_score) + starts_with_bonus
+
+                    # Lower threshold for better results
+                    if best_score > 40:
+                        matches.append((best_score, opt))
+
+                # Sort by score (descending)
                 matches.sort(reverse=True, key=lambda x: x[0])
-                filtered = [opt for score, opt in matches]
+                filtered = [opt for _, opt in matches]
+                filtered = filtered[:3]  # top 3
 
-                self._update_options(filtered if filtered else ["Nenhum resultado encontrado"])
+                self._update_options(
+                    filtered if filtered else ["Nenhum resultado encontrado"]
+                )
 
     def _update_options(self, options: list[str]) -> None:
         """Update the option list with new options"""
@@ -332,7 +349,7 @@ class MenuApp(App):
         mode: str = "exit_on_sair",
         show_preview: bool = False,
         preview_callback: Optional[Callable[[str], dict]] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.options = options
@@ -396,7 +413,12 @@ class MenuApp(App):
         )
 
 
-def menu(opts: list[str], msg: str = "", show_preview: bool = False, preview_callback: Optional[Callable] = None) -> str:
+def menu(
+    opts: list[str],
+    msg: str = "",
+    show_preview: bool = False,
+    preview_callback: Optional[Callable] = None,
+) -> str:
     """
     Display interactive menu with automatic "Sair" option
 
@@ -443,7 +465,7 @@ def menu_navigate(
     opts: list[str],
     msg: str = "",
     show_preview: bool = False,
-    preview_callback: Optional[Callable] = None
+    preview_callback: Optional[Callable] = None,
 ) -> Optional[str]:
     """
     Display interactive menu for navigation (returns None instead of exit)

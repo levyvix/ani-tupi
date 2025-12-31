@@ -33,7 +33,14 @@ class Repository:
 
     def register(self, plugin: PluginInterface) -> None:
         self.sources[plugin.name] = plugin
-    
+
+    def clear_search_results(self) -> None:
+        """Clear all search results, keeping registered plugins"""
+        self.anime_to_urls = defaultdict(list)
+        self.anime_episodes_titles = defaultdict(list)
+        self.anime_episodes_urls = defaultdict(list)
+        self.norm_titles = dict()
+
     def search_anime(self, query: str) -> None:
         with ThreadPool(min(len(self.sources), cpu_count())) as pool:
             for source in self.sources:
