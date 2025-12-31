@@ -88,6 +88,16 @@ def install_as_cli():
         print("\n❌ Erro ao instalar CLI")
         return False
 
+    # Adiciona ao GITHUB_PATH se estiver no GitHub Actions
+    if os.getenv("GITHUB_PATH"):
+        tool_bin = Path.home() / ".local" / "bin"
+        if platform.system() == "Windows":
+            tool_bin = Path.home() / ".local" / "bin"  # UV tool bin no Windows
+
+        with open(os.getenv("GITHUB_PATH"), "a") as f:
+            f.write(f"{tool_bin}\n")
+        print(f"✅ Adicionado {tool_bin} ao GITHUB_PATH")
+
     return True
 
 
