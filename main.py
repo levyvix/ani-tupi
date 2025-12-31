@@ -146,7 +146,7 @@ def anilist_anime_flow(
         rep.clear_search_results()  # Clear previous search results
         with loading(f"Buscando '{variant}'..."):
             rep.search_anime(variant)
-        titles = rep.get_anime_titles()
+        titles = rep.get_anime_titles(filter_by_query=variant, min_score=85)
         if titles:
             used_query = variant
             break  # Found results, stop trying
@@ -169,7 +169,7 @@ def anilist_anime_flow(
             rep.clear_search_results()  # Clear previous search results
             with loading(f"Buscando '{manual_query}'..."):
                 rep.search_anime(manual_query)
-            titles = rep.get_anime_titles()
+            titles = rep.get_anime_titles(filter_by_query=manual_query, min_score=85)
             used_query = manual_query
             manual_search = True
 
@@ -440,7 +440,7 @@ def search_anime_flow(args):
     rep.clear_search_results()  # Clear previous search results
     with loading(f"Buscando '{query}'..."):
         rep.search_anime(query)
-    titles = rep.get_anime_titles()
+    titles = rep.get_anime_titles(filter_by_query=query, min_score=85)
 
     if not titles:
         return None, None

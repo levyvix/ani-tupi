@@ -21,8 +21,12 @@ ani-tupi agora possui integração completa com AniList, permitindo:
 - 📋 **Planning** - Veja animes que você planeja assistir
 - ✅ **Completed** - Histórico de animes completos
 - 🔄 **Sincronização automática** - Progresso atualiza no AniList após cada episódio
+- 📝 **Adição automática à Watching** - Adiciona anime à sua lista ao começar a assistir
 - 💾 **Mapeamento inteligente** - Lembra do título correto do scraper para cada anime
+- ⚡ **Cache de episódios** - Carrega lista de episódios instantaneamente na segunda vez
+- 🚀 **Cache de scrapers** - Resultados de busca salvos para acesso rápido
 - ✅ **Confirmação de progresso** - Pergunta se assistiu até o final antes de atualizar
+- 👤 **Menu de conta AniList** - Veja seu perfil e estatísticas
 - 🎯 **Títulos bilíngues** - Veja nomes em romaji + inglês
 - ⌨️ **Navegação rápida** - Use ESC para voltar, setas para navegar
 
@@ -177,8 +181,12 @@ ani-tupi anilist menu
 - ✅ **Completed**: Histórico de animes completos
 - ⏸️ **Paused** / ❌ **Dropped** / 🔁 **Rewatching**: Todas as suas listas
 - 🔄 **Sincronização automática**: Progresso atualiza no AniList após assistir cada episódio
+- 📝 **Adição automática à lista Watching**: Adiciona anime à sua lista ao começar a assistir
 - 💾 **Mapeamento inteligente**: Salva o título correto do scraper para cada anime do AniList
+- ⚡ **Cache de episódios**: Carrega lista de episódios instantaneamente na segunda vez
+- 🚀 **Cache de scrapers**: Resultados de busca salvos para acesso rápido
 - ✅ **Confirmação de progresso**: Pergunta se você assistiu até o final antes de sincronizar
+- 👤 **Menu de conta AniList**: Veja seu perfil e estatísticas diretamente no terminal
 - 🎯 **Continuar de onde parou**: Retoma automaticamente no episódio certo (AniList + histórico local)
 - 🔍 **Busca flexível**: Tenta romaji primeiro, depois inglês se não encontrar
 - 📝 **Múltiplas fontes**: Se encontrar múltiplos resultados, deixa você escolher o correto
@@ -314,9 +322,28 @@ GPL-3.0 - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 ## 📝 Changelog
 
-### Versão Atual (feature/textual-rich-tui)
+### Versão Atual (Dezembro 2025)
 
-**🎉 Integração AniList Completa**
+**⚡ Performance e Cache**
+- ✅ Cache de episódios: carrega instantaneamente lista de episódios já visitados
+- ✅ Cache de scrapers: resultados de busca salvos para acesso rápido
+- ✅ Correção de crash ao usar cache de episódios
+- ✅ Migração de Textual para Rich + InquirerPy (TUI 65% menor, 10x mais rápido)
+
+**🎉 Melhorias AniList**
+- ✅ Adição automática de anime à lista Watching ao começar a assistir
+- ✅ Menu de conta AniList: veja perfil e estatísticas no terminal
+- ✅ Melhoria na navegação: ESC para voltar, Q para sair
+- ✅ Correção de FileNotFoundError ao executar CLI de fora da pasta do projeto
+
+**🔧 Qualidade de Código**
+- ✅ Aplicação completa de linting Ruff
+- ✅ Melhorias de formatação e mensagens
+- ✅ Adição de OpenSpec para documentação de mudanças
+
+### v0.2.0 (Integração AniList Completa)
+
+**🎉 Integração AniList**
 - ✅ Autenticação OAuth com AniList.co
 - ✅ Navegação por listas (Watching, Planning, Completed, etc)
 - ✅ Visualização de trending anime
@@ -329,14 +356,8 @@ GPL-3.0 - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 **🔧 Melhorias de UX**
 - ✅ Menu de opções quando há progresso salvo (continuar ou escolher episódio)
-- ✅ Melhor formatação de código e mensagens
 - ✅ Navegação com ESC para voltar nos menus
 - ✅ Indicadores visuais de progresso (episódio X/Y, rating)
-
-**🐛 Correções**
-- ✅ Correção de texto "assistir" → "assisti" no menu de confirmação
-- ✅ Padronização de chamadas menu_navigate()
-- ✅ Melhor tratamento de múltiplos resultados de busca
 
 ### v0.1.0 (Base)
 - ✅ Sistema de plugins para múltiplos scrapers

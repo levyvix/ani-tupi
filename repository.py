@@ -48,15 +48,45 @@ class Repository:
             print("Verifique se os plugins estão instalados em plugins/")
             return
 
-        with ThreadPool(min(len(self.sources), cpu_count())) as pool:
-            for source in self.sources:
-                pool.apply(self.sources[source].search_anime, args=(query,))
+        # Progressive search: start with 2 words, increase if no results
+        words = query.split()
+        min_words = 2
+
+        # Store original query for later filtering
+        self._last_query = query
+
+        # If query has 2 or fewer words, just search normally
+        if len(words) <= min_words:
+            with ThreadPool(min(len(self.sources), cpu_count())) as pool:
+                for source in self.sources:
+                    pool.apply(self.sources[source].search_anime, args=(query,))
+            return
+
+        # Progressive search: 2 words, 3 words, ..., all words
+        for num_words in range(min_words, len(words) + 1):
+            partial_query = " ".join(words[:num_words])
+
+            # Clear previous attempt results
+            self.clear_search_results()
+
+            # Search with current query
+            with ThreadPool(min(len(self.sources), cpu_count())) as pool:
+                for source in self.sources:
+                    pool.apply(self.sources[source].search_anime, args=(partial_query,))
+
+            # If found results, stop
+            if self.anime_to_urls:
+                if num_words < len(words):
+                    print(f"ℹ️  Busca com: '{partial_query}' ({num_words}/{len(words)} palavras)")
+                break
 
     def add_anime(self, title: str, url: str, source:str, params=None) -> None:
         """This method assumes that different seasons are different anime, like MAL, so plugin devs should take scrape that way."""
         title_ = title.lower()
         table = {"clássico": "",
                  "classico": "",
+                 "dublado": "",
+                 "legendado": "",
                  ":":"",
                  "part":"season",
                  "temporada":"season",
@@ -69,15 +99,47 @@ class Repository:
 
         self.norm_titles[title] = title_
 
-        threshold = 95
+        threshold = 98
         for key in self.anime_to_urls:
             if fuzz.ratio(title_, self.norm_titles[key]) >= threshold:
                 self.anime_to_urls[key].append((url, source, params))
                 return
         self.anime_to_urls[title].append((url, source, params))
 
-    def get_anime_titles(self) -> list[str]:
-        return sorted(self.anime_to_urls.keys())
+    def get_anime_titles(self, filter_by_query: str = None, min_score: int = 70) -> list[str]:
+        """Get anime titles, optionally filtered by relevance to query.
+
+        Args:
+            filter_by_query: If provided, only return titles with fuzzy score >= min_score
+            min_score: Minimum fuzzy matching score (0-100) to include result
+        """
+        titles = list(self.anime_to_urls.keys())
+
+        if not filter_by_query:
+            return sorted(titles)
+
+        # Normalize query for comparison
+        query_norm = filter_by_query.lower()
+        table = {
+            'clássico': '', 'classico': '',
+            'dublado': '', 'legendado': '',
+            ':': '', 'part': 'season', 'temporada': 'season',
+            '(': '', ')': '', ' ': ''
+        }
+        for key, val in table.items():
+            query_norm = query_norm.replace(key, val)
+
+        # Score each title
+        scored_titles = []
+        for title in titles:
+            title_norm = self.norm_titles[title]
+            score = fuzz.ratio(query_norm, title_norm)
+            if score >= min_score:
+                scored_titles.append((score, title))
+
+        # Sort by score (highest first), then alphabetically
+        scored_titles.sort(key=lambda x: (-x[0], x[1]))
+        return [title for score, title in scored_titles]
 
     def search_episodes(self, anime: str) -> None:
         if anime in self.anime_episodes_titles:
