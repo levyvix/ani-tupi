@@ -9,6 +9,37 @@ Para ver mangás, confira: [manga-tupi](https://github.com/manga-tupi)
 ## 📺 Demo no YouTube
 [![Demo](https://img.youtube.com/vi/eug6gKLTD3I/maxresdefault.jpg)](https://youtu.be/eug6gKLTD3I)
 
+## ⭐ Integração com AniList (Recomendado!)
+
+**Sincronize automaticamente seu progresso com [AniList.co](https://anilist.co)!**
+
+ani-tupi agora possui integração completa com AniList, permitindo:
+
+- 📈 **Trending** - Descubra os animes mais populares do momento
+- 📅 **Recentes** - Continue de onde parou (histórico local)
+- 📺 **Watching** - Acesse sua lista "Assistindo" do AniList
+- 📋 **Planning** - Veja animes que você planeja assistir
+- ✅ **Completed** - Histórico de animes completos
+- 🔄 **Sincronização automática** - Progresso atualiza no AniList após cada episódio
+- 🎯 **Títulos bilíngues** - Veja nomes em romaji + inglês
+- ⌨️ **Navegação rápida** - Use ESC para voltar, setas para navegar
+
+**Setup rápido (30 segundos):**
+
+```bash
+# 1. Fazer login (apenas uma vez)
+ani-tupi anilist auth
+
+# 2. Navegar suas listas + trending
+ani-tupi anilist
+
+# 3. Assista normalmente - tudo sincroniza automaticamente! ✨
+```
+
+Mesmo método usado por [viu-media](https://github.com/viu-media/viu) - simples e confiável!
+
+---
+
 ## 📋 Requisitos
 
 - **Python 3.12+** (obrigatório)
@@ -121,6 +152,35 @@ manga-tupi
 # Ver ajuda
 ani-tupi --help
 ```
+
+### Integração AniList
+
+Sincronize seu progresso com [AniList.co](https://anilist.co) automaticamente!
+
+```bash
+# Fazer login no AniList
+ani-tupi anilist auth
+
+# Navegar listas do AniList
+ani-tupi anilist
+
+# Ou apenas (menu é o padrão)
+ani-tupi anilist menu
+```
+
+**Features:**
+- 📈 **Trending**: Veja os animes mais populares do momento
+- 📺 **Watching**: Continue de onde parou (se logado)
+- 📋 **Planning**: Animes que você planeja assistir
+- ✅ **Completed**: Histórico de animes completos
+- ⏸️ **Paused** / ❌ **Dropped** / 🔁 **Rewatching**: Todas as suas listas
+- 🔄 **Sincronização automática**: Progresso atualiza no AniList após assistir cada episódio
+
+**Como funciona:**
+1. Faça login uma vez com `ani-tupi anilist auth`
+2. Use `ani-tupi anilist` para navegar suas listas
+3. Selecione um anime → ani-tupi busca nos scrapers
+4. Assista normalmente → progresso sincroniza automaticamente!
 
 ### Modo Desenvolvimento
 
