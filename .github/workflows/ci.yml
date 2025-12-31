@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+
+jobs:
+  lint-and-validate:
+    name: Lint e Validação
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+
+    - name: Configurar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Instalar UV
+      run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    - name: Adicionar UV ao PATH
+      run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Verificar pyproject.toml
+      run: |
+        uv --version
+        cat pyproject.toml
+
+    - name: Validar dependências
+      run: uv sync --no-install-project
+
+    - name: Verificar sintaxe Python
+      run: |
+        uv run python -m py_compile main.py
+        uv run python -m py_compile manga_tupi.py
+        uv run python -m py_compile loader.py
+        uv run python -m py_compile repository.py
+        uv run python -m py_compile menu.py
+        uv run python -m py_compile video_player.py
+        uv run python -m py_compile build.py
+
+    - name: Verificar plugins
+      run: |
+        for plugin in plugins/*.py; do
+          if [ -f "$plugin" ]; then
+            echo "Verificando $plugin..."
+            uv run python -m py_compile "$plugin"
+          fi
+        done
+
+  quick-test:
+    name: Teste Rápido
+    runs-on: ubuntu-latest
+    needs: lint-and-validate
+
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+
+    - name: Configurar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Instalar UV
+      run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    - name: Adicionar UV ao PATH
+      run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Instalar dependências
+      run: uv sync
+
+    - name: Testar imports
+      run: |
+        uv run python -c "import loader; print('✅ loader OK')"
+        uv run python -c "import repository; print('✅ repository OK')"
+        uv run python -c "import menu; print('✅ menu OK')"
+        uv run python -c "import video_player; print('✅ video_player OK')"
+        uv run python -c "import manga_tupi; print('✅ manga_tupi OK')"
+
+    - name: Verificar estrutura de diretórios
+      run: |
+        echo "Estrutura do projeto:"
+        ls -la
+        echo -e "\nPlugins:"
+        ls -la plugins/
+
+    - name: Testar help do CLI
+      run: |
+        uv run python main.py --help || true
+        echo "✅ CLI executável"

@@ -1,0 +1,143 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    name: Build Release - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: ani-tupi
+            asset_name: ani-tupi-linux-amd64
+          - os: macos-latest
+            artifact_name: ani-tupi
+            asset_name: ani-tupi-macos-amd64
+          - os: windows-latest
+            artifact_name: ani-tupi.exe
+            asset_name: ani-tupi-windows-amd64.exe
+
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+
+    - name: Configurar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Instalar UV (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    - name: Instalar UV (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        irm https://astral.sh/uv/install.ps1 | iex
+        echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    - name: Adicionar UV ao PATH (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Sincronizar dependências e buildar
+      run: |
+        uv sync --all-extras
+        uv run build.py
+
+    - name: Preparar release (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        cd dist
+        tar -czf ${{ matrix.asset_name }}.tar.gz ani-tupi plugins/
+        cd ..
+
+    - name: Preparar release (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        cd dist
+        Compress-Archive -Path ani-tupi.exe,plugins -DestinationPath ${{ matrix.asset_name }}.zip
+        cd ..
+
+    - name: Upload Release Asset (Linux/macOS)
+      if: runner.os != 'Windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.asset_name }}
+        path: dist/${{ matrix.asset_name }}.tar.gz
+
+    - name: Upload Release Asset (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.asset_name }}
+        path: dist/${{ matrix.asset_name }}.zip
+
+  create-release:
+    name: Criar Release no GitHub
+    needs: build-release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+
+    - name: Download todos os artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: release-assets
+
+    - name: Listar assets
+      run: ls -R release-assets/
+
+    - name: Criar Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: release-assets/**/*
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        body: |
+          ## 🎬 ani-tupi ${{ github.ref_name }}
+
+          Assista anime direto do terminal sem anúncios!
+
+          ### 📦 Download
+
+          Escolha o arquivo para seu sistema operacional:
+          - **Linux**: `ani-tupi-linux-amd64.tar.gz`
+          - **macOS**: `ani-tupi-macos-amd64.tar.gz`
+          - **Windows**: `ani-tupi-windows-amd64.exe.zip`
+
+          ### 🚀 Como usar
+
+          **Linux/macOS:**
+          ```bash
+          tar -xzf ani-tupi-*.tar.gz
+          cd ani-tupi
+          ./ani-tupi
+          ```
+
+          **Windows:**
+          1. Extraia o arquivo .zip
+          2. Execute `ani-tupi.exe`
+
+          ### 📋 Requisitos
+
+          - MPV player instalado
+          - Firefox browser instalado
+
+          ### 📝 Changelog
+
+          Veja as mudanças completas abaixo.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

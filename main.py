@@ -95,7 +95,8 @@ def save_history(anime, episode):
         print("Não há permissão para criar arquivos.")
         return
 
-if __name__=="__main__":
+def cli():
+    """Entry point para CLI"""
     parser = argparse.ArgumentParser(
                 prog = "ani-tupi",
                 description="Veja anime sem sair do terminal.",
@@ -105,10 +106,13 @@ if __name__=="__main__":
     parser.add_argument("--continue_watching", "-c", action="store_true")
     parser.add_argument("--manga", "-m", action="store_true")
     args = parser.parse_args()
-    
+
     if args.manga:
         manga_tupi()
     else:
         main(args)
 
-     
+
+if __name__=="__main__":
+    cli()
+
