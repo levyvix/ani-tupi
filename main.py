@@ -174,22 +174,50 @@ def anilist_anime_flow(
         else:
             return  # Back to AniList menu
 
-    # Always show title selection menu (don't auto-select saved title)
-    # This allows user to choose between dubbed/subbed/different seasons each time
+    # Check if we have a saved title choice from before
     from menu import menu_navigate
 
-    menu_title = f"📺 Anime do AniList: '{display_title}'\n"
-    if manual_search:
-        menu_title += f"🔍 Busca manual: '{used_query}'\n"
+    saved_title = load_anilist_mapping(anilist_id) if anilist_id else None
+
+    # If we have a saved title and it's in the current results, ask user if they want to keep it
+    if saved_title and saved_title in titles:
+        # Ask user if they want to continue with saved choice
+        choice = menu_navigate(
+            ["✅ Continuar com este", "🔄 Escolher outro"],
+            msg=f"Você usou '{saved_title}' antes.\nQuer continuar?",
+        )
+
+        if not choice:
+            return  # User cancelled
+
+        if choice == "✅ Continuar com este":
+            selected_anime = saved_title
+        else:
+            # User wants to choose a different title - show full menu
+            menu_title = f"📺 Anime do AniList: '{display_title}'\n"
+            if manual_search:
+                menu_title += f"🔍 Busca manual: '{used_query}'\n"
+            else:
+                menu_title += f"🔍 Busca usada: '{used_query}'\n"
+            menu_title += f"\nEncontrados {len(titles)} resultados. Escolha:"
+
+            selected_anime = menu_navigate(titles, msg=menu_title)
+            if not selected_anime:
+                return  # User cancelled
     else:
-        menu_title += f"🔍 Busca usada: '{used_query}'\n"
-    menu_title += f"\nEncontrados {len(titles)} resultados. Escolha:"
+        # No saved title or not in results - show full menu
+        menu_title = f"📺 Anime do AniList: '{display_title}'\n"
+        if manual_search:
+            menu_title += f"🔍 Busca manual: '{used_query}'\n"
+        else:
+            menu_title += f"🔍 Busca usada: '{used_query}'\n"
+        menu_title += f"\nEncontrados {len(titles)} resultados. Escolha:"
 
-    selected_anime = menu_navigate(titles, msg=menu_title)
-    if not selected_anime:
-        return  # User cancelled
+        selected_anime = menu_navigate(titles, msg=menu_title)
+        if not selected_anime:
+            return  # User cancelled
 
-    # Save the choice for reference (but don't auto-select next time)
+    # Save the choice for next time
     if anilist_id:
         save_anilist_mapping(anilist_id, selected_anime)
 
