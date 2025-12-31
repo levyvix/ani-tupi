@@ -83,7 +83,7 @@ def save_history(anime, episode):
             dump(data, f)
 
     except FileNotFoundError:
-        Path(file_path).mkdir(parents=True, exist_ok=True)
+        Path(HISTORY_PATH).mkdir(parents=True, exist_ok=True)
 
         with open(file_path, "w") as f:
             data = dict()
