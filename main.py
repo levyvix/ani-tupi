@@ -123,6 +123,11 @@ def offer_sequel_and_continue(anilist_id: int, current_anime: str, args) -> bool
     if not anilist_client.is_authenticated():
         return False
 
+    # Verify token is still valid by checking viewer info
+    if not anilist_client.get_viewer_info():
+        print("\n⚠️  Token do AniList expirou. Faça login novamente com: ani-tupi anilist auth")
+        return False
+
     # Get sequels from AniList
     sequels = anilist_client.get_sequels(anilist_id)
 
@@ -453,7 +458,13 @@ def anilist_anime_flow(
                 if success:
                     print("✅ Progresso salvo no AniList!")
                 else:
-                    print("⚠️  Não foi possível salvar no AniList (continuando...)")
+                    # Verify token is still valid if sync failed
+                    viewer = anilist_client.get_viewer_info()
+                    if not viewer:
+                        print("⚠️  Token do AniList expirou")
+                        print("   Execute: ani-tupi anilist auth")
+                    else:
+                        print("⚠️  Não foi possível salvar no AniList (continuando...)")
 
                 # Check for sequels when last episode is watched
                 if episode == num_episodes:
@@ -616,7 +627,13 @@ def main(args) -> None:
                     if success:
                         print("✅ Progresso salvo no AniList!")
                     else:
-                        print("⚠️  Não foi possível salvar no AniList (continuando...)")
+                        # Verify token is still valid if sync failed
+                        viewer = anilist_client.get_viewer_info()
+                        if not viewer:
+                            print("⚠️  Token do AniList expirou")
+                            print("   Execute: ani-tupi anilist auth")
+                        else:
+                            print("⚠️  Não foi possível salvar no AniList (continuando...)")
 
                     # Check for sequels when last episode is watched
                     if episode == num_episodes:
