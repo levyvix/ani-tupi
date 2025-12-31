@@ -40,7 +40,6 @@ jobs:
         uv run python -m py_compile repository.py
         uv run python -m py_compile menu.py
         uv run python -m py_compile video_player.py
-        uv run python -m py_compile build.py
 
     - name: Verificar plugins
       run: |

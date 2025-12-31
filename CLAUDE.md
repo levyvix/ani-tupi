@@ -48,18 +48,15 @@ uv add package-name                  # NEVER edit pyproject.toml directly
 uv add --dev package-name
 ```
 
-### Building Distribution
+### Installing as CLI Tool
 
 ```bash
-# Build PyInstaller executable
-uv run build.py                      # Creates dist/ani-tupi + dist/plugins/
+# Recommended: Install globally using install-cli.py
+python3 install-cli.py               # Installs to ~/.local/bin/ via uv tool install
+ani-tupi                             # Use globally after install
 
-# Manual PyInstaller (if needed)
-uv sync --all-extras
-pyinstaller --name ani-tupi --onefile main.py \
-    --add-data "plugins:plugins" \
-    --hidden-import plugins.animefire \
-    --hidden-import plugins.animesonlinecc
+# Uninstall
+uv tool uninstall ani-tupi
 ```
 
 ## Architecture Deep Dive
@@ -178,23 +175,14 @@ subprocess.run(["mpv", url, "--fullscreen", "--cursor-autohide-fs-only", "--log-
 
 ## Build System Details
 
-### Three Distribution Methods
+### Two Distribution Methods
 
 1. **CLI Tool (Recommended):** `python3 install-cli.py` → Installs to `~/.local/bin/` via `uv tool install`
-2. **PyInstaller Executable:** `uv run build.py` → Creates `dist/ani-tupi` + `dist/plugins/`
-3. **Development Mode:** `uv run ani-tupi` → No installation required
+2. **Development Mode:** `uv run ani-tupi` → No installation required
 
-### PyInstaller Resource Paths
+### Plugin Loading
 
-All file loading uses `get_resource_path()` helper (in `loader.py` and `build.py`):
-```python
-def get_resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):  # PyInstaller bundle
-        return join(sys._MEIPASS, relative_path)
-    return join(abspath("."), relative_path)
-```
-
-**Why:** PyInstaller extracts to temp `sys._MEIPASS` directory at runtime.
+All plugin loading uses `get_resource_path()` helper in `loader.py` to handle different execution contexts (development vs installed).
 
 ### Cross-Platform Considerations
 
@@ -374,7 +362,6 @@ ani-tupi anilist auth
 - `plugins/animefire.py` - Example plugin (animefire.plus)
 - `plugins/animesonlinecc.py` - Example plugin (animesonlinecc.to)
 - `install-cli.py` - Global CLI installer
-- `build.py` - PyInstaller build script
 - `pyproject.toml` - Project configuration (dependencies, entry points)
 
 ## CI/CD (GitHub Actions)
