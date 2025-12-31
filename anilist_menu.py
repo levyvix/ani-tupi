@@ -135,10 +135,10 @@ def _show_anime_list(list_type: str) -> Optional[tuple[str, int]]:
             # Format title for display (bilingual)
             display_title = anilist_client.format_title(media["title"])
 
-            # Get english first then romaji for searching
+            # Get romaji first, then english
             search_title = (
-                media["title"].get("english")
-                or media["title"].get("romaji")
+                media["title"].get("romaji")
+                or media["title"].get("english")
                 or display_title
             )
 
