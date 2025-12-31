@@ -265,6 +265,7 @@ class AniListClient:
                     entries {
                         id
                         progress
+                        createdAt
                         media {
                             id
                             title {
@@ -294,6 +295,10 @@ class AniListClient:
                 entries = []
                 for list_group in result["MediaListCollection"]["lists"]:
                     entries.extend(list_group["entries"])
+
+                # Sort by createdAt descending (most recent first)
+                entries.sort(key=lambda x: x.get("createdAt", 0), reverse=True)
+
                 return entries
             return []
         except Exception as e:

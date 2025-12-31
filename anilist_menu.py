@@ -181,8 +181,8 @@ def _show_anime_list(list_type: str) -> Optional[tuple[str, int]]:
         # Create args object for anilist_anime_flow
         args = argparse.Namespace(debug=False)
 
-        # Watch the anime (this will handle episodes and return when done)
-        anilist_anime_flow(search_title, anime_id, args)
+        # Watch the anime (pass both display and search titles)
+        anilist_anime_flow(search_title, anime_id, args, anilist_progress=progress, display_title=display_title)
 
         # After watching, loop back to show list again
         # This allows user to select another anime from the same list
