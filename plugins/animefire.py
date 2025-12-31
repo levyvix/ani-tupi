@@ -1,5 +1,4 @@
 import requests
-import subprocess
 from bs4 import BeautifulSoup
 from repository import rep
 from loader import PluginInterface
@@ -13,26 +12,42 @@ from .utils import is_firefox_installed_as_snap
 class AnimeFire(PluginInterface):
     languages = ["pt-br"]
     name = "animefire"
-    
+
     @staticmethod
     def search_anime(query):
         url = "https://animefire.plus/pesquisar/" + "-".join(query.split())
         html_content = requests.get(url)
-        soup = BeautifulSoup(html_content.text, 'html.parser')
-        target_class = 'col-6 col-sm-4 col-md-3 col-lg-2 mb-1 minWDanime divCardUltimosEps'
-        titles_urls = [div.article.a["href"] for div in soup.find_all('div', class_=target_class) if 'title' in div.attrs]
+        soup = BeautifulSoup(html_content.text, "html.parser")
+        target_class = (
+            "col-6 col-sm-4 col-md-3 col-lg-2 mb-1 minWDanime divCardUltimosEps"
+        )
+        titles_urls = [
+            div.article.a["href"]
+            for div in soup.find_all("div", class_=target_class)
+            if "title" in div.attrs
+        ]
         titles = [h3.get_text() for h3 in soup.find_all("h3", class_="animeTitle")]
         for title, url in zip(titles, titles_urls):
             rep.add_anime(title, url, AnimeFire.name)
-    
+
     @staticmethod
     def search_episodes(anime, url, params):
         html_episodes_page = requests.get(url)
         soup = BeautifulSoup(html_episodes_page.text, "html.parser")
-        episode_links = [a["href"] for a in soup.find_all('a', class_="lEp epT divNumEp smallbox px-2 mx-1 text-left d-flex")]
-        opts = [a.get_text() for a in soup.find_all('a', class_="lEp epT divNumEp smallbox px-2 mx-1 text-left d-flex")]
-        rep.add_episode_list(anime, opts, episode_links, AnimeFire.name) 
-    
+        episode_links = [
+            a["href"]
+            for a in soup.find_all(
+                "a", class_="lEp epT divNumEp smallbox px-2 mx-1 text-left d-flex"
+            )
+        ]
+        opts = [
+            a.get_text()
+            for a in soup.find_all(
+                "a", class_="lEp epT divNumEp smallbox px-2 mx-1 text-left d-flex"
+            )
+        ]
+        rep.add_episode_list(anime, opts, episode_links, AnimeFire.name)
+
     @staticmethod
     def search_player_src(url_episode, container, event):
         options = webdriver.FirefoxOptions()
@@ -40,8 +55,10 @@ class AnimeFire(PluginInterface):
 
         try:
             if is_firefox_installed_as_snap():
-                service = webdriver.FirefoxService(executable_path="/snap/bin/geckodriver")
-                driver = webdriver.Firefox(options=options, service = service)
+                service = webdriver.FirefoxService(
+                    executable_path="/snap/bin/geckodriver"
+                )
+                driver = webdriver.Firefox(options=options, service=service)
             else:
                 driver = webdriver.Firefox(options=options)
         except:
@@ -65,7 +82,7 @@ class AnimeFire(PluginInterface):
                 raise Exception("nor iframe nor video tags were found in animefire.")
 
         product = driver.find_element(params[0], params[1])
-        link = product.get_property("src") 
+        link = product.get_property("src")
         driver.quit()
 
         if not event.is_set():
@@ -82,5 +99,3 @@ def load(languages_dict):
     if not can_load:
         return
     rep.register(AnimeFire)
-    
-
