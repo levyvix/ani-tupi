@@ -19,7 +19,7 @@ HISTORY_PATH = (
 )
 
 
-def normalize_and_vary_anime_title(title: str):
+def normalize_anime_title(title: str):
     """
     Gera variações progressivas do título em lowercase, removendo palavras do final.
     Exemplo: "Attack on Titan Season 2" → ["attack on titan", "attack on", "attack"]
