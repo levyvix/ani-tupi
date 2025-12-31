@@ -76,6 +76,12 @@ def install_uv():
             if scripts_dir.exists():
                 os.environ["PATH"] = f"{scripts_dir}:{os.environ['PATH']}"
 
+        # Se estiver no GitHub Actions, adiciona ao GITHUB_PATH
+        if os.getenv("GITHUB_PATH"):
+            with open(os.getenv("GITHUB_PATH"), "a") as f:
+                f.write(f"{scripts_dir}\n")
+            print(f"✅ Adicionado {scripts_dir} ao GITHUB_PATH")
+
         return True
 
     print("❌ Falha ao instalar UV.")
