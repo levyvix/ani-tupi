@@ -512,6 +512,9 @@ def anilist_anime_flow(
 def switch_anime_source(current_anime: str, args) -> tuple[str, int] | tuple[None, None]:
     """Allow user to switch to a different anime source/title.
 
+    Shows all available variations (dubbed/subtitled/different scrapers) found
+    for the base anime name. Uses same search criteria as original search.
+
     Args:
         current_anime: Current anime title being watched
         args: CLI arguments
@@ -520,66 +523,39 @@ def switch_anime_source(current_anime: str, args) -> tuple[str, int] | tuple[Non
     """
     from menu import menu_navigate
 
-    # 1. Extract base search query from current anime title
-    #    (remove " (Dublado)", " (Legendado)", " 2nd Season", etc to get broader results)
+    # 1. Extract base anime name (remove language/season suffixes)
     query = current_anime.split("(")[0].strip()
 
-    # 2. Perform fresh search (use temporary search results)
-    temp_rep_backup = {
-        "anime_to_urls": rep.anime_to_urls.copy(),
-        "anime_episodes_titles": rep.anime_episodes_titles.copy(),
-        "anime_episodes_urls": rep.anime_episodes_urls.copy(),
-    }
+    # 2. Search for the anime (adds to existing results, doesn't clear)
+    with loading(f"Buscando variações de '{query}'..."):
+        rep.search_anime(query)
 
-    try:
-        rep.clear_search_results()
-        with loading(f"Buscando fontes alternativas para '{query}'..."):
-            rep.search_anime(query)
+    # 3. Get all available titles using same score threshold as search_anime_flow()
+    titles = rep.get_anime_titles(filter_by_query=query, min_score=85)
 
-        # 3. Get all available titles
-        titles = rep.get_anime_titles(filter_by_query=query, min_score=70)
+    if not titles:
+        print("⚠️  Nenhuma variação encontrada")
+        return None, None
 
-        if not titles:
-            print("⚠️  Nenhuma fonte alternativa encontrada")
-            # Restore previous state on failure
-            rep.anime_to_urls = temp_rep_backup["anime_to_urls"]
-            rep.anime_episodes_titles = temp_rep_backup["anime_episodes_titles"]
-            rep.anime_episodes_urls = temp_rep_backup["anime_episodes_urls"]
-            return None, None
+    # 4. Show selection menu with all options
+    selected_anime = menu_navigate(titles, msg="Escolha a fonte.")
 
-        # 4. Show selection menu
-        selected_anime = menu_navigate(titles, msg="Escolha a nova fonte.")
+    if not selected_anime:
+        return None, None  # User cancelled
 
-        if not selected_anime:
-            # User cancelled - restore previous state
-            rep.anime_to_urls = temp_rep_backup["anime_to_urls"]
-            rep.anime_episodes_titles = temp_rep_backup["anime_episodes_titles"]
-            rep.anime_episodes_urls = temp_rep_backup["anime_episodes_urls"]
-            return None, None
+    # 5. Load episodes from new source
+    with loading("Carregando episódios..."):
+        rep.search_episodes(selected_anime)
 
-        # 5. Load episodes from new source
-        with loading("Carregando episódios..."):
-            rep.search_episodes(selected_anime)
+    # 6. Show episode selection menu
+    episode_list = rep.get_episode_list(selected_anime)
+    selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
 
-        # 6. Show episode selection menu
-        episode_list = rep.get_episode_list(selected_anime)
-        selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+    if not selected_episode:
+        return None, None  # User cancelled
 
-        if not selected_episode:
-            # User cancelled - restore previous state
-            rep.anime_to_urls = temp_rep_backup["anime_to_urls"]
-            rep.anime_episodes_titles = temp_rep_backup["anime_episodes_titles"]
-            rep.anime_episodes_urls = temp_rep_backup["anime_episodes_urls"]
-            return None, None
-
-        episode_idx = episode_list.index(selected_episode)
-        return selected_anime, episode_idx
-    except Exception:
-        # If anything goes wrong, restore previous search results
-        rep.anime_to_urls = temp_rep_backup["anime_to_urls"]
-        rep.anime_episodes_titles = temp_rep_backup["anime_episodes_titles"]
-        rep.anime_episodes_urls = temp_rep_backup["anime_episodes_urls"]
-        raise
+    episode_idx = episode_list.index(selected_episode)
+    return selected_anime, episode_idx
 
 
 def show_main_menu():
