@@ -34,70 +34,47 @@ def check_uv_installed():
 
 
 def install_uv():
-    """Instala UV automaticamente"""
-    print("\n📦 UV não encontrado. Instalando...")
-    system = platform.system()
+    """Instala UV automaticamente usando pip"""
+    print("\n📦 UV não encontrado. Instalando via pip...")
 
-    if system in ["Linux", "Darwin"]:  # Linux ou macOS
-        install_cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh"
-        if run_command(install_cmd, shell=True, check=False):
-            print("✅ UV instalado com sucesso!")
-            # Adiciona UV ao PATH da sessão atual
-            home = Path.home()
-            uv_bin = home / ".cargo" / "bin"
-            if uv_bin.exists():
-                os.environ["PATH"] = f"{uv_bin}:{os.environ['PATH']}"
-            return True
-    elif system == "Windows":
-        # Usar Python puro para evitar problemas com PowerShell em CI
-        import urllib.request
-        import tempfile
-
+    # Tenta pip3 primeiro, depois pip
+    pip_cmd = None
+    for cmd in ['pip3', 'pip']:
         try:
-            print("🔧 Baixando instalador do UV...")
-            installer_url = "https://astral.sh/uv/install.ps1"
+            subprocess.run([cmd, '--version'], check=True, capture_output=True)
+            pip_cmd = cmd
+            break
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
 
-            # Baixa o instalador
-            with urllib.request.urlopen(installer_url) as response:
-                installer_script = response.read().decode('utf-8')
+    if not pip_cmd:
+        print("❌ pip não encontrado!")
+        print("\n📦 Instale pip primeiro e tente novamente")
+        return False
 
-            # Salva temporariamente
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as f:
-                f.write(installer_script)
-                script_path = f.name
+    # Instala UV via pip
+    install_cmd = [pip_cmd, 'install', '--user', 'uv']
+    if run_command(install_cmd, check=False):
+        print("✅ UV instalado com sucesso!")
 
-            # Executa com PowerShell diretamente (sem -c)
-            install_cmd = ['powershell', '-ExecutionPolicy', 'Bypass', '-File', script_path]
+        # Adiciona scripts do Python ao PATH
+        if platform.system() == "Windows":
+            # Windows: Scripts vai para AppData\Roaming\Python\Python3X\Scripts
+            python_version = f"Python{sys.version_info.major}{sys.version_info.minor}"
+            scripts_dir = Path.home() / "AppData" / "Roaming" / "Python" / python_version / "Scripts"
+            if scripts_dir.exists():
+                os.environ["PATH"] = f"{scripts_dir};{os.environ['PATH']}"
+        else:
+            # Linux/macOS: Scripts vai para ~/.local/bin
+            scripts_dir = Path.home() / ".local" / "bin"
+            if scripts_dir.exists():
+                os.environ["PATH"] = f"{scripts_dir}:{os.environ['PATH']}"
 
-            if run_command(install_cmd, check=False):
-                print("✅ UV instalado com sucesso!")
-                # Adiciona UV ao PATH da sessão atual
-                home = Path.home()
-                uv_bin = home / ".cargo" / "bin"
-                if uv_bin.exists():
-                    os.environ["PATH"] = f"{uv_bin};{os.environ['PATH']}"
+        return True
 
-                # Remove arquivo temporário
-                try:
-                    os.unlink(script_path)
-                except:
-                    pass
-
-                return True
-
-            # Limpa em caso de erro
-            try:
-                os.unlink(script_path)
-            except:
-                pass
-
-        except Exception as e:
-            print(f"❌ Erro ao instalar UV: {e}")
-
-    print("❌ Falha ao instalar UV automaticamente.")
-    print("\n📦 Instale manualmente:")
-    print("   Linux/macOS: curl -LsSf https://astral.sh/uv/install.sh | sh")
-    print("   Windows: irm https://astral.sh/uv/install.ps1 | iex")
+    print("❌ Falha ao instalar UV.")
+    print("\n📦 Tente instalar manualmente:")
+    print(f"   {pip_cmd} install uv")
     return False
 
 
