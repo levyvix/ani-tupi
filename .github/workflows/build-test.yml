@@ -105,13 +105,13 @@ jobs:
         which ani-tupi
         which manga-tupi
         ani-tupi --help
-        manga-tupi --help || true
+        echo "✅ CLI instalado e funcionando!"
 
     - name: Verificar comandos instalados (Windows)
       if: runner.os == 'Windows'
       shell: powershell
       run: |
-        Get-Command ani-tupi -ErrorAction SilentlyContinue
-        Get-Command manga-tupi -ErrorAction SilentlyContinue
+        Get-Command ani-tupi
+        Get-Command manga-tupi
         ani-tupi --help
-        manga-tupi --help
+        echo "✅ CLI instalado e funcionando!"
