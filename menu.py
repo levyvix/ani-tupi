@@ -78,6 +78,7 @@ def menu(
             amark="►",  # Arrow for selected item
             pointer="►",  # Pointer for highlighted item
             instruction="(Use arrow keys, Q to quit, ESC to back)",
+            mandatory=False,  # Allow None as answer (for Q key)
             keybindings={
                 "skip": [{"key": "q"}, {"key": "Q"}],  # Q to quit (returns None via skip)
             },
@@ -138,6 +139,7 @@ def menu_navigate(
             amark="►",  # Arrow for selected item
             pointer="►",  # Pointer for highlighted item
             instruction="(Use arrow keys, Q to quit, ESC to back)",
+            mandatory=False,  # Allow None as answer (for Q key)
             keybindings={
                 "skip": [{"key": "q"}, {"key": "Q"}],  # Q to quit (returns None via skip)
             },
