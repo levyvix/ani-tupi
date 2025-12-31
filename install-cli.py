@@ -49,20 +49,55 @@ def install_uv():
                 os.environ["PATH"] = f"{uv_bin}:{os.environ['PATH']}"
             return True
     elif system == "Windows":
-        install_cmd = 'powershell -c "irm https://astral.sh/uv/install.ps1 | iex"'
-        if run_command(install_cmd, shell=True, check=False):
-            print("✅ UV instalado com sucesso!")
-            # Adiciona UV ao PATH da sessão atual
-            home = Path.home()
-            uv_bin = home / ".cargo" / "bin"
-            if uv_bin.exists():
-                os.environ["PATH"] = f"{uv_bin};{os.environ['PATH']}"
-            return True
+        # Usar Python puro para evitar problemas com PowerShell em CI
+        import urllib.request
+        import tempfile
+
+        try:
+            print("🔧 Baixando instalador do UV...")
+            installer_url = "https://astral.sh/uv/install.ps1"
+
+            # Baixa o instalador
+            with urllib.request.urlopen(installer_url) as response:
+                installer_script = response.read().decode('utf-8')
+
+            # Salva temporariamente
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as f:
+                f.write(installer_script)
+                script_path = f.name
+
+            # Executa com PowerShell diretamente (sem -c)
+            install_cmd = ['powershell', '-ExecutionPolicy', 'Bypass', '-File', script_path]
+
+            if run_command(install_cmd, check=False):
+                print("✅ UV instalado com sucesso!")
+                # Adiciona UV ao PATH da sessão atual
+                home = Path.home()
+                uv_bin = home / ".cargo" / "bin"
+                if uv_bin.exists():
+                    os.environ["PATH"] = f"{uv_bin};{os.environ['PATH']}"
+
+                # Remove arquivo temporário
+                try:
+                    os.unlink(script_path)
+                except:
+                    pass
+
+                return True
+
+            # Limpa em caso de erro
+            try:
+                os.unlink(script_path)
+            except:
+                pass
+
+        except Exception as e:
+            print(f"❌ Erro ao instalar UV: {e}")
 
     print("❌ Falha ao instalar UV automaticamente.")
     print("\n📦 Instale manualmente:")
     print("   Linux/macOS: curl -LsSf https://astral.sh/uv/install.sh | sh")
-    print("   Windows: powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"")
+    print("   Windows: irm https://astral.sh/uv/install.ps1 | iex")
     return False
 
 
