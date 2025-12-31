@@ -79,20 +79,20 @@ class MenuScreen(Screen):
     ]
 
     CSS = """
-    /* Base styling */
+    /* Base styling - Yellow theme (classic ani-tupi) */
     Screen {
-        background: $surface;
+        background: black;
     }
 
     #menu-container {
         width: 3fr;
         height: 100%;
-        border: solid $primary;
+        border: solid yellow;
     }
 
     #menu-title {
-        background: $primary;
-        color: $primary-background;
+        background: yellow;
+        color: black;
         text-align: center;
         text-style: bold;
         padding: 1;
@@ -101,26 +101,26 @@ class MenuScreen(Screen):
 
     #menu-options {
         height: 1fr;
-        background: $surface;
+        background: black;
     }
 
     #search-input {
         dock: bottom;
-        border: tall $primary;
+        border: tall yellow;
         display: none;  /* Hidden by default */
     }
 
     #preview-panel {
         width: 2fr;
         height: 100%;
-        background: $panel;
-        border: solid $primary;
+        background: #1a1a1a;
+        border: solid yellow;
         padding: 1;
     }
 
     #preview-title {
-        background: $primary;
-        color: $primary-background;
+        background: yellow;
+        color: black;
         text-align: center;
         text-style: bold;
         padding: 1;
@@ -128,31 +128,32 @@ class MenuScreen(Screen):
 
     #preview-content {
         padding: 1;
-        color: $text;
+        color: yellow;
     }
 
     OptionList > .option-list--option {
-        background: $surface;
-        color: $text;
+        background: black;
+        color: yellow;
     }
 
     OptionList > .option-list--option-highlighted {
-        background: $primary;
-        color: $primary-background;
+        background: yellow;
+        color: black;
     }
 
-    OptionList > .option-list--separator {
-        color: $text-muted;
+    OptionList > .option-list--option-disabled {
+        color: #555555;
+        background: black;
     }
 
     Header {
-        background: $primary;
-        color: $primary-background;
+        background: yellow;
+        color: black;
     }
 
     Footer {
-        background: $primary;
-        color: $primary-background;
+        background: yellow;
+        color: black;
     }
     """
 
@@ -314,20 +315,9 @@ class MenuScreen(Screen):
 
     def action_toggle_theme(self) -> None:
         """Cycle through available themes"""
-        themes = ["yellow", "cyberpunk", "nord", "catppuccin"]
-
-        # Get current theme from app
-        current_theme = getattr(self.app, "_current_theme", "yellow")
-
-        # Get next theme
-        try:
-            current_idx = themes.index(current_theme)
-            next_theme = themes[(current_idx + 1) % len(themes)]
-        except ValueError:
-            next_theme = themes[0]
-
-        # Apply theme
-        self.app.set_theme(next_theme)
+        # TODO: Implement dynamic theme switching
+        # For now, theme is fixed to yellow (classic ani-tupi)
+        pass
 
 
 class MenuApp(App):
@@ -373,53 +363,15 @@ class MenuApp(App):
         self._current_theme = theme_name
         self._save_theme(theme_name)
 
-        # Apply theme colors
-        themes = {
-            "yellow": {
-                "primary": "yellow",
-                "primary-background": "black",
-                "surface": "black",
-                "panel": "#1a1a1a",
-                "text": "yellow",
-                "text-muted": "#555555",
-            },
-            "cyberpunk": {
-                "primary": "#ff00ff",
-                "primary-background": "#000000",
-                "surface": "#0a0e27",
-                "panel": "#1a1e37",
-                "text": "#00ffff",
-                "text-muted": "#555577",
-            },
-            "nord": {
-                "primary": "#88c0d0",
-                "primary-background": "#2e3440",
-                "surface": "#2e3440",
-                "panel": "#3b4252",
-                "text": "#d8dee9",
-                "text-muted": "#4c566a",
-            },
-            "catppuccin": {
-                "primary": "#cba6f7",
-                "primary-background": "#1e1e2e",
-                "surface": "#1e1e2e",
-                "panel": "#181825",
-                "text": "#cdd6f4",
-                "text-muted": "#6c7086",
-            },
-        }
+        # Apply theme colors by updating CSS variables
+        # Note: Theme is applied via CSS in MenuScreen class
+        # This method primarily saves the preference
 
-        # Get theme colors
-        theme_colors = themes.get(theme_name, themes["yellow"])
-
-        # Update design system colors
-        self.design.update({
-            f"${key}": value
-            for key, value in theme_colors.items()
-        })
-
-        # Refresh the screen
-        self.refresh()
+        # Refresh the screen if mounted
+        try:
+            self.refresh()
+        except:
+            pass  # Not mounted yet
 
     def on_mount(self) -> None:
         """Called when app is mounted"""
