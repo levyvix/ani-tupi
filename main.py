@@ -530,8 +530,8 @@ def switch_anime_source(current_anime: str, args) -> tuple[str, int] | tuple[Non
     with loading(f"Buscando variações de '{query}'..."):
         rep.search_anime(query)
 
-    # 3. Get all available titles using same score threshold as search_anime_flow()
-    titles = rep.get_anime_titles(filter_by_query=query, min_score=85)
+    # 3. Get all available titles that contain the base anime name
+    titles = rep.get_anime_titles(filter_by_query=query)
 
     if not titles:
         print("⚠️  Nenhuma variação encontrada")
