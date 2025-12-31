@@ -367,9 +367,8 @@ ani-tupi anilist auth
 ## CI/CD (GitHub Actions)
 
 Located in `.github/workflows/`:
-- `ci.yml` - Fast validation on push/PR
-- `build-test.yml` - Multi-platform build testing
-- `release.yml` - Automated releases on tags
+- `ci.yml` - Fast validation on push/PR (syntax checks, dependency validation)
+- `build-test.yml` - Tests install-cli.py on multiple platforms
 
 ## Future Enhancement Ideas (from todo.txt)
 
