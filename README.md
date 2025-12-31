@@ -21,6 +21,8 @@ ani-tupi agora possui integração completa com AniList, permitindo:
 - 📋 **Planning** - Veja animes que você planeja assistir
 - ✅ **Completed** - Histórico de animes completos
 - 🔄 **Sincronização automática** - Progresso atualiza no AniList após cada episódio
+- 💾 **Mapeamento inteligente** - Lembra do título correto do scraper para cada anime
+- ✅ **Confirmação de progresso** - Pergunta se assistiu até o final antes de atualizar
 - 🎯 **Títulos bilíngues** - Veja nomes em romaji + inglês
 - ⌨️ **Navegação rápida** - Use ESC para voltar, setas para navegar
 
@@ -175,6 +177,11 @@ ani-tupi anilist menu
 - ✅ **Completed**: Histórico de animes completos
 - ⏸️ **Paused** / ❌ **Dropped** / 🔁 **Rewatching**: Todas as suas listas
 - 🔄 **Sincronização automática**: Progresso atualiza no AniList após assistir cada episódio
+- 💾 **Mapeamento inteligente**: Salva o título correto do scraper para cada anime do AniList
+- ✅ **Confirmação de progresso**: Pergunta se você assistiu até o final antes de sincronizar
+- 🎯 **Continuar de onde parou**: Retoma automaticamente no episódio certo (AniList + histórico local)
+- 🔍 **Busca flexível**: Tenta romaji primeiro, depois inglês se não encontrar
+- 📝 **Múltiplas fontes**: Se encontrar múltiplos resultados, deixa você escolher o correto
 
 **Como funciona:**
 1. Faça login uma vez com `ani-tupi anilist auth`
@@ -304,6 +311,41 @@ GPL-3.0 - veja o arquivo [LICENSE](LICENSE) para detalhes.
 - Comunidade anime brasileira
 - Desenvolvedores do mpv
 - Projeto ani-cli (inspiração)
+
+## 📝 Changelog
+
+### Versão Atual (feature/textual-rich-tui)
+
+**🎉 Integração AniList Completa**
+- ✅ Autenticação OAuth com AniList.co
+- ✅ Navegação por listas (Watching, Planning, Completed, etc)
+- ✅ Visualização de trending anime
+- ✅ Sincronização automática de progresso após assistir episódios
+- ✅ Confirmação "assistiu até o final" antes de atualizar
+- ✅ Mapeamento inteligente: salva título correto do scraper para cada anime
+- ✅ Retoma automaticamente no episódio correto (AniList + histórico local)
+- ✅ Busca flexível: tenta romaji primeiro, depois inglês
+- ✅ Suporte a títulos bilíngues (romaji + inglês)
+
+**🔧 Melhorias de UX**
+- ✅ Menu de opções quando há progresso salvo (continuar ou escolher episódio)
+- ✅ Melhor formatação de código e mensagens
+- ✅ Navegação com ESC para voltar nos menus
+- ✅ Indicadores visuais de progresso (episódio X/Y, rating)
+
+**🐛 Correções**
+- ✅ Correção de texto "assistir" → "assisti" no menu de confirmação
+- ✅ Padronização de chamadas menu_navigate()
+- ✅ Melhor tratamento de múltiplos resultados de busca
+
+### v0.1.0 (Base)
+- ✅ Sistema de plugins para múltiplos scrapers
+- ✅ Integração com mpv para reprodução
+- ✅ Menu curses em português brasileiro
+- ✅ Histórico local de episódios assistidos
+- ✅ Suporte a modo debug
+- ✅ Build com PyInstaller
+- ✅ Instalação via UV tool
 
 ---
 
