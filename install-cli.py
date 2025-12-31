@@ -64,8 +64,14 @@ def install_uv():
             scripts_dir = Path.home() / "AppData" / "Roaming" / "Python" / python_version / "Scripts"
             if scripts_dir.exists():
                 os.environ["PATH"] = f"{scripts_dir};{os.environ['PATH']}"
+        elif platform.system() == "Darwin":
+            # macOS: Scripts vai para ~/Library/Python/X.Y/bin
+            python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+            scripts_dir = Path.home() / "Library" / "Python" / python_version / "bin"
+            if scripts_dir.exists():
+                os.environ["PATH"] = f"{scripts_dir}:{os.environ['PATH']}"
         else:
-            # Linux/macOS: Scripts vai para ~/.local/bin
+            # Linux: Scripts vai para ~/.local/bin
             scripts_dir = Path.home() / ".local" / "bin"
             if scripts_dir.exists():
                 os.environ["PATH"] = f"{scripts_dir}:{os.environ['PATH']}"
