@@ -43,6 +43,11 @@ class Repository:
         self.norm_titles = {}
 
     def search_anime(self, query: str) -> None:
+        if not self.sources:
+            print("\n❌ Erro: Nenhum plugin carregado!")
+            print("Verifique se os plugins estão instalados em plugins/")
+            return
+
         with ThreadPool(min(len(self.sources), cpu_count())) as pool:
             for source in self.sources:
                 pool.apply(self.sources[source].search_anime, args=(query,))

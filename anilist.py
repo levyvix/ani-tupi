@@ -160,7 +160,7 @@ class AniListClient:
         return result.get("data")
 
     def get_viewer_info(self) -> dict | None:
-        """Get authenticated user info."""
+        """Get authenticated user info with statistics."""
         if not self.is_authenticated():
             return None
 
@@ -171,6 +171,14 @@ class AniListClient:
                 name
                 avatar {
                     medium
+                    large
+                }
+                statistics {
+                    anime {
+                        count
+                        episodesWatched
+                        minutesWatched
+                    }
                 }
             }
         }
@@ -182,15 +190,27 @@ class AniListClient:
         except Exception:
             return None
 
-    def get_trending(self, page: int = 1, per_page: int = 20) -> list[dict]:
-        """Get trending anime.
+    def get_trending(
+        self,
+        page: int = 1,
+        per_page: int = 20,
+        year: int | None = None,
+        season: str | None = None,
+    ) -> list[dict]:
+        """Get trending anime with optional filters.
+
+        Args:
+            page: Page number
+            per_page: Items per page
+            year: Filter by year (None = all years)
+            season: Filter by season (WINTER, SPRING, SUMMER, FALL, or None = all seasons)
 
         Returns list of anime with: id, title, episodes, coverImage
         """
         query = """
-        query ($page: Int, $perPage: Int) {
+        query ($page: Int, $perPage: Int, $seasonYear: Int, $season: MediaSeason) {
             Page(page: $page, perPage: $perPage) {
-                media(type: ANIME, sort: TRENDING_DESC) {
+                media(type: ANIME, sort: TRENDING_DESC, seasonYear: $seasonYear, season: $season) {
                     id
                     title {
                         romaji
@@ -203,12 +223,17 @@ class AniListClient:
                     }
                     averageScore
                     seasonYear
+                    season
                 }
             }
         }
         """
 
         variables = {"page": page, "perPage": per_page}
+        if year:
+            variables["seasonYear"] = year
+        if season:
+            variables["season"] = season
 
         try:
             result = self._query(query, variables)
@@ -386,6 +411,58 @@ class AniListClient:
             return result.get("Media") if result else None
         except Exception:
             return None
+
+    def get_recent_activities(self, limit: int = 5) -> list[dict]:
+        """Get user's recent anime list activities.
+
+        Args:
+            limit: Number of recent activities to fetch (default 5)
+
+        Returns:
+            List of activity dicts with: type, status, progress, media info, createdAt
+
+        """
+        if not self.is_authenticated():
+            return []
+
+        # Ensure we have user_id
+        if not self.user_id:
+            user_info = self.get_viewer_info()
+            if user_info:
+                self.user_id = user_info["id"]
+            else:
+                return []
+
+        query = """
+        query ($userId: Int, $page: Int, $perPage: Int) {
+            Page(page: $page, perPage: $perPage) {
+                activities(userId: $userId, type: ANIME_LIST, sort: ID_DESC) {
+                    ... on ListActivity {
+                        id
+                        status
+                        progress
+                        createdAt
+                        media {
+                            id
+                            title {
+                                romaji
+                                english
+                            }
+                            episodes
+                        }
+                    }
+                }
+            }
+        }
+        """
+
+        variables = {"userId": self.user_id, "page": 1, "perPage": limit}
+
+        try:
+            result = self._query(query, variables)
+            return result["Page"]["activities"] if result else []
+        except Exception:
+            return []
 
     def is_in_any_list(self, anime_id: int) -> bool:
         """Check if anime is in any of the user's lists.

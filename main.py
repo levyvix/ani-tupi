@@ -115,6 +115,7 @@ def anilist_anime_flow(
     args,
     anilist_progress: int = 0,
     display_title: str | None = None,
+    total_episodes: int | None = None,
 ) -> None:
     """Flow for anime selected from AniList
     Searches scrapers for the anime and starts normal playback flow.
@@ -125,14 +126,16 @@ def anilist_anime_flow(
         args: Command line arguments
         anilist_progress: Current episode progress from AniList (0 if not watching)
         display_title: Full bilingual title for display (romaji / english)
+        total_episodes: Total number of episodes from AniList (None if unknown)
 
     """
     # Use display_title if provided, otherwise fall back to anime_title
     if not display_title:
         display_title = anime_title
     from anilist import anilist_client
+    from scraper_cache import get_cache, set_cache
 
-    loader.load_plugins({"t-br"}, None if not args.debug else ["animesonlinecc"])
+    loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
 
     # Try different title variations
     title_variations = normalize_anime_title(anime_title)
@@ -190,6 +193,9 @@ def anilist_anime_flow(
             msg=f"Título salvo encontrado: '{selected_anime}'",
         )
 
+        if not change_choice:
+            return  # User cancelled (← Voltar or Sair)
+
         if change_choice == "🔄 Escolher outro título":
             # Let them choose a different title
             menu_title = f"📺 Anime do AniList: '{display_title}'\n"
@@ -205,8 +211,7 @@ def anilist_anime_flow(
 
             # Save the new choice
             save_anilist_mapping(anilist_id, selected_anime)
-        elif not change_choice:
-            return  # User cancelled
+        # If "▶️ Continuar com este título", just continue with selected_anime
     elif len(titles) > 1:
         # No saved mapping or not found - show selection menu
         from menu import menu_navigate
@@ -234,10 +239,25 @@ def anilist_anime_flow(
         if anilist_id:
             save_anilist_mapping(anilist_id, selected_anime)
 
-    # Get episodes
-    with loading("Carregando episódios..."):
-        rep.search_episodes(selected_anime)
-    episode_list = rep.get_episode_list(selected_anime)
+    # Get episodes (check cache first)
+    cache_data = get_cache(selected_anime)
+    scraper_episode_count = None
+
+    if cache_data:
+        # Use cached data
+        episode_list = cache_data.get("episode_urls", [])
+        scraper_episode_count = cache_data.get("episode_count", len(episode_list))
+        print(f"ℹ️  Usando cache ({scraper_episode_count} eps disponíveis)")
+    else:
+        # Fetch from scrapers
+        with loading("Carregando episódios..."):
+            rep.search_episodes(selected_anime)
+        episode_list = rep.get_episode_list(selected_anime)
+        scraper_episode_count = len(episode_list)
+
+        # Save to cache
+        set_cache(selected_anime, scraper_episode_count, episode_list)
+
     from menu import menu_navigate
 
     # Check local history for this anime (use max of AniList and local)
@@ -284,16 +304,28 @@ def anilist_anime_flow(
 
         # Next episode (+1)
         if max_progress < len(episode_list):
+            # Next episode exists in the list (available in scrapers)
             next_ep = f"⏭️  Episódio {max_progress + 1} (próximo)"
             options.append(next_ep)
             option_to_idx[next_ep] = max_progress
+        elif total_episodes and max_progress < total_episodes:
+            # Next episode exists according to AniList but not in scrapers yet
+            next_ep = f"⏭️  Episódio {max_progress + 1} (aguardando)"
+            options.append(next_ep)
+            option_to_idx[next_ep] = None  # Mark as unavailable
+        # If neither condition is true, anime is complete (don't show next episode)
 
         # Add option to choose any episode
         options.append("📋 Escolher outro episódio")
 
-        choice = menu_navigate(
-            options, msg=f"{selected_anime} - De onde quer continuar?"
-        )
+        # Build menu message with episode availability info
+        menu_msg = f"{selected_anime} - De onde quer continuar?"
+        if total_episodes and scraper_episode_count:
+            menu_msg += f"\n📊 {scraper_episode_count} eps disponíveis / {total_episodes} total"
+        elif scraper_episode_count:
+            menu_msg += f"\n📊 {scraper_episode_count} eps disponíveis"
+
+        choice = menu_navigate(options, msg=menu_msg)
 
         if not choice:
             return  # User cancelled
@@ -306,6 +338,13 @@ def anilist_anime_flow(
             episode_idx = episode_list.index(selected_episode)
         else:
             episode_idx = option_to_idx[choice]
+            # Check if episode is unavailable (marked as None)
+            if episode_idx is None:
+                print(
+                    f"\n⏳ Episódio {max_progress + 1} ainda não disponível nos scrapers."
+                )
+                input("\nPressione Enter para voltar...")
+                return
     else:
         # No progress or progress out of bounds - show full episode list
         selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
@@ -340,13 +379,15 @@ def anilist_anime_flow(
             if confirm == "✅ Sim, assisti até o final":
                 # Check if anime is in any list
                 if not anilist_client.is_in_any_list(anilist_id):
+                    print("\n📝 Adicionando à sua lista do AniList...")
                     anilist_client.add_to_list(anilist_id, "CURRENT")
 
+                print(f"\n🔄 Sincronizando progresso com AniList (Ep {episode})...")
                 success = anilist_client.update_progress(anilist_id, episode)
                 if success:
-                    pass
+                    print("✅ Progresso salvo no AniList!")
                 else:
-                    pass
+                    print("⚠️  Não foi possível salvar no AniList (continuando...)")
 
         opts = []
         if episode_idx < num_episodes - 1:
@@ -490,13 +531,15 @@ def main(args) -> None:
                 if confirm == "✅ Sim, assisti até o final":
                     # Check if anime is in any list
                     if not anilist_client.is_in_any_list(anilist_id):
+                        print("\n📝 Adicionando à sua lista do AniList...")
                         anilist_client.add_to_list(anilist_id, "CURRENT")
 
+                    print(f"\n🔄 Sincronizando progresso com AniList (Ep {episode})...")
                     success = anilist_client.update_progress(anilist_id, episode)
                     if success:
-                        pass
+                        print("✅ Progresso salvo no AniList!")
                     else:
-                        pass
+                        print("⚠️  Não foi possível salvar no AniList (continuando...)")
 
         opts = []
         if episode_idx < num_episodes - 1:
@@ -617,9 +660,15 @@ def load_history():
 
             # Next episode (+1)
             if last_episode_idx < len(episode_list) - 1:
+                # Next episode exists in the list
                 next_ep = f"⏭️  Episódio {last_ep_num + 1} (próximo)"
                 options.append(next_ep)
                 option_to_idx[next_ep] = last_episode_idx + 1
+            else:
+                # Next episode doesn't exist yet, but show as unavailable
+                next_ep = f"⏭️  Episódio {last_ep_num + 1} (aguardando)"
+                options.append(next_ep)
+                option_to_idx[next_ep] = None  # Mark as unavailable
 
             # Add option to choose any episode
             options.append("📋 Escolher outro episódio")
@@ -639,6 +688,13 @@ def load_history():
                 episode_idx = episode_list.index(selected_episode)
             else:
                 episode_idx = option_to_idx[choice]
+                # Check if episode is unavailable (marked as None)
+                if episode_idx is None:
+                    print(
+                        f"\n⏳ Episódio {last_ep_num + 1} ainda não disponível nos scrapers."
+                    )
+                    input("\nPressione Enter para voltar...")
+                    exit()
 
         return anime, episode_idx, anilist_id, anilist_title
     except FileNotFoundError:

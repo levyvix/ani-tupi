@@ -78,19 +78,20 @@ def menu(
             answer = inquirer.fuzzy(
                 message=msg or "Menu",
                 choices=choices,
-                default="",
-                qmark="",  # Remove question mark prefix
-                amark="►",  # Arrow for selected item
-                pointer="►",  # Pointer for highlighted item
+                default=None,
+                qmark="",
+                amark="►",
+                pointer="►",
                 instruction="(Type to search, Q to quit, ESC to back)",
-                mandatory=False,  # Allow None as answer (for Q key)
+                mandatory=False,
                 keybindings={
                     "skip": [
                         {"key": "q"},
                         {"key": "Q"},
-                    ],  # Q to quit (returns None via skip)
+                    ],
                 },
-                max_height="70%",  # Show more items
+                max_height="70%",
+                raise_keyboard_interrupt=False,
             ).execute()
         else:
             # Use simple select for small menus
@@ -98,25 +99,26 @@ def menu(
                 message=msg or "Menu",
                 choices=choices,
                 default=None,
-                qmark="",  # Remove question mark prefix
-                amark="►",  # Arrow for selected item
-                pointer="►",  # Pointer for highlighted item
+                qmark="",
+                amark="►",
+                pointer="►",
                 instruction="(Use arrow keys, Q to quit, ESC to back)",
-                mandatory=False,  # Allow None as answer (for Q key)
+                mandatory=False,
                 keybindings={
                     "skip": [
                         {"key": "q"},
                         {"key": "Q"},
-                    ],  # Q to quit (returns None via skip)
+                    ],
                 },
+                raise_keyboard_interrupt=False,
             ).execute()
-    except KeyboardInterrupt:
-        # ESC or Ctrl+C pressed - also quit for main menu
+    except (KeyboardInterrupt, EOFError):
+        # ESC or Ctrl+C pressed - exit for main menu
         sys.exit(0)
 
     # Handle result
     if answer == "Sair" or answer is None:
-        # None means Q was pressed (skip binding)
+        # None means Q was pressed or ESC without selection
         sys.exit(0)
 
     return answer
@@ -142,17 +144,23 @@ def menu_navigate(
         Selected option or None if user cancels
 
     Behavior:
-        - Does NOT add "Sair" automatically
+        - Adds "← Voltar" and "Sair" automatically
+        - "← Voltar" returns None (go back)
+        - "Sair" exits to terminal
         - ESC returns None (go back to previous menu)
         - Q key exits to terminal immediately
-        - Ctrl+C also exits to terminal
-        - Allows navigation without exiting program
         - Fuzzy search enabled by default
 
     """
+    # Add navigation options
+    opts_copy = opts.copy()
+    if not enable_search:
+        opts_copy.append("─" * 30)
+    opts_copy.extend(["← Voltar", "Sair"])
+
     # Convert options to InquirerPy choices
     choices = []
-    for opt in opts:
+    for opt in opts_copy:
         # Handle separators (lines starting with ─)
         if opt.startswith("─"):
             # Fuzzy search doesn't support separators, skip them
@@ -168,19 +176,20 @@ def menu_navigate(
             answer = inquirer.fuzzy(
                 message=msg or "Menu",
                 choices=choices,
-                default="",
-                qmark="",  # Remove question mark prefix
-                amark="►",  # Arrow for selected item
-                pointer="►",  # Pointer for highlighted item
+                default=None,
+                qmark="",
+                amark="►",
+                pointer="►",
                 instruction="(Type to search, Q to quit, ESC to back)",
-                mandatory=False,  # Allow None as answer (for Q key)
+                mandatory=False,
                 keybindings={
                     "skip": [
                         {"key": "q"},
                         {"key": "Q"},
-                    ],  # Q to quit (returns None via skip)
+                    ],
                 },
-                max_height="70%",  # Show more items
+                max_height="70%",
+                raise_keyboard_interrupt=False,
             ).execute()
         else:
             # Use simple select for small menus
@@ -188,27 +197,33 @@ def menu_navigate(
                 message=msg or "Menu",
                 choices=choices,
                 default=None,
-                qmark="",  # Remove question mark prefix
-                amark="►",  # Arrow for selected item
-                pointer="►",  # Pointer for highlighted item
+                qmark="",
+                amark="►",
+                pointer="►",
                 instruction="(Use arrow keys, Q to quit, ESC to back)",
-                mandatory=False,  # Allow None as answer (for Q key)
+                mandatory=False,
                 keybindings={
                     "skip": [
                         {"key": "q"},
                         {"key": "Q"},
-                    ],  # Q to quit (returns None via skip)
+                    ],
                 },
+                raise_keyboard_interrupt=False,
             ).execute()
-    except KeyboardInterrupt:
-        # ESC or Ctrl+C pressed - go back (return None for navigation)
+    except (KeyboardInterrupt, EOFError):
+        # ESC or Ctrl+C pressed - return None for navigation menus
         return None
 
-    # Handle Q key (skip binding returns None)
-    if answer is None:
+    # Handle special options
+    if answer == "← Voltar" or answer is None:
+        # Voltar selected or Q pressed (skip binding) - go back
+        return None
+
+    if answer == "Sair":
+        # Sair selected - exit program
         sys.exit(0)
 
-    # Return selection
+    # Return selection (filter out the added options)
     return answer
 
 
