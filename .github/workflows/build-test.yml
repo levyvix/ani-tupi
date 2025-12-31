@@ -93,6 +93,13 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Pré-instalar UV no Windows (workaround GitHub Actions)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        irm https://astral.sh/uv/install.ps1 | iex
+        echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
     - name: Executar install-cli.py
       run: python3 install-cli.py || python install-cli.py
 
