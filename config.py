@@ -3,13 +3,13 @@
 Centralized settings for ani-tupi including:
 - API endpoints and credentials
 - Cache settings
-- Search and fuzzy matching thresholds
+- Search configuration
 - OS-specific data paths
 
 Configuration can be overridden via environment variables:
     ANI_TUPI__ANILIST__CLIENT_ID=12345
     ANI_TUPI__CACHE__DURATION_HOURS=12
-    ANI_TUPI__SEARCH__FUZZY_THRESHOLD=95
+    ANI_TUPI__SEARCH__PROGRESSIVE_SEARCH_MIN_WORDS=2
 """
 
 import os
@@ -68,20 +68,8 @@ class CacheSettings(BaseModel):
 
 
 class SearchSettings(BaseModel):
-    """Anime search and fuzzy matching configuration."""
+    """Anime search configuration."""
 
-    fuzzy_threshold: int = Field(
-        98,
-        ge=0,
-        le=100,
-        description="Fuzzy matching threshold for deduplication (0-100)",
-    )
-    min_score: int = Field(
-        70,
-        ge=0,
-        le=100,
-        description="Minimum relevance score for search results (0-100)",
-    )
     progressive_search_min_words: int = Field(
         2,
         ge=1,
@@ -96,7 +84,7 @@ class AppSettings(BaseSettings):
     Environment variables use the prefix ANI_TUPI__ with nested delimiters:
     - ANI_TUPI__ANILIST__CLIENT_ID=12345
     - ANI_TUPI__CACHE__DURATION_HOURS=12
-    - ANI_TUPI__SEARCH__FUZZY_THRESHOLD=95
+    - ANI_TUPI__SEARCH__PROGRESSIVE_SEARCH_MIN_WORDS=2
 
     Can also be configured via .env file in project root.
     """

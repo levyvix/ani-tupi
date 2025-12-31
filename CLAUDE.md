@@ -144,8 +144,6 @@ settings.cache.duration_hours    # Cache validity (1-72 hours, default 6)
 settings.cache.cache_file        # Path to cache JSON (auto-resolved OS path)
 
 # Search
-settings.search.fuzzy_threshold  # Fuzzy matching strictness (0-100, default 98)
-settings.search.min_score        # Minimum relevance score (0-100, default 70)
 settings.search.progressive_search_min_words  # Min words for progressive search (1-10, default 2)
 ```
 
@@ -179,7 +177,7 @@ path = get_data_path()  # ~/.local/state/ani-tupi (Linux/macOS)
 ```
 
 All config-aware modules import `settings` from `config.py`:
-- `repository.py` - Uses fuzzy_threshold, min_score, progressive_search_min_words
+- `repository.py` - Uses progressive_search_min_words
 - `anilist.py` - Uses API URLs, client_id, token_file
 - `scraper_cache.py` - Uses cache_file and duration_hours
 - `main.py`, `anilist_menu.py` - Use get_data_path() for history/mappings
