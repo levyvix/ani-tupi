@@ -52,7 +52,8 @@ def menu(
         - Adds "Sair" automatically to the end
         - If "Sair" is selected → calls sys.exit()
         - Returns selected option
-        - Q key also exits to terminal
+        - Q key exits to terminal immediately
+        - ESC or Ctrl+C also exits to terminal
     """
     # Add "Sair" to options
     opts_copy = opts.copy()
@@ -76,17 +77,18 @@ def menu(
             qmark="",  # Remove question mark prefix
             amark="►",  # Arrow for selected item
             pointer="►",  # Pointer for highlighted item
-            instruction="(Use arrow keys, ESC to back, Q to quit)",
+            instruction="(Use arrow keys, Q to quit, ESC to back)",
             keybindings={
-                "interrupt": [{"key": "q"}, {"key": "Q"}],  # Q to quit
+                "skip": [{"key": "q"}, {"key": "Q"}],  # Q to quit (returns None via skip)
             },
         ).execute()
     except KeyboardInterrupt:
-        # Q key or Ctrl+C pressed - quit to terminal
+        # ESC or Ctrl+C pressed - also quit for main menu
         sys.exit(0)
 
     # Handle result
     if answer == "Sair" or answer is None:
+        # None means Q was pressed (skip binding)
         sys.exit(0)
 
     return answer
@@ -112,8 +114,9 @@ def menu_navigate(
 
     Behavior:
         - Does NOT add "Sair" automatically
-        - ESC returns None (go back)
-        - Q exits to terminal
+        - ESC returns None (go back to previous menu)
+        - Q key exits to terminal immediately
+        - Ctrl+C also exits to terminal
         - Allows navigation without exiting program
     """
     # Convert options to InquirerPy choices
@@ -134,22 +137,20 @@ def menu_navigate(
             qmark="",  # Remove question mark prefix
             amark="►",  # Arrow for selected item
             pointer="►",  # Pointer for highlighted item
-            instruction="(Use arrow keys, ESC to go back, Q to quit)",
+            instruction="(Use arrow keys, Q to quit, ESC to back)",
             keybindings={
-                "interrupt": [{"key": "q"}, {"key": "Q"}],  # Q to quit
+                "skip": [{"key": "q"}, {"key": "Q"}],  # Q to quit (returns None via skip)
             },
         ).execute()
     except KeyboardInterrupt:
-        # ESC or Ctrl+C - try to handle gracefully
-        try:
-            # Check if it's Q key (would normally exit) or ESC (go back)
-            # Since we can't distinguish, we assume ESC for navigation
-            return None
-        except:
-            # If all else fails, exit
-            sys.exit(0)
+        # ESC or Ctrl+C pressed - go back (return None for navigation)
+        return None
 
-    # Return selection (or None if somehow empty)
+    # Handle Q key (skip binding returns None)
+    if answer is None:
+        sys.exit(0)
+
+    # Return selection
     return answer
 
 
