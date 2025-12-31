@@ -760,8 +760,29 @@ def cli() -> None:
     parser.add_argument("--debug", "-d", action="store_true")
     parser.add_argument("--continue_watching", "-c", action="store_true")
     parser.add_argument("--manga", "-m", action="store_true")
+    parser.add_argument(
+        "--clear-cache",
+        nargs="?",
+        const=True,
+        metavar="[anime_name]",
+        help="Limpar cache (sem argumentos limpa tudo, ou especifique anime para limpar apenas um)",
+    )
 
     args = parser.parse_args()
+
+    # Handle --clear-cache before other commands
+    if args.clear_cache is not None:
+        from scraper_cache import clear_cache
+
+        if args.clear_cache is True:
+            # Clear all cache
+            clear_cache()
+            print("✅ Cache completamente limpo!")
+        else:
+            # Clear specific anime
+            clear_cache(args.clear_cache)
+            print(f"✅ Cache de '{args.clear_cache}' foi limpo!")
+        return
 
     # Handle commands
     if args.command == "anilist":

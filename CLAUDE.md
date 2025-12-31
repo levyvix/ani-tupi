@@ -42,6 +42,10 @@ uv run main.py --debug               # Debug mode (skips video playback)
 uv run main.py -q "dandadan"         # Direct search query
 uv run main.py --continue-watching   # Resume last watched
 
+# Cache management
+uv run ani-tupi --clear-cache        # Clear all cache
+uv run ani-tupi --clear-cache "Dandadan"  # Clear cache for specific anime
+
 # AniList integration
 uv run ani-tupi anilist auth         # Authenticate with AniList
 uv run ani-tupi anilist              # Browse AniList lists (trending, watching, etc)

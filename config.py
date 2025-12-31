@@ -71,7 +71,7 @@ class SearchSettings(BaseModel):
     """Anime search and fuzzy matching configuration."""
 
     fuzzy_threshold: int = Field(
-        98,
+        90,
         ge=0,
         le=100,
         description="Fuzzy matching threshold for deduplication (0-100)",
