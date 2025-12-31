@@ -1,15 +1,15 @@
 """
 AniList menu interface
-Curses-based menu for browsing AniList trending and user lists
+Textual-based menu for browsing AniList trending and user lists
 """
 
-import curses
 import sys
 import json
 from typing import Optional
 from pathlib import Path
 from os import name as os_name
 from anilist import anilist_client
+from menu import menu_navigate
 
 # History file path (same as main.py)
 HISTORY_PATH = Path.home().as_posix() + "/.local/state/ani-tupi/" if os_name != 'nt' else "C:\\Program Files\\ani-tupi\\"
@@ -48,9 +48,9 @@ def anilist_main_menu() -> Optional[tuple[str, int]]:
         menu_options.append("🔐 Login (use: ani-tupi anilist auth)")
 
     # Display menu
-    selection = _display_menu(menu_options, "AniList Menu")
+    selection = menu_navigate(menu_options, "AniList Menu")
 
-    if selection is None or selection == "Sair":
+    if selection is None:
         return None
 
     # Handle selection
@@ -140,115 +140,15 @@ def _show_anime_list(list_type: str) -> Optional[tuple[str, int]]:
         anime_map[display] = (display_title, search_title, anime_id, progress, episodes)
 
     # Show menu
-    selection = _display_menu(options, title)
+    selection = menu_navigate(options, title)
 
-    if selection is None or selection == "Sair":
+    if selection is None:
         return anilist_main_menu()
 
     # Return selected anime info
     # Returns: (display_title, search_title, anilist_id)
     display_title, search_title, anime_id, progress, episodes = anime_map[selection]
     return (search_title, anime_id)  # Use search_title (romaji) for scraper search
-
-
-def _display_menu(options: list[str], title: str = "") -> Optional[str]:
-    """
-    Display curses menu (reusing logic from menu.py)
-
-    Args:
-        options: List of menu options
-        title: Menu title
-
-    Returns:
-        Selected option or None if exited
-    """
-    # Add exit option if not present
-    if "Sair" not in options and "Voltar" not in options:
-        options = options + ["Voltar"]
-
-    def _menu_impl(stdscr):
-        # Setup
-        curses.curs_set(0)  # Hide cursor
-        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_YELLOW)  # Selected
-        curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)  # Normal
-
-        current_option = 0
-        start_index = 0  # Viewport start
-
-        while True:
-            stdscr.clear()
-            screen_height, screen_width = stdscr.getmaxyx()
-
-            # Display title
-            if title:
-                title_text = f" {title} "
-                stdscr.addstr(0, (screen_width - len(title_text)) // 2, title_text, curses.color_pair(2) | curses.A_BOLD)
-
-            # Display navigation hints at bottom
-            hints = "↑↓: Navegar | Enter: Selecionar | ESC: Voltar"
-            try:
-                stdscr.addstr(screen_height - 1, (screen_width - len(hints)) // 2, hints, curses.color_pair(2) | curses.A_DIM)
-            except:
-                pass  # Ignore if terminal too small
-
-            # Calculate viewport
-            display_height = screen_height - 3  # Reserve space for hints
-            end_index = min(start_index + display_height, len(options))
-            visible_options = options[start_index:end_index]
-
-            # Display options
-            for idx, option in enumerate(visible_options):
-                actual_idx = start_index + idx
-                y_pos = idx + 1
-
-                # Skip separator lines in selection
-                if option.startswith("─"):
-                    stdscr.addstr(y_pos, 2, option, curses.color_pair(2))
-                elif actual_idx == current_option:
-                    stdscr.addstr(y_pos, 2, f"> {option}", curses.color_pair(1))
-                else:
-                    stdscr.addstr(y_pos, 2, f"  {option}", curses.color_pair(2))
-
-            stdscr.refresh()
-
-            # Handle input
-            key = stdscr.getch()
-
-            if key == 27:  # ESC key
-                return None
-
-            if key == curses.KEY_UP:
-                # Move up, skip separators
-                current_option = (current_option - 1) % len(options)
-                while options[current_option].startswith("─"):
-                    current_option = (current_option - 1) % len(options)
-
-                # Adjust viewport
-                if current_option < start_index:
-                    start_index = current_option
-
-            elif key == curses.KEY_DOWN:
-                # Move down, skip separators
-                current_option = (current_option + 1) % len(options)
-                while options[current_option].startswith("─"):
-                    current_option = (current_option + 1) % len(options)
-
-                # Adjust viewport
-                if current_option >= end_index:
-                    start_index = current_option - display_height + 1
-
-            elif key in [curses.KEY_ENTER, 10, 13]:  # Enter
-                selected = options[current_option]
-                if selected in ["Sair", "Voltar"]:
-                    return None
-                return selected
-
-        return None
-
-    try:
-        return curses.wrapper(_menu_impl)
-    except KeyboardInterrupt:
-        return None
 
 
 def _show_recent_history() -> Optional[tuple[str, int]]:
@@ -297,7 +197,7 @@ def _show_recent_history() -> Optional[tuple[str, int]]:
         anime_map[display] = anime_name
 
     # Show menu
-    selection = _display_menu(options, "Animes Recentes (Local)")
+    selection = menu_navigate(options, "Animes Recentes (Local)")
 
     if selection is None:
         return anilist_main_menu()

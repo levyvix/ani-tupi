@@ -9,6 +9,7 @@ from json import load, dump
 from manga_tupi import main as manga_tupi
 from os import name
 from pathlib import Path
+import time
 
 
 HISTORY_PATH = Path.home().as_posix() + "/.local/state/ani-tupi/" if name != 'nt' else "C:\\Program Files\\ani-tupi\\"
@@ -90,10 +91,15 @@ def main(args):
         episode_list = rep.get_episode_list(selected_anime)
         selected_episode = menu(episode_list, msg="Escolha o episódio.")
 
-        episode_idx = episode_list.index(selected_episode) 
+        episode_idx = episode_list.index(selected_episode)
     else:
         selected_anime, episode_idx = load_history()
-    
+
+        # Need to search episodes again (history no longer stores URLs)
+        print(f"\n🔍 Buscando episódios de '{selected_anime}'...")
+        rep.search_anime(selected_anime)
+        rep.search_episodes(selected_anime)
+
     num_episodes = len(rep.anime_episodes_urls[selected_anime][0][0])
     while True:
         episode = episode_idx + 1
@@ -116,18 +122,45 @@ def main(args):
             episode_idx -= 1
 
 def load_history():
+    """
+    Load watch history and migrate old format if needed
+
+    Old format: {"anime_name": [episodes_urls, episode_idx], ...}
+    New format: {"anime_name": [timestamp, episode_idx], ...}
+    """
     file_path = HISTORY_PATH + "history.json"
     try:
         with open(file_path, "r") as f:
             data = load(f)
+
+            # Migrate old format to new format if needed
+            needs_migration = False
+            for anime_name, info in data.items():
+                # Check if first element is a list (old format)
+                if isinstance(info[0], list):
+                    needs_migration = True
+                    # Migrate: [episodes_urls, episode_idx] → [timestamp, episode_idx]
+                    data[anime_name] = [int(time.time()), info[1]]
+
+            # Save migrated data
+            if needs_migration:
+                print("⚙️  Migrando histórico para novo formato...")
+                with open(file_path, "w") as f_write:
+                    dump(data, f_write)
+
+            # Build menu with episode info
             titles = dict()
             for entry, info in data.items():
                 ep_info = f" (Ultimo episódio assistido {info[1] + 1})"
                 titles[entry + ep_info] = len(ep_info)
+
             selected = menu(list(titles.keys()), msg="Continue assistindo.")
             anime = selected[:-titles[selected]]
             episode_idx = data[anime][1]
-            rep.anime_episodes_urls[anime] = data[anime][0]
+
+            # Note: We no longer restore episodes_urls from history
+            # User will need to search for the anime again to get fresh URLs
+
         return anime, episode_idx
     except FileNotFoundError:
         print("Sem histórico de animes")
@@ -137,13 +170,19 @@ def load_history():
         return
 
 def save_history(anime, episode):
+    """
+    Save watch history with timestamp
+
+    Format: {"anime_name": [timestamp, episode_idx], ...}
+    """
     file_path = HISTORY_PATH + "history.json"
     try:
         with open(file_path, "r+") as f:
             data = load(f)
-            data[anime] = [rep.anime_episodes_urls[anime],
-                           episode]
-        with open(file_path , "w") as f:
+            # Save with timestamp (new format)
+            data[anime] = [int(time.time()), episode]
+
+        with open(file_path, "w") as f:
             dump(data, f)
 
     except FileNotFoundError:
@@ -151,8 +190,8 @@ def save_history(anime, episode):
 
         with open(file_path, "w") as f:
             data = dict()
-            data[anime] = [rep.anime_episodes_urls[anime],
-                            episode]
+            # Save with timestamp (new format)
+            data[anime] = [int(time.time()), episode]
             dump(data, f)
 
     except PermissionError:
