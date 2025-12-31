@@ -5,8 +5,6 @@ from multiprocessing.pool import ThreadPool
 from os import cpu_count
 from threading import Thread
 
-from fuzzywuzzy import fuzz
-
 from config import settings
 from loader import PluginInterface
 from models import EpisodeData
@@ -83,12 +81,13 @@ class Repository:
                 break
 
     def add_anime(self, title: str, url: str, source: str, params=None) -> None:
-        """Add anime with fuzzy deduplication.
+        """Add anime with exact deduplication.
 
         This method assumes different seasons are different anime (like MAL).
         Plugin devs should scrape that way.
 
-        Uses fuzzy matching threshold from config (default 98).
+        Uses exact matching: only consolidates if normalized titles are 100% identical.
+        This preserves dubbed/subbed/season distinctions.
         """
         title_ = title.lower()
         table = {
@@ -107,10 +106,9 @@ class Repository:
 
         self.norm_titles[title] = title_
 
-        # Use fuzzy threshold from config
-        threshold = settings.search.fuzzy_threshold
+        # Exact matching: only consolidate if normalized titles are identical
         for key in self.anime_to_urls:
-            if fuzz.ratio(title_, self.norm_titles[key]) >= threshold:
+            if title_ == self.norm_titles[key]:
                 self.anime_to_urls[key].append((url, source, params))
                 return
         self.anime_to_urls[title].append((url, source, params))
@@ -118,57 +116,24 @@ class Repository:
     def get_anime_titles(
         self, filter_by_query: str = None, min_score: int | None = None
     ) -> list[str]:
-        """Get anime titles, optionally filtered by relevance to query.
+        """Get anime titles, optionally filtered by exact match to query.
 
         Args:
-            filter_by_query: If provided, only return titles with fuzzy score >= min_score
-            min_score: Minimum fuzzy matching score (0-100). Defaults to config value.
+            filter_by_query: If provided, only return titles that contain this query (case-insensitive)
+            min_score: Ignored (kept for API compatibility)
 
         Returns:
-            Sorted list of anime titles, filtered and scored if query provided.
-
-        Raises:
-            ValueError: If min_score is outside valid range (0-100).
+            Sorted list of anime titles, filtered if query provided.
         """
-        # Use config default if min_score not provided
-        if min_score is None:
-            min_score = settings.search.min_score
-
-        # Validate min_score
-        if not 0 <= min_score <= 100:
-            raise ValueError(f"min_score must be 0-100, got {min_score}")
-
         titles = list(self.anime_to_urls.keys())
 
         if not filter_by_query:
             return sorted(titles)
 
-        # Normalize query for comparison
-        query_norm = filter_by_query.lower()
-        table = {
-            "clássico": "",
-            "classico": "",
-            ":": "",
-            "part": "season",
-            "temporada": "season",
-            "(": "",
-            ")": "",
-            " ": "",
-        }
-        for key, val in table.items():
-            query_norm = query_norm.replace(key, val)
-
-        # Score each title
-        scored_titles = []
-        for title in titles:
-            title_norm = self.norm_titles[title]
-            score = fuzz.ratio(query_norm, title_norm)
-            if score >= min_score:
-                scored_titles.append((score, title))
-
-        # Sort by score (highest first), then alphabetically
-        scored_titles.sort(key=lambda x: (-x[0], x[1]))
-        return [title for score, title in scored_titles]
+        # Simple case-insensitive substring matching
+        query_lower = filter_by_query.lower()
+        filtered = [title for title in titles if query_lower in title.lower()]
+        return sorted(filtered)
 
     def search_episodes(self, anime: str) -> None:
         if anime in self.anime_episodes_titles:
