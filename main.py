@@ -12,7 +12,12 @@ from pathlib import Path
 import time
 
 
-HISTORY_PATH = Path.home().as_posix() + "/.local/state/ani-tupi/" if name != 'nt' else "C:\\Program Files\\ani-tupi\\"
+HISTORY_PATH = (
+    Path.home().as_posix() + "/.local/state/ani-tupi/"
+    if name != "nt"
+    else "C:\\Program Files\\ani-tupi\\"
+)
+
 
 def normalize_anime_title(title: str) -> list[str]:
     """
@@ -21,20 +26,18 @@ def normalize_anime_title(title: str) -> list[str]:
     """
     import re
 
-    variations = [title]  # Original title always first
-
     # Remove "Season N" / "2nd Season" etc
     season_patterns = [
-        r'\s+Season\s+\d+',
-        r'\s+\d+(?:st|nd|rd|th)\s+Season',
-        r'\s+S\d+',
-        r'\s+Part\s+\d+',
+        r"\s+Season\s+\d+",
+        r"\s+\d+(?:st|nd|rd|th)\s+Season",
+        r"\s+S\d+",
+        r"\s+Part\s+\d+",
     ]
 
     base_variations = [title]  # Start with original
 
     for pattern in season_patterns:
-        cleaned = re.sub(pattern, '', title, flags=re.IGNORECASE).strip()
+        cleaned = re.sub(pattern, "", title, flags=re.IGNORECASE).strip()
         if cleaned and cleaned not in base_variations:
             base_variations.append(cleaned)
 
@@ -56,6 +59,7 @@ def normalize_anime_title(title: str) -> list[str]:
             all_variations.append(title_case)
 
     return all_variations
+
 
 def anilist_anime_flow(anime_title: str, anilist_id: int, args):
     """
@@ -84,9 +88,9 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args):
 
         # Offer manual search
         from menu import menu_navigate
+
         choice = menu_navigate(
-            ["🔍 Buscar manualmente", "🔙 Voltar ao AniList"],
-            msg="O que deseja fazer?"
+            ["🔍 Buscar manualmente", "🔙 Voltar ao AniList"], msg="O que deseja fazer?"
         )
 
         if not choice:
@@ -107,7 +111,10 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args):
     # If multiple results, let user choose
     if len(titles) > 1:
         from menu import menu_navigate
-        selected_anime = menu_navigate(titles, msg=f"Encontrados {len(titles)} resultados. Escolha:")
+
+        selected_anime = menu_navigate(
+            titles, msg=f"Encontrados {len(titles)} resultados. Escolha:"
+        )
         if not selected_anime:
             return  # User cancelled
     else:
@@ -118,6 +125,7 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args):
     rep.search_episodes(selected_anime)
     episode_list = rep.get_episode_list(selected_anime)
     from menu import menu_navigate
+
     selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
 
     if not selected_episode:
@@ -130,7 +138,8 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args):
     while True:
         episode = episode_idx + 1
         player_url = rep.search_player(selected_anime, episode)
-        if args.debug: print(player_url)
+        if args.debug:
+            print(player_url)
         play_video(player_url, args.debug)
         save_history(selected_anime, episode_idx)
 
@@ -140,7 +149,7 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args):
             if success:
                 print(f"✅ AniList atualizado: episódio {episode}")
             else:
-                print(f"⚠️  Não foi possível atualizar AniList")
+                print("⚠️  Não foi possível atualizar AniList")
 
         opts = []
         if episode_idx < num_episodes - 1:
@@ -151,6 +160,7 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args):
         opts.append("🔙 Voltar")
 
         from menu import menu_navigate
+
         selected_opt = menu_navigate(opts, msg="O que quer fazer agora?")
 
         if not selected_opt or selected_opt == "🔙 Voltar":
@@ -166,6 +176,7 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args):
                 continue  # Stay in current episode menu
             episode_idx = episode_list.index(selected_episode)
 
+
 def show_main_menu():
     """Display main menu with options"""
     options = [
@@ -176,9 +187,14 @@ def show_main_menu():
     ]
     return menu(options, msg="Ani-Tupi - Menu Principal")
 
+
 def search_anime_flow(args):
     """Flow for searching and selecting an anime"""
-    query = (input("\n🔍 Pesquise anime: ") if not args.query else args.query) if not args.debug else "eva"
+    query = (
+        (input("\n🔍 Pesquise anime: ") if not args.query else args.query)
+        if not args.debug
+        else "eva"
+    )
     rep.clear_search_results()  # Clear previous search results
     rep.search_anime(query)
     titles = rep.get_anime_titles()
@@ -188,6 +204,7 @@ def search_anime_flow(args):
         return None, None
 
     from menu import menu_navigate
+
     selected_anime = menu_navigate(titles, msg="Escolha o Anime.")
 
     if not selected_anime:
@@ -202,6 +219,7 @@ def search_anime_flow(args):
 
     episode_idx = episode_list.index(selected_episode)
     return selected_anime, episode_idx
+
 
 def main(args):
     loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
@@ -236,6 +254,7 @@ def main(args):
             rep.search_episodes(selected_anime)
         elif choice == "📺 AniList":
             from anilist_menu import anilist_main_menu
+
             # Loop to allow watching multiple anime
             while True:
                 result = anilist_main_menu()
@@ -253,7 +272,8 @@ def main(args):
     while True:
         episode = episode_idx + 1
         player_url = rep.search_player(selected_anime, episode)
-        if args.debug: print(player_url)
+        if args.debug:
+            print(player_url)
         play_video(player_url, args.debug)
         save_history(selected_anime, episode_idx)
 
@@ -266,6 +286,7 @@ def main(args):
         opts.append("🔙 Voltar")
 
         from menu import menu_navigate
+
         selected_opt = menu_navigate(opts, msg="O que quer fazer agora?")
 
         if not selected_opt or selected_opt == "🔙 Voltar":
@@ -280,6 +301,7 @@ def main(args):
             if not selected_episode:
                 continue  # Stay in current episode menu
             episode_idx = episode_list.index(selected_episode)
+
 
 def load_history():
     """
@@ -315,12 +337,13 @@ def load_history():
                 titles[entry + ep_info] = len(ep_info)
 
             from menu import menu_navigate
+
             selected = menu_navigate(list(titles.keys()), msg="Continue assistindo.")
 
             if not selected:
                 exit()  # User cancelled continue watching
 
-            anime = selected[:-titles[selected]]
+            anime = selected[: -titles[selected]]
             episode_idx = data[anime][1]
 
             # Note: We no longer restore episodes_urls from history
@@ -333,6 +356,7 @@ def load_history():
     except PermissionError:
         print("Sem permissão para ler arquivos.")
         return
+
 
 def save_history(anime, episode):
     """
@@ -363,23 +387,32 @@ def save_history(anime, episode):
         print("Não há permissão para criar arquivos.")
         return
 
+
 def cli():
     """Entry point para CLI"""
     parser = argparse.ArgumentParser(
-                prog = "ani-tupi",
-                description="Veja anime sem sair do terminal.",
-            )
+        prog="ani-tupi",
+        description="Veja anime sem sair do terminal.",
+    )
 
     # Create subparsers for commands
     subparsers = parser.add_subparsers(dest="command", help="Comandos disponíveis")
 
     # AniList command
     anilist_parser = subparsers.add_parser("anilist", help="Integração com AniList")
-    anilist_parser.add_argument("action", nargs="?", default="menu", choices=["auth", "menu"],
-                                help="auth: fazer login | menu: navegar listas (padrão)")
+    anilist_parser.add_argument(
+        "action",
+        nargs="?",
+        default="menu",
+        choices=["auth", "menu"],
+        help="auth: fazer login | menu: navegar listas (padrão)",
+    )
 
     # Main anime command arguments (default)
-    parser.add_argument("--query", "-q",)
+    parser.add_argument(
+        "--query",
+        "-q",
+    )
     parser.add_argument("--debug", "-d", action="store_true")
     parser.add_argument("--continue_watching", "-c", action="store_true")
     parser.add_argument("--manga", "-m", action="store_true")
@@ -409,6 +442,5 @@ def cli():
         main(args)
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     cli()
-
