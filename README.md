@@ -159,6 +159,36 @@ manga-tupi
 ani-tupi --help
 ```
 
+### Ler Mangá
+
+Leia mangá do MangaDex direto do terminal!
+
+```bash
+# Ler mangá interativamente
+manga-tupi
+```
+
+**Features:**
+- 🔍 **Busca em tempo real**: Digite para procurar manga
+- 📖 **Menu interativo**: Selecione com setas, ESC para voltar
+- 💾 **Histórico de leitura**: Salva o último capítulo lido
+- ⮕ **Retomar leitura**: Hint "⮕ Retomar" mostra o último capítulo
+- 🖼️ **Visualizador de imagens**: Abre automaticamente no seu viewer padrão (feh, Preview, etc)
+- 🔄 **Cache de capítulos**: Carrega lista de capítulos instantaneamente
+- ⚙️ **Configurável**: Customize pasta de download, idiomas preferidos, etc
+- ⏳ **Loading spinners**: Feedback visual durante API calls
+
+**Configuração (opcional):**
+
+```bash
+# Pasta de download padrão é ~/Downloads
+# Para customizar, use variáveis de ambiente:
+
+export ANI_TUPI__MANGA__OUTPUT_DIRECTORY=~/Mangas
+export ANI_TUPI__MANGA__CACHE_DURATION_HOURS=48
+export ANI_TUPI__MANGA__LANGUAGES=pt-br,en,ja
+```
+
 ### Integração AniList
 
 Sincronize seu progresso com [AniList.co](https://anilist.co) automaticamente!
@@ -190,6 +220,7 @@ ani-tupi anilist menu
 - 🎯 **Continuar de onde parou**: Retoma automaticamente no episódio certo (AniList + histórico local)
 - 🔍 **Busca flexível**: Tenta romaji primeiro, depois inglês se não encontrar
 - 📝 **Múltiplas fontes**: Se encontrar múltiplos resultados, deixa você escolher o correto
+- 🔄 **Trocar fonte durante reprodução**: Mude entre versões dublada/legendada/diferentes scrapers após assistir um episódio quando a fonte atual não tiver novos episódios disponíveis
 
 **Como funciona:**
 1. Faça login uma vez com `ani-tupi anilist auth`
@@ -223,11 +254,18 @@ O executável será criado em `dist/ani-tupi` (Linux/macOS) ou `dist/ani-tupi.ex
 ```
 ani-tupi/
 ├── main.py              # Entry point para anime
-├── manga_tupi.py        # Entry point para mangá
+├── manga_tupi.py        # Entry point para mangá (refatorado)
+├── manga_service.py     # Service layer MangaDex (NEW)
 ├── loader.py            # Sistema de plugins
 ├── repository.py        # Repositório de dados
-├── menu.py              # Interface do menu
+├── menu.py              # Interface do menu (Rich + InquirerPy)
+├── loading.py           # Loading spinners (Rich)
 ├── video_player.py      # Integração com mpv
+├── models.py            # Pydantic data models (anime + manga)
+├── config.py            # Configuração centralizada (Pydantic)
+├── anilist.py           # Cliente AniList GraphQL
+├── anilist_menu.py      # Menu AniList
+├── scraper_cache.py     # Cache de scrapers
 ├── plugins/             # Plugins de scraping
 │   ├── animefire.py
 │   └── animesonlinecc.py
@@ -323,6 +361,25 @@ GPL-3.0 - veja o arquivo [LICENSE](LICENSE) para detalhes.
 ## 📝 Changelog
 
 ### Versão Atual (Dezembro 2025)
+
+**🔄 Trocar Fonte Durante Reprodução**
+- ✅ Opção "🔄 Trocar fonte" no menu pós-episódio
+- ✅ Alterna entre versões dublada/legendada/diferentes scrapers
+- ✅ Útil quando a fonte atual não tem episódios mais recentes
+- ✅ Mostra todas as variações encontradas para o anime base
+- ✅ Disponível em busca normal e fluxo AniList
+
+**🎵 Refatoração Manga CLI**
+- ✅ Mangá refatorado para seguir MVCP (Model-View-Controller-Plugin)
+- ✅ Service layer MangaDex com erro handling e cache
+- ✅ Substituição de `input()` por Rich + InquirerPy menus
+- ✅ Spinners de loading para API calls
+- ✅ Histórico de leitura em JSON (`manga_history.json`)
+- ✅ Resume hint "⮕ Retomar" mostra último capítulo lido
+- ✅ Configuração centralizada com Pydantic (`config.py`)
+- ✅ Pydantic data models para MangaMetadata, ChapterData, etc
+- ✅ Cache de capítulos (24h padrão, configurável)
+- ✅ Múltiplos idiomas (pt-br, en, ja padrão)
 
 **⚡ Performance e Cache**
 - ✅ Cache de episódios: carrega instantaneamente lista de episódios já visitados
