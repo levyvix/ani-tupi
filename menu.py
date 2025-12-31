@@ -79,20 +79,20 @@ class MenuScreen(Screen):
     ]
 
     CSS = """
-    /* Base styling - Yellow theme (classic ani-tupi) */
+    /* Catppuccin Mocha Theme */
     Screen {
-        background: black;
+        background: #1e1e2e;
     }
 
     #menu-container {
         width: 3fr;
         height: 100%;
-        border: solid yellow;
+        border: solid #cba6f7;
     }
 
     #menu-title {
-        background: yellow;
-        color: black;
+        background: #cba6f7;
+        color: #1e1e2e;
         text-align: center;
         text-style: bold;
         padding: 1;
@@ -101,26 +101,26 @@ class MenuScreen(Screen):
 
     #menu-options {
         height: 1fr;
-        background: black;
+        background: #1e1e2e;
     }
 
     #search-input {
         dock: bottom;
-        border: tall yellow;
+        border: tall #cba6f7;
         display: none;  /* Hidden by default */
     }
 
     #preview-panel {
         width: 2fr;
         height: 100%;
-        background: #1a1a1a;
-        border: solid yellow;
+        background: #181825;
+        border: solid #cba6f7;
         padding: 1;
     }
 
     #preview-title {
-        background: yellow;
-        color: black;
+        background: #cba6f7;
+        color: #1e1e2e;
         text-align: center;
         text-style: bold;
         padding: 1;
@@ -128,32 +128,32 @@ class MenuScreen(Screen):
 
     #preview-content {
         padding: 1;
-        color: yellow;
+        color: #cdd6f4;
     }
 
     OptionList > .option-list--option {
-        background: black;
-        color: yellow;
+        background: #1e1e2e;
+        color: #cdd6f4;
     }
 
     OptionList > .option-list--option-highlighted {
-        background: yellow;
-        color: black;
+        background: #cba6f7;
+        color: #1e1e2e;
     }
 
     OptionList > .option-list--option-disabled {
-        color: #555555;
-        background: black;
+        color: #6c7086;
+        background: #1e1e2e;
     }
 
     Header {
-        background: yellow;
-        color: black;
+        background: #cba6f7;
+        color: #1e1e2e;
     }
 
     Footer {
-        background: yellow;
-        color: black;
+        background: #cba6f7;
+        color: #1e1e2e;
     }
     """
 
@@ -322,6 +322,9 @@ class MenuScreen(Screen):
 class MenuApp(App):
     """Main menu application"""
 
+    # Disable animations for smoother transitions
+    ENABLE_COMMAND_PALETTE = False
+
     def __init__(
         self,
         options: list[str],
@@ -339,6 +342,9 @@ class MenuApp(App):
         self.preview_callback = preview_callback
         self.result: Optional[str] = None
         self._current_theme = self._load_theme()
+
+        # Disable animations for instant transitions
+        self.animation_level = "none"
 
     def _load_theme(self) -> str:
         """Load saved theme preference"""
