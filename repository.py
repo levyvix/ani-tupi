@@ -42,7 +42,7 @@ class Repository:
         self.anime_episodes_urls = defaultdict(list)
         self.norm_titles = {}
 
-    def search_anime(self, query: str) -> None:
+    def search_anime(self, query: str, verbose: bool = True) -> None:
         if not self.sources:
             print("\n❌ Erro: Nenhum plugin carregado!")
             print("Verifique se os plugins estão instalados em plugins/")
@@ -76,7 +76,7 @@ class Repository:
 
             # If found results, stop
             if self.anime_to_urls:
-                if num_words < len(words):
+                if verbose and num_words < len(words):
                     print(f"ℹ️  Busca com: '{partial_query}' ({num_words}/{len(words)} palavras)")
                 break
 

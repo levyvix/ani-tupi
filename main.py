@@ -141,7 +141,7 @@ def anilist_anime_flow(
     for variant in title_variations:
         rep.clear_search_results()  # Clear previous search results
         with loading(f"Buscando '{variant}'..."):
-            rep.search_anime(variant)
+            rep.search_anime(variant, verbose=False)
         titles = rep.get_anime_titles(filter_by_query=variant, min_score=85)
         if titles:
             used_query = variant
