@@ -105,6 +105,80 @@ def normalize_anime_title(title: str):
     return result
 
 
+def offer_sequel_and_continue(anilist_id: int, current_anime: str, args) -> bool:
+    """Check for sequels when last episode is watched and offer to continue.
+
+    Args:
+        anilist_id: AniList ID of the anime just watched
+        current_anime: Title of the anime being watched
+        args: Command line arguments
+
+    Returns:
+        True if user accepted sequel and it started playback, False otherwise
+    """
+    from anilist import anilist_client
+    from menu import menu_navigate
+
+    # Only offer sequels if authenticated
+    if not anilist_client.is_authenticated():
+        return False
+
+    # Get sequels from AniList
+    sequels = anilist_client.get_sequels(anilist_id)
+
+    if not sequels:
+        return False  # No sequels found
+
+    # Format sequel options
+    if len(sequels) == 1:
+        sequel = sequels[0]
+        sequel_title = anilist_client.format_title(sequel["title"])
+
+        # Single sequel: offer simple confirmation
+        choice = menu_navigate(
+            ["✅ Sim, continuar", "❌ Não, parar aqui"],
+            msg=f"Deseja continuar com a sequência?\n\n→ {sequel_title}",
+        )
+
+        if choice == "✅ Sim, continuar":
+            # Get sequel info and start playback
+            anilist_anime_flow(
+                sequel_title,
+                sequel["id"],
+                args,
+                anilist_progress=0,
+                display_title=sequel_title,
+                total_episodes=sequel.get("episodes"),
+            )
+            return True
+    else:
+        # Multiple sequels: let user choose
+        sequel_options = [anilist_client.format_title(s["title"]) for s in sequels]
+
+        choice = menu_navigate(
+            sequel_options + ["❌ Não, parar aqui"],
+            msg="Qual sequência deseja assistir?",
+        )
+
+        if choice and choice != "❌ Não, parar aqui":
+            # Find selected sequel
+            selected_sequel = next((s for s in sequels
+                                   if anilist_client.format_title(s["title"]) == choice), None)
+            if selected_sequel:
+                sequel_title = anilist_client.format_title(selected_sequel["title"])
+                anilist_anime_flow(
+                    sequel_title,
+                    selected_sequel["id"],
+                    args,
+                    anilist_progress=0,
+                    display_title=sequel_title,
+                    total_episodes=selected_sequel.get("episodes"),
+                )
+                return True
+
+    return False
+
+
 def anilist_anime_flow(
     anime_title: str,
     anilist_id: int,
@@ -367,6 +441,12 @@ def anilist_anime_flow(
                 if not anilist_client.is_in_any_list(anilist_id):
                     print("\n📝 Adicionando à sua lista do AniList...")
                     anilist_client.add_to_list(anilist_id, "CURRENT")
+                else:
+                    # Auto-promote from PLANNING to CURRENT if needed
+                    entry = anilist_client.get_media_list_entry(anilist_id)
+                    if entry and entry.get("status") == "PLANNING":
+                        print("\n📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
+                        anilist_client.add_to_list(anilist_id, "CURRENT")
 
                 print(f"\n🔄 Sincronizando progresso com AniList (Ep {episode})...")
                 success = anilist_client.update_progress(anilist_id, episode)
@@ -374,6 +454,11 @@ def anilist_anime_flow(
                     print("✅ Progresso salvo no AniList!")
                 else:
                     print("⚠️  Não foi possível salvar no AniList (continuando...)")
+
+                # Check for sequels when last episode is watched
+                if episode == num_episodes:
+                    if offer_sequel_and_continue(anilist_id, selected_anime, args):
+                        return  # Sequel started, exit this flow
 
         opts = []
         if episode_idx < num_episodes - 1:
@@ -519,6 +604,12 @@ def main(args) -> None:
                     if not anilist_client.is_in_any_list(anilist_id):
                         print("\n📝 Adicionando à sua lista do AniList...")
                         anilist_client.add_to_list(anilist_id, "CURRENT")
+                    else:
+                        # Auto-promote from PLANNING to CURRENT if needed
+                        entry = anilist_client.get_media_list_entry(anilist_id)
+                        if entry and entry.get("status") == "PLANNING":
+                            print("\n📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
+                            anilist_client.add_to_list(anilist_id, "CURRENT")
 
                     print(f"\n🔄 Sincronizando progresso com AniList (Ep {episode})...")
                     success = anilist_client.update_progress(anilist_id, episode)
@@ -526,6 +617,11 @@ def main(args) -> None:
                         print("✅ Progresso salvo no AniList!")
                     else:
                         print("⚠️  Não foi possível salvar no AniList (continuando...)")
+
+                    # Check for sequels when last episode is watched
+                    if episode == num_episodes:
+                        if offer_sequel_and_continue(anilist_id, selected_anime, args):
+                            return  # Sequel started, exit this flow
 
         opts = []
         if episode_idx < num_episodes - 1:

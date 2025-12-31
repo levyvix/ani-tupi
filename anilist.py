@@ -534,6 +534,118 @@ class AniListClient:
         except Exception:
             return False
 
+    def get_anime_relations(self, anime_id: int) -> list[dict]:
+        """Get anime relations (sequels, prequels, related, etc).
+
+        Args:
+            anime_id: AniList anime ID
+
+        Returns:
+            List of relation edges with node metadata (id, title, type)
+        """
+        query = """
+        query ($id: Int) {
+            Media(id: $id, type: ANIME) {
+                relations {
+                    edges {
+                        relationType
+                        node {
+                            id
+                            type
+                            title {
+                                romaji
+                                english
+                                native
+                            }
+                            episodes
+                        }
+                    }
+                }
+            }
+        }
+        """
+
+        variables = {"id": anime_id}
+
+        try:
+            result = self._query(query, variables)
+            if result and "Media" in result and "relations" in result["Media"]:
+                return result["Media"]["relations"]["edges"]
+            return []
+        except Exception:
+            return []
+
+    def get_sequels(self, anime_id: int) -> list[dict]:
+        """Get direct sequels of an anime.
+
+        Args:
+            anime_id: AniList anime ID
+
+        Returns:
+            List of sequel anime nodes with: id, title, episodes
+        """
+        relations = self.get_anime_relations(anime_id)
+
+        # Filter for SEQUEL type relations and ANIME type nodes
+        sequels = [
+            edge["node"]
+            for edge in relations
+            if edge.get("relationType") == "SEQUEL" and edge["node"].get("type") == "ANIME"
+        ]
+
+        return sequels
+
+    def get_media_list_entry(self, anime_id: int) -> dict | None:
+        """Get user's media list entry for an anime.
+
+        Args:
+            anime_id: AniList anime ID
+
+        Returns:
+            MediaList entry with: id, status, progress, score, or None if not in list
+        """
+        if not self.is_authenticated():
+            return None
+
+        # Ensure we have user_id
+        if not self.user_id:
+            user_info = self.get_viewer_info()
+            if user_info:
+                self.user_id = user_info["id"]
+            else:
+                return None
+
+        query = """
+        query ($userId: Int, $mediaId: Int) {
+            MediaList(userId: $userId, mediaId: $mediaId) {
+                id
+                status
+                progress
+                score
+                startedAt {
+                    year
+                    month
+                    day
+                }
+                completedAt {
+                    year
+                    month
+                    day
+                }
+            }
+        }
+        """
+
+        variables = {"userId": self.user_id, "mediaId": anime_id}
+
+        try:
+            result = self._query(query, variables)
+            if result and "MediaList" in result and result["MediaList"]:
+                return result["MediaList"]
+            return None
+        except Exception:
+            return None
+
     def format_title(self, title_obj: dict) -> str:
         """Format title object to single string
         Shows romaji + english when both available.
