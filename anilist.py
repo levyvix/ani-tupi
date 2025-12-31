@@ -1,24 +1,15 @@
 """AniList API integration for ani-tupi.
 
 GraphQL client for tracking anime progress and fetching lists.
+Configuration is loaded from config.py (environment variables or defaults).
 """
 
 import json
 import webbrowser
-from pathlib import Path
 
 import requests
 
-# AniList API endpoints
-ANILIST_API_URL = "https://graphql.anilist.co"
-ANILIST_AUTH_URL = "https://anilist.co/api/v2/oauth/authorize"
-ANILIST_TOKEN_URL = "https://anilist.co/api/v2/oauth/token"
-
-# OAuth Config (using implicit grant - no client secret needed)
-CLIENT_ID = 20148  # Public client ID (same as viu-media/viu)
-
-# Token storage
-TOKEN_FILE = Path.home() / ".local/state/ani-tupi/anilist_token.json"
+from config import settings
 
 
 class AniListClient:
@@ -31,10 +22,11 @@ class AniListClient:
 
     def _load_token(self) -> str | None:
         """Load access token and user_id from file."""
-        if not TOKEN_FILE.exists():
+        token_file = settings.anilist.token_file
+        if not token_file.exists():
             return None
         try:
-            with TOKEN_FILE.open() as f:
+            with token_file.open() as f:
                 data = json.load(f)
                 self.user_id = data.get("user_id")  # Load user_id if exists
                 return data.get("access_token")
@@ -43,11 +35,12 @@ class AniListClient:
 
     def _save_token(self, token: str, user_id: int | None = None) -> None:
         """Save access token and user_id to file."""
-        TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        token_file = settings.anilist.token_file
+        token_file.parent.mkdir(parents=True, exist_ok=True)
         data = {"access_token": token}
         if user_id:
             data["user_id"] = user_id
-        with TOKEN_FILE.open("w") as f:
+        with token_file.open("w") as f:
             json.dump(data, f)
 
     def is_authenticated(self) -> bool:
@@ -60,7 +53,7 @@ class AniListClient:
         Opens browser for authorization, user copies token from URL.
         """
         # Build OAuth URL
-        auth_url = f"{ANILIST_AUTH_URL}?client_id={CLIENT_ID}&response_type=token"
+        auth_url = f"{settings.anilist.auth_url}?client_id={settings.anilist.client_id}&response_type=token"
 
 
         # Open browser
@@ -142,7 +135,7 @@ class AniListClient:
             headers["Authorization"] = f"Bearer {use_token}"
 
         response = requests.post(
-            ANILIST_API_URL,
+            settings.anilist.api_url,
             json={"query": query, "variables": variables or {}},
             headers=headers,
         )

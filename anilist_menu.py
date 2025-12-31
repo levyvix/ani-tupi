@@ -5,19 +5,14 @@ Textual-based menu for browsing AniList trending and user lists.
 import json
 import os
 import webbrowser
-from os import name as os_name
-from pathlib import Path
 
 from anilist import anilist_client
+from config import get_data_path
 from loading import loading
 from menu import menu_navigate
 
-# History file path (same as main.py)
-HISTORY_PATH = (
-    Path.home() / ".local/state/ani-tupi"
-    if os_name != "nt"
-    else Path("C:\\Program Files\\ani-tupi")
-)
+# History file path (centralized from config)
+HISTORY_PATH = get_data_path()
 
 
 def anilist_main_menu() -> tuple[str, int] | None:

@@ -31,6 +31,8 @@ dependencies = [
     "tqdm>=4.67.0",
     "rich>=14.2.0",
     "inquirerpy>=0.3.4",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
 ]
 
 [project.scripts]

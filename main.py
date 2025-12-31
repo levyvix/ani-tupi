@@ -1,22 +1,18 @@
 import argparse
 import time
 from json import dump, load
-from os import name
-from pathlib import Path
 from sys import exit
 
 import loader
+from config import get_data_path
 from loading import loading
 from manga_tupi import main as manga_tupi
 from menu import menu
 from repository import rep
 from video_player import play_video
 
-HISTORY_PATH = (
-    Path.home() / ".local/state/ani-tupi"
-    if name != "nt"
-    else Path("C:\\Program Files\\ani-tupi")
-)
+# Use centralized path function from config
+HISTORY_PATH = get_data_path()
 
 # AniList to scraper title mappings cache
 ANILIST_MAPPINGS_FILE = HISTORY_PATH / "anilist_mappings.json"

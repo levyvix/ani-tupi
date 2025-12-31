@@ -111,6 +111,105 @@ uv tool install --reinstall .        # Required to pick up source code changes
 - **Solution**: Changed to `dirname(abspath(__file__))` which returns the module's install location
 - **After fixing**: Must use `uv tool install --reinstall .` to rebuild the package (UV caches builds)
 
+## Configuration Management
+
+### Pydantic Configuration (`config.py`)
+
+As of 2025-12-31, ani-tupi uses **Pydantic v2** for runtime type validation and centralized configuration.
+
+**Key Features:**
+- **Type Safety**: Runtime validation of all configuration values
+- **Centralized Settings**: Single source of truth in `config.py` instead of scattered magic numbers
+- **Environment Variable Support**: Override settings via `ANI_TUPI__*` env vars
+- **OS-Aware Paths**: Single `get_data_path()` replaces duplicated platform-specific logic
+- **Validation**: Invalid config values raise clear errors on startup
+
+**Available Settings:**
+
+```python
+from config import settings
+
+# AniList API
+settings.anilist.api_url         # GraphQL endpoint (default: graphql.anilist.co)
+settings.anilist.auth_url        # OAuth authorization URL
+settings.anilist.client_id       # Public OAuth client ID
+settings.anilist.token_file      # Path to access token (auto-resolved OS path)
+
+# Cache
+settings.cache.duration_hours    # Cache validity (1-72 hours, default 6)
+settings.cache.cache_file        # Path to cache JSON (auto-resolved OS path)
+
+# Search
+settings.search.fuzzy_threshold  # Fuzzy matching strictness (0-100, default 98)
+settings.search.min_score        # Minimum relevance score (0-100, default 70)
+settings.search.progressive_search_min_words  # Min words for progressive search (1-10, default 2)
+```
+
+**Environment Variable Override:**
+
+```bash
+# Override any setting with ANI_TUPI__SECTION__SETTING=value
+export ANI_TUPI__SEARCH__FUZZY_THRESHOLD=85
+export ANI_TUPI__CACHE__DURATION_HOURS=12
+export ANI_TUPI__ANILIST__CLIENT_ID=12345
+
+uv run ani-tupi  # Uses custom config
+```
+
+**Local Development (.env file):**
+
+```bash
+# Copy .env.example to .env and customize
+cp .env.example .env
+# Edit .env with your settings
+uv run ani-tupi  # Automatically loads .env
+```
+
+**Path Resolution:**
+
+```python
+from config import get_data_path
+
+path = get_data_path()  # ~/.local/state/ani-tupi (Linux/macOS)
+                        # C:\Program Files\ani-tupi (Windows)
+```
+
+All config-aware modules import `settings` from `config.py`:
+- `repository.py` - Uses fuzzy_threshold, min_score, progressive_search_min_words
+- `anilist.py` - Uses API URLs, client_id, token_file
+- `scraper_cache.py` - Uses cache_file and duration_hours
+- `main.py`, `anilist_menu.py` - Use get_data_path() for history/mappings
+
+### Data Models (`models.py`)
+
+Pydantic models for structured data validation:
+
+```python
+from models import AnimeMetadata, EpisodeData, VideoUrl
+
+# AnimeMetadata: Anime from scraper
+anime = AnimeMetadata(
+    title="Dandadan",
+    url="https://example.com/dandadan",
+    source="animefire",
+    params=None  # Optional scraper params
+)
+
+# EpisodeData: Episode list (validates title/URL length match)
+episodes = EpisodeData(
+    anime_title="Dandadan",
+    episode_titles=["Ep1", "Ep2"],
+    episode_urls=["url1", "url2"],
+    source="animefire"
+)
+
+# VideoUrl: Playback URL with optional headers
+video = VideoUrl(
+    url="https://example.com/stream.m3u8",
+    headers={"User-Agent": "Mozilla/5.0"}
+)
+```
+
 ## Architecture Deep Dive
 
 ### TUI System (Rich + InquirerPy)

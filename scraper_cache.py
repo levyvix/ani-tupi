@@ -1,18 +1,12 @@
-"""Cache system for scraper results to avoid unnecessary requests."""
+"""Cache system for scraper results to avoid unnecessary requests.
+
+Cache settings (location, duration) are configured in config.py
+"""
 
 import json
 import time
-from pathlib import Path
 
-# Cache location
-CACHE_FILE = (
-    Path.home() / ".local/state/ani-tupi/scraper_cache.json"
-    if __import__("os").name != "nt"
-    else Path("C:\\Program Files\\ani-tupi\\scraper_cache.json")
-)
-
-# Cache duration: 6 hours
-CACHE_DURATION = 6 * 60 * 60
+from config import settings
 
 
 def get_cache(anime_title: str) -> dict | None:
@@ -26,10 +20,11 @@ def get_cache(anime_title: str) -> dict | None:
 
     """
     try:
-        if not CACHE_FILE.exists():
+        cache_file = settings.cache.cache_file
+        if not cache_file.exists():
             return None
 
-        with CACHE_FILE.open() as f:
+        with cache_file.open() as f:
             cache = json.load(f)
 
         if anime_title not in cache:
@@ -38,8 +33,9 @@ def get_cache(anime_title: str) -> dict | None:
         data = cache[anime_title]
         timestamp = data.get("timestamp", 0)
 
-        # Check if cache is still valid
-        if time.time() - timestamp > CACHE_DURATION:
+        # Check if cache is still valid (duration in hours from config)
+        cache_duration_seconds = settings.cache.duration_hours * 3600
+        if time.time() - timestamp > cache_duration_seconds:
             return None  # Expired
 
         return data
@@ -58,10 +54,11 @@ def set_cache(anime_title: str, episode_count: int, episode_urls: list[str]) -> 
 
     """
     try:
+        cache_file = settings.cache.cache_file
         # Load existing cache
         cache = {}
-        if CACHE_FILE.exists():
-            with CACHE_FILE.open() as f:
+        if cache_file.exists():
+            with cache_file.open() as f:
                 cache = json.load(f)
 
         # Update with new data
@@ -72,8 +69,8 @@ def set_cache(anime_title: str, episode_count: int, episode_urls: list[str]) -> 
         }
 
         # Save
-        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with CACHE_FILE.open("w") as f:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with cache_file.open("w") as f:
             json.dump(cache, f, indent=2)
 
     except Exception:
@@ -88,22 +85,23 @@ def clear_cache(anime_title: str | None = None) -> None:
 
     """
     try:
+        cache_file = settings.cache.cache_file
         if anime_title is None:
             # Clear all cache
-            if CACHE_FILE.exists():
-                CACHE_FILE.unlink()
+            if cache_file.exists():
+                cache_file.unlink()
         else:
             # Clear specific anime
-            if not CACHE_FILE.exists():
+            if not cache_file.exists():
                 return
 
-            with CACHE_FILE.open() as f:
+            with cache_file.open() as f:
                 cache = json.load(f)
 
             if anime_title in cache:
                 del cache[anime_title]
 
-                with CACHE_FILE.open("w") as f:
+                with cache_file.open("w") as f:
                     json.dump(cache, f, indent=2)
 
     except Exception:
