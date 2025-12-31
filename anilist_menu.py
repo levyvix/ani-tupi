@@ -10,6 +10,7 @@ from pathlib import Path
 from os import name as os_name
 from anilist import anilist_client
 from menu import menu_navigate
+from loading import loading
 
 # History file path (same as main.py)
 HISTORY_PATH = (
@@ -108,10 +109,12 @@ def _show_anime_list(list_type: str) -> Optional[tuple[str, int]]:
     while True:  # Loop to allow watching multiple anime from same list
         # Fetch anime list
         if list_type == "trending":
-            anime_list = anilist_client.get_trending(per_page=50)
+            with loading("Carregando trending..."):
+                anime_list = anilist_client.get_trending(per_page=50)
             title = "Trending Anime"
         else:
-            anime_list = anilist_client.get_user_list(list_type, per_page=50)
+            with loading(f"Carregando lista {list_type}..."):
+                anime_list = anilist_client.get_user_list(list_type, per_page=50)
             title = f"Your {list_type.title()} List"
 
         if not anime_list:
@@ -258,7 +261,8 @@ def _show_recent_history() -> Optional[tuple[str, int]]:
 
     # No saved anilist_id - search for it
     print(f"\n🔍 Buscando '{anime_name}' no AniList...")
-    search_results = anilist_client.search_anime(anime_name)
+    with loading(f"Buscando '{anime_name}' no AniList..."):
+        search_results = anilist_client.search_anime(anime_name)
 
     if not search_results:
         print(f"\n❌ '{anime_name}' não encontrado no AniList.")
@@ -295,7 +299,8 @@ def _search_and_add_anime(is_logged_in: bool) -> Optional[tuple[str, int]]:
         return anilist_main_menu()
 
     print(f"\n🔍 Buscando '{query}' no AniList...")
-    results = anilist_client.search_anime(query)
+    with loading(f"Buscando '{query}' no AniList..."):
+        results = anilist_client.search_anime(query)
 
     if not results:
         print(f"\n❌ Nenhum anime encontrado para '{query}'")

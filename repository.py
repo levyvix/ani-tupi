@@ -7,6 +7,7 @@ from threading import Thread, Condition
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.pool import ThreadPool
 from fuzzywuzzy import fuzz
+from loading import loading
 
 
 class Repository:

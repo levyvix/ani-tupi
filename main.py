@@ -10,6 +10,7 @@ from manga_tupi import main as manga_tupi
 from os import name
 from pathlib import Path
 import time
+from loading import loading
 
 
 HISTORY_PATH = (
@@ -143,7 +144,8 @@ def anilist_anime_flow(
     for variant in title_variations:
         print(f"\n🔍 Buscando '{variant}' nos scrapers...")
         rep.clear_search_results()  # Clear previous search results
-        rep.search_anime(variant)
+        with loading(f"Buscando '{variant}'..."):
+            rep.search_anime(variant)
         titles = rep.get_anime_titles()
         if titles:
             used_query = variant
@@ -167,7 +169,8 @@ def anilist_anime_flow(
         if choice == "🔍 Buscar manualmente":
             manual_query = input("\n🔍 Digite o nome para buscar: ")
             rep.clear_search_results()  # Clear previous search results
-            rep.search_anime(manual_query)
+            with loading(f"Buscando '{manual_query}'..."):
+                rep.search_anime(manual_query)
             titles = rep.get_anime_titles()
             used_query = manual_query
             manual_search = True
@@ -242,7 +245,8 @@ def anilist_anime_flow(
             save_anilist_mapping(anilist_id, selected_anime)
 
     # Get episodes
-    rep.search_episodes(selected_anime)
+    with loading("Carregando episódios..."):
+        rep.search_episodes(selected_anime)
     episode_list = rep.get_episode_list(selected_anime)
     from menu import menu_navigate
 
@@ -325,7 +329,8 @@ def anilist_anime_flow(
     # Playback loop (with AniList sync)
     while True:
         episode = episode_idx + 1
-        player_url = rep.search_player(selected_anime, episode)
+        with loading("Buscando vídeo..."):
+            player_url = rep.search_player(selected_anime, episode)
         if args.debug:
             print(player_url)
         play_video(player_url, args.debug)
@@ -398,7 +403,8 @@ def search_anime_flow(args):
         else "eva"
     )
     rep.clear_search_results()  # Clear previous search results
-    rep.search_anime(query)
+    with loading(f"Buscando '{query}'..."):
+        rep.search_anime(query)
     titles = rep.get_anime_titles()
 
     if not titles:
@@ -412,7 +418,8 @@ def search_anime_flow(args):
     if not selected_anime:
         return None, None  # User cancelled
 
-    rep.search_episodes(selected_anime)
+    with loading("Carregando episódios..."):
+        rep.search_episodes(selected_anime)
     episode_list = rep.get_episode_list(selected_anime)
     selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
 
@@ -469,7 +476,8 @@ def main(args):
     num_episodes = len(rep.anime_episodes_urls[selected_anime][0][0])
     while True:
         episode = episode_idx + 1
-        player_url = rep.search_player(selected_anime, episode)
+        with loading("Buscando vídeo..."):
+            player_url = rep.search_player(selected_anime, episode)
         if args.debug:
             print(player_url)
         play_video(player_url, args.debug)
@@ -596,8 +604,10 @@ def load_history():
             # Search for episodes to offer -1/0/+1 options
             print(f"\n🔍 Buscando episódios de '{anime}'...")
             rep.clear_search_results()
-            rep.search_anime(anime)
-            rep.search_episodes(anime)
+            with loading(f"Buscando '{anime}'..."):
+                rep.search_anime(anime)
+            with loading("Carregando episódios..."):
+                rep.search_episodes(anime)
             episode_list = rep.get_episode_list(anime)
 
             if not episode_list:

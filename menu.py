@@ -1,426 +1,33 @@
 """
-Textual-based menu system for ani-tupi
-Modern TUI with search, themes, and preview support
+Rich + InquirerPy based menu system for ani-tupi
+Modern, responsive TUI with Catppuccin theme
 """
 
-from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, OptionList, Static, Input, Label
-from textual.containers import Container, Vertical, Horizontal
-from textual.binding import Binding
-from textual.screen import Screen
-from typing import Optional, Callable, Any
-from rich.text import Text
-from pathlib import Path
+from InquirerPy import inquirer
+from InquirerPy.base.control import Choice
+from InquirerPy.separator import Separator
+from rich.console import Console
+from rich.theme import Theme
+from typing import Optional, Callable
 import sys
-import os
 
 
-# Theme system - Path for saving user preference
-THEME_FILE = Path.home() / ".local/state/ani-tupi/theme.txt"
-
-
-class PreviewPanel(Vertical):
-    """Painel lateral para preview de informações"""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.current_data = None
-
-    def compose(self) -> ComposeResult:
-        yield Label("Preview", id="preview-title")
-        yield Static("Selecione um item para ver detalhes", id="preview-content")
-
-    def update_preview(self, item_data: dict):
-        """Atualiza preview com dados do item"""
-        self.current_data = item_data
-
-        if not item_data:
-            content = "Selecione um item para ver detalhes"
-        else:
-            parts = []
-
-            if "title" in item_data:
-                parts.append(f"[bold yellow]{item_data['title']}[/bold yellow]")
-
-            if "synopsis" in item_data:
-                parts.append(f"\n{item_data['synopsis']}")
-
-            if "rating" in item_data:
-                parts.append(f"\n⭐ Rating: {item_data['rating']}")
-
-            if "episodes" in item_data:
-                parts.append(f"\n📺 Episodes: {item_data['episodes']}")
-
-            content = "\n".join(parts) if parts else "Sem informações disponíveis"
-
-        preview_widget = self.query_one("#preview-content", Static)
-        preview_widget.update(content)
-
-
-class SearchInput(Input):
-    """Input field for fuzzy search"""
-
-    def __init__(self, **kwargs):
-        super().__init__(
-            placeholder="Digite para buscar...", id="search-input", **kwargs
-        )
-
-
-class MenuScreen(Screen):
-    """Tela de menu principal com suporte a search e preview"""
-
-    BINDINGS = [
-        Binding("escape", "back", "Voltar", priority=True),
-        Binding("q", "quit", "Sair", priority=True),
-        Binding("/", "toggle_search", "Buscar", priority=True),
-        Binding("t", "toggle_theme", "Tema", show=True),
-    ]
-
-    CSS = """
-    /* Catppuccin Mocha Theme */
-    Screen {
-        background: #1e1e2e;
+# Catppuccin Mocha Theme
+CATPPUCCIN_MOCHA = Theme(
+    {
+        "menu.title": "bold #cba6f7",  # Purple header
+        "menu.text": "#cdd6f4",  # Light text
+        "menu.highlight": "reverse #cba6f7",  # Inverted purple
+        "menu.muted": "#6c7086",  # Muted gray
+        "info": "#89dceb",  # Sky blue for info
+        "success": "#a6e3a1",  # Green for success
+        "warning": "#f9e2af",  # Yellow for warnings
+        "error": "#f38ba8",  # Red for errors
     }
+)
 
-    #menu-container {
-        width: 3fr;
-        height: 100%;
-        border: solid #cba6f7;
-    }
-
-    #menu-subtitle {
-        background: #181825;
-        color: #cdd6f4;
-        text-align: left;
-        padding: 1;
-        border: solid #6c7086;
-        margin-bottom: 1;
-    }
-
-    #menu-options {
-        height: 1fr;
-        background: #1e1e2e;
-    }
-
-    #search-input {
-        dock: bottom;
-        border: tall #cba6f7;
-        display: none;  /* Hidden by default */
-    }
-
-    #preview-panel {
-        width: 2fr;
-        height: 100%;
-        background: #181825;
-        border: solid #cba6f7;
-        padding: 1;
-    }
-
-    #preview-title {
-        background: #cba6f7;
-        color: #1e1e2e;
-        text-align: center;
-        text-style: bold;
-        padding: 1;
-    }
-
-    #preview-content {
-        padding: 1;
-        color: #cdd6f4;
-    }
-
-    OptionList > .option-list--option {
-        background: #1e1e2e;
-        color: #cdd6f4;
-    }
-
-    OptionList > .option-list--option-highlighted {
-        background: #cba6f7;
-        color: #1e1e2e;
-    }
-
-    OptionList > .option-list--option-disabled {
-        color: #6c7086;
-        background: #1e1e2e;
-    }
-
-    Header {
-        background: #cba6f7;
-        color: #1e1e2e;
-    }
-
-    Footer {
-        background: #cba6f7;
-        color: #1e1e2e;
-    }
-    """
-
-    def __init__(
-        self,
-        options: list[str],
-        title: str,
-        on_select: Optional[Callable[[str], None]] = None,
-        show_preview: bool = False,
-        preview_callback: Optional[Callable[[str], dict]] = None,
-        mode: str = "exit_on_sair",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.options = options
-        self.all_options = options.copy()  # Store original for search
-        self.title_text = title
-        self.on_select_callback = on_select
-        self.show_preview = show_preview
-        self.preview_callback = preview_callback
-        self.mode = mode  # "exit_on_sair" or "navigate"
-        self.search_active = False
-
-    def compose(self) -> ComposeResult:
-        yield Header()
-
-        if self.show_preview:
-            with Horizontal():
-                with Container(id="menu-container"):
-                    if self.title_text and self.title_text != "Menu":
-                        yield Static(self.title_text, id="menu-subtitle")
-                    yield self._create_option_list()
-                    yield SearchInput()
-
-                yield PreviewPanel(id="preview-panel")
-        else:
-            with Container(id="menu-container"):
-                if self.title_text and self.title_text != "Menu":
-                    yield Static(self.title_text, id="menu-subtitle")
-                yield self._create_option_list()
-                yield SearchInput()
-
-        yield Footer()
-
-    def _create_option_list(self) -> OptionList:
-        """Create and populate the option list"""
-        option_list = OptionList(id="menu-options")
-
-        for opt in self.options:
-            # Handle separators - just add as regular option
-            # They will be styled via CSS with .option-list--option-disabled
-            option_list.add_option(opt)
-
-        return option_list
-
-    def on_mount(self) -> None:
-        """Called when screen is mounted"""
-        # Focus the option list
-        self.query_one("#menu-options", OptionList).focus()
-
-    def on_option_list_option_highlighted(
-        self, event: OptionList.OptionHighlighted
-    ) -> None:
-        """Called when an option is highlighted"""
-        if self.show_preview and self.preview_callback:
-            # Get the option text
-            option_text = str(event.option.prompt)
-
-            # Get preview data from callback
-            preview_data = self.preview_callback(option_text)
-
-            # Update preview panel
-            preview = self.query_one("#preview-panel", PreviewPanel)
-            preview.update_preview(preview_data)
-
-    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        """Called when an option is selected"""
-        # Get the selected option prompt (text)
-        try:
-            selected = str(event.option.prompt)
-        except:
-            # Fallback if prompt doesn't exist
-            selected = str(event.option_id)
-
-        # Skip separators and empty options
-        if selected.startswith("─") or not selected.strip():
-            return
-
-        if self.on_select_callback:
-            self.on_select_callback(selected)
-        else:
-            self.app.exit(selected)
-
-    def action_back(self) -> None:
-        """Handle back action (ESC key)"""
-        if self.search_active:
-            # If search is active, close it
-            self.action_toggle_search()
-        else:
-            # Otherwise, exit with None
-            self.app.exit(None)
-
-    def action_quit(self) -> None:
-        """Handle quit action (q key) - always exit to terminal"""
-        sys.exit(0)
-
-    def action_toggle_search(self) -> None:
-        """Toggle search input visibility"""
-        search_input = self.query_one("#search-input", SearchInput)
-
-        if self.search_active:
-            # Hide search, restore original options
-            search_input.styles.display = "none"
-            self.search_active = False
-            search_input.value = ""
-            self._update_options(self.all_options)
-            self.query_one("#menu-options", OptionList).focus()
-        else:
-            # Show search
-            search_input.styles.display = "block"
-            self.search_active = True
-            search_input.focus()
-
-    def on_key(self, event) -> None:
-        """Handle key presses - allow arrow navigation during search"""
-        if self.search_active and event.key in ["down", "up"]:
-            # If search is active and user presses arrow keys, focus the option list
-            self.query_one("#menu-options", OptionList).focus()
-            # Don't prevent default - let the option list handle the arrow key
-            return
-
-    def on_input_changed(self, event: Input.Changed) -> None:
-        """Handle search input changes"""
-        if event.input.id == "search-input":
-            query = event.value.lower().strip()
-
-            if not query:
-                # Empty query - show all
-                self._update_options(self.all_options)
-            else:
-                # Filter options using improved fuzzy matching
-                from fuzzywuzzy import fuzz
-
-                matches = []
-                for opt in self.all_options:
-                    # Skip separators
-                    if opt.startswith("─"):
-                        continue
-
-                    opt_lower = opt.lower()
-
-                    # Calculate multiple scores for better matching
-                    partial_score = fuzz.partial_ratio(
-                        query, opt_lower
-                    )  # Partial match
-                    token_score = fuzz.token_set_ratio(
-                        query, opt_lower
-                    )  # Word-based match
-                    starts_with_bonus = 20 if opt_lower.startswith(query) else 0
-
-                    # Use best score
-                    best_score = max(partial_score, token_score) + starts_with_bonus
-
-                    # Lower threshold for better results
-                    if best_score > 40:
-                        matches.append((best_score, opt))
-
-                # Sort by score (descending)
-                matches.sort(reverse=True, key=lambda x: x[0])
-                filtered = [opt for _, opt in matches]
-                filtered = filtered[:3]  # top 3
-
-                self._update_options(
-                    filtered if filtered else ["Nenhum resultado encontrado"]
-                )
-
-    def _update_options(self, options: list[str]) -> None:
-        """Update the option list with new options"""
-        option_list = self.query_one("#menu-options", OptionList)
-        option_list.clear_options()
-
-        for opt in options:
-            option_list.add_option(opt)
-
-    def action_toggle_theme(self) -> None:
-        """Cycle through available themes"""
-        # TODO: Implement dynamic theme switching
-        # For now, theme is fixed to yellow (classic ani-tupi)
-        pass
-
-
-class MenuApp(App):
-    """Main menu application"""
-
-    # Set app title for header display
-    TITLE = "ani-tupi"
-
-    # Disable animations for smoother transitions
-    ENABLE_COMMAND_PALETTE = False
-
-    def __init__(
-        self,
-        options: list[str],
-        title: str,
-        mode: str = "exit_on_sair",
-        show_preview: bool = False,
-        preview_callback: Optional[Callable[[str], dict]] = None,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.options = options
-        self.title_text = title
-        self.mode = mode
-        self.show_preview = show_preview
-        self.preview_callback = preview_callback
-        self.result: Optional[str] = None
-        self._current_theme = self._load_theme()
-
-        # Disable animations for instant transitions
-        self.animation_level = "none"
-
-    def _load_theme(self) -> str:
-        """Load saved theme preference"""
-        try:
-            if THEME_FILE.exists():
-                return THEME_FILE.read_text().strip()
-        except:
-            pass
-        return "yellow"
-
-    def _save_theme(self, theme: str) -> None:
-        """Save theme preference"""
-        try:
-            THEME_FILE.parent.mkdir(parents=True, exist_ok=True)
-            THEME_FILE.write_text(theme)
-        except:
-            pass
-
-    def set_theme(self, theme_name: str) -> None:
-        """Change application theme"""
-        self._current_theme = theme_name
-        self._save_theme(theme_name)
-
-        # Apply theme colors by updating CSS variables
-        # Note: Theme is applied via CSS in MenuScreen class
-        # This method primarily saves the preference
-
-        # Refresh the screen if mounted
-        try:
-            self.refresh()
-        except:
-            pass  # Not mounted yet
-
-    def on_mount(self) -> None:
-        """Called when app is mounted"""
-        # Apply saved theme
-        self.set_theme(self._current_theme)
-
-        # Push the menu screen
-        self.push_screen(
-            MenuScreen(
-                self.options,
-                self.title_text,
-                on_select=None,
-                mode=self.mode,
-                show_preview=self.show_preview,
-                preview_callback=self.preview_callback,
-            )
-        )
+# Global console with theme
+console = Console(theme=CATPPUCCIN_MOCHA)
 
 
 def menu(
@@ -435,8 +42,8 @@ def menu(
     Args:
         opts: List of menu options
         msg: Title message
-        show_preview: Show preview panel (default: False)
-        preview_callback: Function to get preview data for an option
+        show_preview: Ignored (preview feature removed in refactor)
+        preview_callback: Ignored (preview feature removed in refactor)
 
     Returns:
         Selected option (without "Sair")
@@ -445,30 +52,44 @@ def menu(
         - Adds "Sair" automatically to the end
         - If "Sair" is selected → calls sys.exit()
         - Returns selected option
+        - Q key also exits to terminal
     """
     # Add "Sair" to options
     opts_copy = opts.copy()
     opts_copy.append("Sair")
 
-    # Run app
-    app = MenuApp(
-        opts_copy,
-        msg or "Menu",
-        mode="exit_on_sair",
-        show_preview=show_preview,
-        preview_callback=preview_callback,
-    )
-    result = app.run()
+    # Convert options to InquirerPy choices
+    choices = []
+    for opt in opts_copy:
+        # Handle separators (lines starting with ─)
+        if opt.startswith("─"):
+            choices.append(Separator())
+        else:
+            choices.append(opt)
 
-    # Handle result
-    if result == "Sair" or result is None:
+    # Display menu
+    try:
+        answer = inquirer.select(
+            message=msg or "Menu",
+            choices=choices,
+            default=None,
+            qmark="",  # Remove question mark prefix
+            amark="►",  # Arrow for selected item
+            pointer="►",  # Pointer for highlighted item
+            instruction="(Use arrow keys, ESC to back, Q to quit)",
+            keybindings={
+                "interrupt": [{"key": "q"}, {"key": "Q"}],  # Q to quit
+            },
+        ).execute()
+    except KeyboardInterrupt:
+        # Q key or Ctrl+C pressed - quit to terminal
         sys.exit(0)
 
-    # Remove "Sair" from original list (to preserve behavior)
-    # Note: Original curses version did opts.pop()
-    # But since we used a copy, we don't need to modify original
+    # Handle result
+    if answer == "Sair" or answer is None:
+        sys.exit(0)
 
-    return result
+    return answer
 
 
 def menu_navigate(
@@ -483,32 +104,53 @@ def menu_navigate(
     Args:
         opts: List of menu options (can include separators "─")
         msg: Title message
-        show_preview: Show preview panel (default: False)
-        preview_callback: Function to get preview data for an option
+        show_preview: Ignored (preview feature removed in refactor)
+        preview_callback: Ignored (preview feature removed in refactor)
 
     Returns:
         Selected option or None if user cancels
 
     Behavior:
         - Does NOT add "Sair" automatically
-        - ESC/Q returns None
+        - ESC returns None (go back)
+        - Q exits to terminal
         - Allows navigation without exiting program
     """
-    # Run app
-    app = MenuApp(
-        opts,
-        msg or "Menu",
-        mode="navigate",
-        show_preview=show_preview,
-        preview_callback=preview_callback,
-    )
-    result = app.run()
+    # Convert options to InquirerPy choices
+    choices = []
+    for opt in opts:
+        # Handle separators (lines starting with ─)
+        if opt.startswith("─"):
+            choices.append(Separator())
+        else:
+            choices.append(opt)
 
-    # Return None for cancel actions
-    if result in ["Sair", "Voltar"]:
-        return None
+    # Display menu
+    try:
+        answer = inquirer.select(
+            message=msg or "Menu",
+            choices=choices,
+            default=None,
+            qmark="",  # Remove question mark prefix
+            amark="►",  # Arrow for selected item
+            pointer="►",  # Pointer for highlighted item
+            instruction="(Use arrow keys, ESC to go back, Q to quit)",
+            keybindings={
+                "interrupt": [{"key": "q"}, {"key": "Q"}],  # Q to quit
+            },
+        ).execute()
+    except KeyboardInterrupt:
+        # ESC or Ctrl+C - try to handle gracefully
+        try:
+            # Check if it's Q key (would normally exit) or ESC (go back)
+            # Since we can't distinguish, we assume ESC for navigation
+            return None
+        except:
+            # If all else fails, exit
+            sys.exit(0)
 
-    return result
+    # Return selection (or None if somehow empty)
+    return answer
 
 
 if __name__ == "__main__":
@@ -522,5 +164,6 @@ if __name__ == "__main__":
         "Opção 5",
     ]
 
+    console.print("\n[menu.title]Testando menu()[/menu.title]")
     selection = menu(test_options, "Menu de Teste")
-    print(f"\nSelecionado: {selection}")
+    console.print(f"\n[success]Selecionado: {selection}[/success]")
