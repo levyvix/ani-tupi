@@ -1,23 +1,20 @@
 import importlib
 import sys
-from abc import ABC, abstractmethod
+from abc import ABC, abstractstaticmethod
 from os.path import isfile, join, abspath
 from os import listdir
 
 
 class PluginInterface(ABC):
-    @abstractmethod
-    @staticmethod
+    @abstractstaticmethod
     def search_anime():
         raise NotImplementedError
 
-    @abstractmethod
-    @staticmethod
+    @abstractstaticmethod
     def search_episodes():
         raise NotImplementedError
 
-    @abstractmethod
-    @staticmethod
+    @abstractstaticmethod
     def search_player_src():
         raise NotImplementedError
 
