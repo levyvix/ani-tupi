@@ -110,7 +110,13 @@ def normalize_anime_title(title: str):
     return result
 
 
-def anilist_anime_flow(anime_title: str, anilist_id: int, args, anilist_progress: int = 0, display_title: str = None):
+def anilist_anime_flow(
+    anime_title: str,
+    anilist_id: int,
+    args,
+    anilist_progress: int = 0,
+    display_title: str = None,
+):
     """
     Flow for anime selected from AniList
     Searches scrapers for the anime and starts normal playback flow
@@ -182,9 +188,10 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args, anilist_progress
 
         # Offer option to change if they want
         from menu import menu_navigate
+
         change_choice = menu_navigate(
             ["▶️  Continuar com este título", "🔄 Escolher outro título"],
-            msg=f"Título salvo encontrado: '{selected_anime}'"
+            msg=f"Título salvo encontrado: '{selected_anime}'",
         )
 
         if change_choice == "🔄 Escolher outro título":
@@ -217,9 +224,7 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args, anilist_progress
             menu_title += f"🔍 Busca usada: '{used_query}'\n"
         menu_title += f"\nEncontrados {len(titles)} resultados. Escolha:"
 
-        selected_anime = menu_navigate(
-            titles, msg=menu_title
-        )
+        selected_anime = menu_navigate(titles, msg=menu_title)
         if not selected_anime:
             return  # User cancelled
 
@@ -292,7 +297,9 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args, anilist_progress
         # Add option to choose any episode
         options.append("📋 Escolher outro episódio")
 
-        choice = menu_navigate(options, msg=f"{selected_anime} - De onde quer continuar?")
+        choice = menu_navigate(
+            options, msg=f"{selected_anime} - De onde quer continuar?"
+        )
 
         if not choice:
             return  # User cancelled
@@ -328,13 +335,12 @@ def anilist_anime_flow(anime_title: str, anilist_id: int, args, anilist_progress
         if anilist_client.is_authenticated() and anilist_id:
             from menu import menu_navigate
 
-            confirm_options = ["✅ Sim, assistir até o final", "❌ Não"]
+            confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
             confirm = menu_navigate(
-                confirm_options,
-                msg=f"Você assistiu o episódio {episode} até o final?"
+                confirm_options, msg=f"Você assistiu o episódio {episode} até o final?"
             )
 
-            if confirm == "✅ Sim, assistir até o final":
+            if confirm == "✅ Sim, assisti até o final":
                 success = anilist_client.update_progress(anilist_id, episode)
                 if success:
                     print(f"✅ AniList atualizado: episódio {episode}")
@@ -571,7 +577,9 @@ def load_history():
 
             if choice == "📋 Escolher outro episódio":
                 # Let user choose from full episode list
-                selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+                selected_episode = menu_navigate(
+                    episode_list, msg="Escolha o episódio."
+                )
                 if not selected_episode:
                     exit()
                 episode_idx = episode_list.index(selected_episode)
