@@ -94,8 +94,6 @@ class Repository:
         table = {
             "clássico": "",
             "classico": "",
-            "dublado": "",
-            "legendado": "",
             ":": "",
             "part": "season",
             "temporada": "season",
@@ -150,8 +148,6 @@ class Repository:
         table = {
             "clássico": "",
             "classico": "",
-            "dublado": "",
-            "legendado": "",
             ":": "",
             "part": "season",
             "temporada": "season",
