@@ -389,11 +389,26 @@ class Repository:
 
         return result
 
-    def search_episodes(self, anime: str) -> None:
+    def search_episodes(self, anime: str, source_filter: str | None = None) -> None:
+        """Search for episodes from all sources or a specific source.
+
+        Args:
+            anime: Anime title to search episodes for
+            source_filter: Optional source name to search only that source (e.g., "animefire")
+        """
         if anime in self.anime_episodes_titles:
             return self.anime_episode_titles[anime]
 
         urls_and_scrapers = rep.anime_to_urls[anime]
+
+        # Filter by source if specified
+        if source_filter:
+            urls_and_scrapers = [
+                (url, source, params)
+                for url, source, params in urls_and_scrapers
+                if source == source_filter
+            ]
+
         threads = [
             Thread(
                 target=self.sources[source].search_episodes,
@@ -435,7 +450,10 @@ class Repository:
         self.anime_episodes_urls[anime].append((episode_data.episode_urls, source))
 
     def get_episode_list(self, anime: str):
-        episode_list = sorted(self.anime_episodes_titles[anime], key=lambda title_list: len(title_list))[-1]
+        episodes = self.anime_episodes_titles[anime]
+        if not episodes:
+            return []
+        episode_list = sorted(episodes, key=lambda title_list: len(title_list))[-1]
         return episode_list
 
     def load_from_cache(self, anime: str, cache_data: dict) -> None:

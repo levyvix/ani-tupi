@@ -23,12 +23,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ani-tupi is a terminal-based anime/manga streaming application in Brazilian Portuguese that follows an **MVCP (Model-View-Controller-Plugin)** architecture:
+ani-tupi is a terminal-based anime/manga streaming application in Brazilian Portuguese that follows a **modular architecture**:
 
-- **Model** (`repository.py`): Singleton data store managing anime/episode/video URL mappings
-- **View** (`menu.py`): Curses-based TUI with yellow/black color scheme
-- **Controller** (`main.py`, `manga_tupi.py`): Application flow and user interaction
-- **Plugin** (`loader.py` + `plugins/*`): Extensible scraper system for different anime sources
+- **Core Services** (`core/`): Business logic and external API integrations
+  - `core/anilist_service.py` - AniList GraphQL client
+  - `core/history_service.py` - Watch history management
+- **UI Layer** (`ui/`): User interface components and menus
+  - `ui/components.py` - Reusable menu widgets (Rich + InquirerPy)
+  - `ui/anilist_menus.py` - AniList browsing interface
+- **Data Layer**: Singleton data store and models
+  - `repository.py` - Central data store managing anime/episode/video URL mappings
+  - `models.py` - Pydantic models for type-safe data
+  - `config.py` - Centralized configuration
+- **Plugin System** (`loader.py` + `plugins/*`): Extensible scraper system for anime sources
+- **Entry Points**:
+  - `cli.py` - Main CLI entry point for ani-tupi
+  - `manga_tupi.py` - Manga mode entry point
+  - `main.py` - Legacy controller (to be refactored)
 
 ## Development Commands
 
@@ -185,9 +196,9 @@ path = get_data_path()  # ~/.local/state/ani-tupi (Linux/macOS)
 
 All config-aware modules import `settings` from `config.py`:
 - `repository.py` - Uses progressive_search_min_words
-- `anilist.py` - Uses API URLs, client_id, token_file
+- `core/anilist_service.py` - Uses API URLs, client_id, token_file
 - `scraper_cache.py` - Uses cache_file and duration_hours
-- `main.py`, `anilist_menu.py` - Use get_data_path() for history/mappings
+- `main.py`, `ui/anilist_menus.py`, `core/history_service.py` - Use get_data_path() for history/mappings
 
 ### Data Models (`models.py`)
 
@@ -221,14 +232,45 @@ video = VideoUrl(
 
 ## Architecture Deep Dive
 
+### Module Organization (as of 2026-01-01)
+
+The codebase is organized into clear layers:
+
+```
+ani-tupi/
+├── core/                    # Business logic layer
+│   ├── __init__.py
+│   ├── anilist_service.py   # AniList GraphQL API client
+│   └── history_service.py   # Watch history management
+├── ui/                      # User interface layer
+│   ├── __init__.py
+│   ├── components.py        # Reusable menu widgets (menu, loading)
+│   └── anilist_menus.py     # AniList browsing interface
+├── plugins/                 # Scraper plugins (no changes)
+│   ├── animefire.py
+│   └── animesonlinecc.py
+├── cli.py                   # NEW: CLI entry point
+├── main.py                  # Legacy controller (contains most business logic)
+├── manga_tupi.py            # Manga mode entry point
+├── repository.py            # Singleton data store
+├── models.py                # Pydantic data models
+├── config.py                # Centralized configuration
+└── loader.py                # Plugin discovery system
+```
+
+**Dependency Rules:**
+- `core/` can import: `models`, `config`, `repository`, `loader`
+- `ui/` can import: `core/`, `models`, `config`, `repository`
+- `plugins/` can import: `loader`, `repository`, `models`
+- `cli.py` imports: `main` (for now - will evolve to use `ui/` and `core/` directly)
+
 ### TUI System (Rich + InquirerPy)
 
 **Architecture:** As of 2025-12-31, the TUI has been refactored from Textual to Rich + InquirerPy for better performance and simplicity.
 
 **Core Components:**
-- `menu.py` - Interactive menus using InquirerPy (arrow keys, ESC, Q)
-- `loading.py` - Loading spinners for API calls using Rich
-- `anilist_menu.py` - AniList browsing interface
+- `ui/components.py` - Interactive menus using InquirerPy (arrow keys, ESC, Q) + loading spinners using Rich
+- `ui/anilist_menus.py` - AniList browsing interface
 
 **Key Features:**
 - **Stateless Functions**: No app instances, functions return immediately
@@ -244,7 +286,7 @@ video = VideoUrl(
 
 **Adding Loading Spinners to New Code:**
 ```python
-from loading import loading
+from ui.components import loading
 
 # Wrap slow operations with spinner
 with loading("Buscando animes..."):
@@ -255,7 +297,7 @@ with loading("Buscando animes..."):
 
 **Using Menus with Search:**
 ```python
-from menu import menu, menu_navigate
+from ui.components import menu, menu_navigate
 
 # Basic menu (fuzzy search enabled by default)
 selected = menu(["Option 1", "Option 2"], "Choose")
@@ -562,17 +604,31 @@ ani-tupi anilist auth
 
 ## Key Files Reference
 
-- `main.py` - CLI entry point, main application loop
-- `anilist.py` - AniList GraphQL API client
-- `anilist_menu.py` - AniList browsing interface (Rich + InquirerPy)
+**Entry Points:**
+- `cli.py` - NEW: Main CLI entry point (thin wrapper for now)
 - `manga_tupi.py` - Manga mode entry point (MangaDex API)
+
+**Core Services:**
+- `core/anilist_service.py` - AniList GraphQL API client
+- `core/history_service.py` - Watch history management (load/save/reset)
+
+**UI Layer:**
+- `ui/components.py` - Reusable menu widgets (menu, menu_navigate, loading)
+- `ui/anilist_menus.py` - AniList browsing interface
+
+**Data & Business Logic:**
+- `main.py` - Legacy controller (contains most business logic - to be refactored)
 - `repository.py` - Singleton data store, search orchestration
-- `menu.py` - Interactive menu system (Rich + InquirerPy, replaces Textual)
-- `loading.py` - Loading spinner context manager (Rich)
+- `models.py` - Pydantic data models (AnimeMetadata, EpisodeData, VideoUrl)
+- `config.py` - Centralized configuration (Pydantic Settings)
+
+**Plugin System:**
 - `loader.py` - Plugin discovery and loading system
+- `plugins/animefire.py` - Example scraper plugin (animefire.plus)
+- `plugins/animesonlinecc.py` - Example scraper plugin (animesonlinecc.to)
+
+**Utilities:**
 - `video_player.py` - MPV subprocess wrapper
-- `plugins/animefire.py` - Example plugin (animefire.plus)
-- `plugins/animesonlinecc.py` - Example plugin (animesonlinecc.to)
 - `install-cli.py` - Global CLI installer
 - `pyproject.toml` - Project configuration (dependencies, entry points)
 

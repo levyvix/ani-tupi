@@ -66,17 +66,42 @@ def get_resource_path(relative_path):
 
 
 def load_plugins(languages: dict, plugins=None) -> None:
+    """Load plugins based on preferences and language filters.
+
+    Args:
+        languages: Dict of supported languages (e.g., {"pt-br"})
+        plugins: Optional list of specific plugins to load (overrides preferences)
+                 If None, loads all plugins except disabled ones
+    """
     path = get_resource_path("plugins/")
     system = {"__init__.py", "utils.py"}
-    plugins = (
-        plugins
-        if plugins is not None
-        else [
-            file[:-3]
-            for file in listdir(path)
-            if isfile(join(path, file)) and file not in system
-        ]
-    )
+
+    # Get all available plugin files
+    all_plugin_files = [
+        file[:-3]
+        for file in listdir(path)
+        if isfile(join(path, file)) and file not in system
+    ]
+
+    # Apply filtering based on preferences
+    if plugins is None:
+        # Load preferences to get disabled plugins
+        try:
+            from plugin_manager import load_plugin_preferences
+
+            prefs = load_plugin_preferences()
+            disabled_plugins = set(prefs.get("disabled_plugins", []))
+
+            # Filter out disabled plugins
+            plugins = [p for p in all_plugin_files if p not in disabled_plugins]
+        except Exception:
+            # If preferences can't be loaded, load all plugins
+            plugins = all_plugin_files
+    else:
+        # Use explicit plugin list (for debug mode)
+        pass
+
+    # Load each enabled plugin
     for plugin in plugins:
-        plugin = importlib.import_module("plugins." + plugin)
-        plugin.load(languages)
+        plugin_module = importlib.import_module("plugins." + plugin)
+        plugin_module.load(languages)

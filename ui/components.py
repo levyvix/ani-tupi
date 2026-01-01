@@ -1,13 +1,19 @@
-"""Rich + InquirerPy based menu system for ani-tupi
-Modern, responsive TUI with Catppuccin theme.
+"""Reusable UI components: menu(), loading()
+
+This module consolidates menu system and loading indicators:
+- menu() / menu_navigate() - Interactive menus with InquirerPy
+- loading() - Rich spinners for API calls
 """
 
 import sys
 from collections.abc import Callable
+from contextlib import contextmanager
 
 from InquirerPy import inquirer
 from InquirerPy.separator import Separator
 from rich.console import Console
+from rich.live import Live
+from rich.spinner import Spinner
 from rich.theme import Theme
 
 # Catppuccin Mocha Theme
@@ -225,6 +231,29 @@ def menu_navigate(
 
     # Return selection (filter out the added options)
     return answer
+
+
+@contextmanager
+def loading(msg: str = "Carregando..."):
+    """Context manager for displaying loading indicators during operations.
+
+    Args:
+        msg: The message to display alongside the spinner
+
+    Usage:
+        with loading("Buscando animes..."):
+            results = fetch_anime()
+
+    """
+    console_instance = Console()
+
+    with Live(
+        Spinner("dots", text=msg),
+        console=console_instance,
+        refresh_per_second=12.5,
+        transient=True,  # Spinner disappears after completion
+    ):
+        yield
 
 
 if __name__ == "__main__":

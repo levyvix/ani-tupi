@@ -11,14 +11,13 @@ import subprocess
 from InquirerPy import inquirer
 
 from config import settings
-from loading import loading
 from manga_service import (
     MangaDexClient,
     MangaDexError,
     MangaHistory,
     MangaNotFoundError,
 )
-from menu import menu_navigate
+from ui.components import loading, menu_navigate
 
 
 def _find_image_viewer() -> str | None:

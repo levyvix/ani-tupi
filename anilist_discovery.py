@@ -35,7 +35,7 @@ def auto_discover_anilist_id(scraper_title: str) -> int | None:
             return cached  # None is valid (means "not found")
 
         # Query AniList API
-        from anilist import anilist_client
+        from core.anilist_service import anilist_client
 
         results = anilist_client.search_anime(scraper_title)
 
@@ -109,7 +109,7 @@ def get_anilist_metadata(anilist_id: int) -> dict | None:
         return cached
 
     try:
-        from anilist import anilist_client
+        from core.anilist_service import anilist_client
 
         # Fetch from AniList API
         metadata = anilist_client.get_anime_details(anilist_id)
