@@ -86,55 +86,61 @@ class Repository:
                 break
 
     def _search_with_incremental_results(self, query: str, verbose: bool = True) -> None:
-        """Search anime with incremental results, with 5s timeout for slow sources."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        """Search anime with incremental results, with 5s hard timeout for slow sources."""
+        from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 
         if verbose:
             print(f"⠼ Buscando '{query}'...")
 
         TIMEOUT_SECONDS = 5.0
-        start_time = time.time()
-        timed_out = False
 
-        with ThreadPoolExecutor(max_workers=min(len(self.sources), cpu_count())) as executor:
+        executor = ThreadPoolExecutor(max_workers=min(len(self.sources), cpu_count()))
+
+        try:
             # Submit all search tasks
             future_to_source = {
                 executor.submit(self.sources[source].search_anime, query): source
                 for source in self.sources
             }
 
-            # Process results as they complete
-            completed = 0
-            for future in as_completed(future_to_source):
+            # Wait with hard timeout - returns immediately after timeout
+            done, pending = wait(
+                future_to_source.keys(),
+                timeout=TIMEOUT_SECONDS,
+                return_when=ALL_COMPLETED
+            )
+
+            # Process completed futures
+            for future in done:
                 source = future_to_source[future]
-
-                # Check timeout
-                elapsed = time.time() - start_time
-                if elapsed > TIMEOUT_SECONDS:
-                    timed_out = True
-                    if verbose:
-                        remaining = len(self.sources) - completed
-                        print(f"⏱️ Timeout ({TIMEOUT_SECONDS}s) - {remaining} fonte(s) lenta(s) ignorada(s)")
-                    break
-
                 try:
-                    future.result()  # Wait for this source to complete
-                    completed += 1
+                    future.result()
                     if verbose and len(self.sources) > 1:
-                        # Show progress: X/N sources completed + result count
                         count = len(self.anime_to_urls)
-                        print(f"✓ {source} ({count} resultados, {completed}/{len(self.sources)} fontes)", end="\r")
+                        print(f"✓ {source} ({count} resultados)", end="\r")
                 except Exception as e:
-                    print(f"❌ Erro em {source}: {e}")
+                    if verbose:
+                        print(f"❌ Erro em {source}: {e}")
 
-            # Clear progress line
+            # Clear progress line and show summary
             if verbose and len(self.sources) > 1:
                 print(" " * 70 + "\r", end="")
 
-            # Show final count if timed out
-            if timed_out and verbose:
+            completed = len(done)
+            total = len(self.sources)
+
+            if verbose:
                 count = len(self.anime_to_urls)
-                print(f"📊 {count} resultado(s) de {completed}/{len(self.sources)} fonte(s)")
+                if pending:
+                    print(f"⏱️ Timeout ({TIMEOUT_SECONDS}s) - {len(pending)} fonte(s) ignorada(s)")
+                    print(f"📊 {count} resultado(s) de {completed}/{total} fonte(s)")
+                elif completed > 1 and count > 0:
+                    # All completed successfully (show count only if multiple sources)
+                    print(f"✓ {count} resultado(s) de {completed}/{total} fonte(s)")
+
+        finally:
+            # Shutdown executor WITHOUT waiting for pending tasks
+            executor.shutdown(wait=False, cancel_futures=True)
 
     def add_anime(self, title: str, url: str, source: str, params=None) -> None:
         """Add anime with exact deduplication.
