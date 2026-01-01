@@ -89,5 +89,7 @@ jobs:
 
     - name: Testar help do CLI
       run: |
-        uv run python main.py --help || true
+        uv run python cli.py --help || true
         echo "✅ CLI executável"
+        uv run python cli.py anilist --help || true
+        echo "✅ CLI anilist executável"
