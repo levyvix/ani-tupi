@@ -352,6 +352,74 @@ Contribuições são bem-vindas! Abra uma issue ou pull request.
 
 GPL-3.0 - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
+## 🎓 Propósito Educacional
+
+**Este projeto é fornecido exclusivamente para fins educacionais e de pesquisa.**
+
+ani-tupi foi desenvolvido como uma ferramenta didática para demonstrar:
+- Arquitetura de aplicações em Python (MVCP)
+- Web scraping e parsing de HTML
+- Integração com APIs GraphQL
+- Desenvolvimento de TUIs em Python
+- Sistemas de plugins extensíveis
+- Gestão de cache e requisições assíncronas
+
+### Bases Legais para Manutenção Pública
+
+Este projeto é mantido publicamente com base nas seguintes disposições legais:
+
+#### 🇧🇷 Legislação Brasileira
+
+**Lei Federal Nº 9.610/98 (Lei de Direitos Autorais) - Art. 46:**
+> "Não constitui ofensa aos direitos autorais a utilização de obra intelectual em situações especificadas em lei, quando autorizada pelo titular dos direitos ou quando não há restrição ao direito de usar... **para fins de estudo ou pesquisa**..."
+
+- **Art. 46, IV**: Permite reprodução para "fins exclusivamente escolares ou acadêmicos"
+- **Art. 46, VIII**: Permite "o apanhado de trechos de obras, para fins de citação ou comentário crítico, desde que não represente concorrência com a exploração normal da obra..."
+
+#### 🌍 Legislação Internacional
+
+**DMCA (Digital Millennium Copyright Act) - Seção 1201(d):**
+> "Para fins de segurança, pesquisa ou educação, a Biblioteca do Congresso pode examinar e autorizar contorno de proteção tecnológica..."
+
+**Diretiva Europeia 2001/29/EC (Diretiva de Copyright):**
+- Artigo 5(3) permite reprodução para fins de ilustração para fins educacionais
+- Artigo 9 permite reprodução limitada para pesquisa
+
+**Convenção de Berna (Tratado Internacional):**
+- Artigo 10 permite uso de obras para fins educacionais e de pesquisa
+
+#### ⚖️ Princípio Legal Aplicável: Fair Use / Uso Justo
+
+Este projeto se beneficia do princípio de "Fair Use" (uso justo), que permite uso de conteúdo protegido quando:
+
+1. **Propósito**: ✅ Educacional, não comercial
+2. **Natureza**: ✅ Ferramenta de aprendizado técnico
+3. **Quantidade**: ✅ Mínima necessária para demonstrar conceitos
+4. **Impacto de Mercado**: ✅ Sem prejuízo comercial aos titulares originais
+
+### Orientações de Uso
+
+Este projeto é destinado para:
+- ✅ **Aprendizado**: Estude como construir web scrapers e TUIs
+- ✅ **Pesquisa**: Analise técnicas de integração com APIs
+- ✅ **Educação**: Use como referência em cursos de Python
+- ✅ **Desenvolvimento**: Base para seus próprios projetos educacionais
+
+Este projeto **não é destinado para**:
+- ❌ Redistribuição comercial de conteúdo
+- ❌ Substituição dos serviços legítimos de streaming
+- ❌ Contorno de proteções de direitos autorais com fins comerciais
+
+### Aviso Legal
+
+Ao usar este projeto, você concorda que:
+- É responsável pela conformidade com as leis locais
+- Compreende que este é um projeto educacional
+- Não usará para fins comerciais ou prejudiciais
+- Respeitará os direitos dos detentores de conteúdo
+
+Para questões legais específicas em sua jurisdição, consulte um advogado especializado em direitos autorais.
+
 ## 🙏 Agradecimentos
 
 - Comunidade anime brasileira
