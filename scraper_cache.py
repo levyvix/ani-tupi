@@ -1,51 +1,56 @@
-"""Cache system for scraper results to avoid unnecessary requests.
+"""Cache system for scraper results (wrapper for backward compatibility).
+
+DEPRECATED: This module is kept for backward compatibility only.
+New code should use cache_manager.py instead.
 
 Cache settings (location, duration) are configured in config.py
 """
 
-import json
-import time
-
-from config import settings
+from cache_manager import (
+    get_cache as _get_diskcache,
+    clear_cache_all,
+    clear_cache_by_prefix,
+)
+from anilist_discovery import auto_discover_anilist_id
 
 
 def get_cache(anime_title: str) -> dict | None:
-    """Get cached scraper data for an anime.
+    """Get cached scraper data for an anime (backward compatibility wrapper).
 
     Args:
         anime_title: Normalized anime title
 
     Returns:
-        Cached data dict or None if not found/expired
+        Dict with 'episode_urls' and 'episode_count' or None if not found
 
     """
     try:
-        cache_file = settings.cache.cache_file
-        if not cache_file.exists():
-            return None
+        # Try to discover AniList ID for better cache lookup
+        anilist_id = auto_discover_anilist_id(anime_title)
 
-        with cache_file.open() as f:
-            cache = json.load(f)
+        if anilist_id:
+            cache_key = f"episodes:{anilist_id}"
+        else:
+            cache_key = f"episodes:{anime_title}"
 
-        if anime_title not in cache:
-            return None
+        # Get from new cache system
+        cached_urls = _get_diskcache(cache_key)
 
-        data = cache[anime_title]
-        timestamp = data.get("timestamp", 0)
+        if cached_urls:
+            return {
+                "episode_urls": cached_urls,
+                "episode_count": len(cached_urls),
+                "timestamp": 0,  # Not used in new system
+            }
 
-        # Check if cache is still valid (duration in hours from config)
-        cache_duration_seconds = settings.cache.duration_hours * 3600
-        if time.time() - timestamp > cache_duration_seconds:
-            return None  # Expired
-
-        return data
+        return None
 
     except Exception:
         return None
 
 
 def set_cache(anime_title: str, episode_count: int, episode_urls: list[str]) -> None:
-    """Save scraper results to cache.
+    """Save scraper results to cache (backward compatibility wrapper).
 
     Args:
         anime_title: Normalized anime title
@@ -54,55 +59,43 @@ def set_cache(anime_title: str, episode_count: int, episode_urls: list[str]) -> 
 
     """
     try:
-        cache_file = settings.cache.cache_file
-        # Load existing cache
-        cache = {}
-        if cache_file.exists():
-            with cache_file.open() as f:
-                cache = json.load(f)
+        from cache_manager import get_cache as dc
+        from config import settings
 
-        # Update with new data
-        cache[anime_title] = {
-            "episode_count": episode_count,
-            "episode_urls": episode_urls,
-            "timestamp": time.time(),
-        }
+        # Try to discover AniList ID for better cache key
+        anilist_id = auto_discover_anilist_id(anime_title)
 
-        # Save
-        cache_file.parent.mkdir(parents=True, exist_ok=True)
-        with cache_file.open("w") as f:
-            json.dump(cache, f, indent=2)
+        if anilist_id:
+            cache_key = f"episodes:{anilist_id}"
+        else:
+            cache_key = f"episodes:{anime_title}"
+
+        # Save to new cache system
+        dc().set(cache_key, episode_urls, expire=settings.cache.duration_hours * 3600)
 
     except Exception:
         pass  # Silent fail - cache is optional
 
 
 def clear_cache(anime_title: str | None = None) -> None:
-    """Clear cache for specific anime or all cache.
+    """Clear cache for specific anime or all cache (backward compatibility wrapper).
 
     Args:
         anime_title: Anime to clear, or None to clear all
 
     """
     try:
-        cache_file = settings.cache.cache_file
         if anime_title is None:
             # Clear all cache
-            if cache_file.exists():
-                cache_file.unlink()
+            clear_cache_all()
         else:
-            # Clear specific anime
-            if not cache_file.exists():
-                return
+            # Try to discover AniList ID for precise clearing
+            anilist_id = auto_discover_anilist_id(anime_title)
 
-            with cache_file.open() as f:
-                cache = json.load(f)
-
-            if anime_title in cache:
-                del cache[anime_title]
-
-                with cache_file.open("w") as f:
-                    json.dump(cache, f, indent=2)
+            if anilist_id:
+                clear_cache_by_prefix(f":{anilist_id}:")
+            else:
+                clear_cache_by_prefix(f":{anime_title}:")
 
     except Exception:
-        pass
+        pass  # Silent fail

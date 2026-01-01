@@ -115,6 +115,13 @@ uv tool install --reinstall .        # Required to pick up source code changes
 - **Solution**: Changed to `dirname(abspath(__file__))` which returns the module's install location
 - **After fixing**: Must use `uv tool install --reinstall .` to rebuild the package (UV caches builds)
 
+**Video player won't open when selecting an episode:**
+- **Problem**: App shows "Buscando vídeo..." but player never launches; goes straight to "Did you watch to the end?" prompt
+- **Root cause**: `geckodriver` is missing. The animefire plugin uses Selenium + Firefox to extract video URLs, and Selenium requires geckodriver
+- **Solution**: Install geckodriver via `sudo pacman -S geckodriver` (or via Omarchy GUI: `Super + Alt + Space → Install > Package`)
+- **Verification**: Run `which geckodriver && geckodriver --version` to confirm installation
+- **Also fixed**: Added error handling in `repository.py::search_player()` to prevent IndexError when video URL extraction fails
+
 ## Configuration Management
 
 ### Pydantic Configuration (`config.py`)

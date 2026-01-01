@@ -53,17 +53,32 @@ class AniListSettings(BaseModel):
 
 
 class CacheSettings(BaseModel):
-    """Scraper cache configuration."""
+    """Scraper cache configuration (SQLite via diskcache)."""
 
     duration_hours: int = Field(
-        6,
+        168,
         ge=1,
-        le=72,
-        description="Cache validity duration in hours",
+        le=720,
+        description="Cache validity duration in hours (default 7 days, max 30 days)",
     )
+    cache_dir: Path = Field(
+        default_factory=lambda: get_data_path() / "cache",
+        description="Path to SQLite cache directory (diskcache)",
+    )
+    # Kept for migration compatibility
     cache_file: Path = Field(
         default_factory=lambda: get_data_path() / "scraper_cache.json",
-        description="Path to cache storage file",
+        description="Path to legacy JSON cache file (deprecated, for migration only)",
+    )
+    anilist_auto_discover: bool = Field(
+        True,
+        description="Auto-discover AniList ID for manual searches via fuzzy matching",
+    )
+    anilist_fuzzy_threshold: int = Field(
+        90,
+        ge=70,
+        le=100,
+        description="Minimum fuzzy match score (0-100) for AniList ID auto-discovery",
     )
 
 

@@ -236,6 +236,10 @@ def anilist_anime_flow(
 
     loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
 
+    # Store anilist_id in repository for caching (cache key)
+    if anilist_id:
+        rep.anime_to_anilist_id[anime_title] = anilist_id
+
     # Show active sources
     active_sources = rep.get_active_sources()
     if active_sources:
@@ -247,47 +251,53 @@ def anilist_anime_flow(
     used_query = None  # Track which query was actually used
     metadata = {}  # Track search metadata
     current_variant_idx = 0  # Track which variation we're currently using
+    cache_data = None  # Track if we found the anime in cache
 
     while current_variant_idx < len(title_variations):
         variant = title_variations[current_variant_idx]
 
-        # Try up to 2 times per variation (in case of rate limiting/timeout)
-        for attempt in range(2):
-            rep.clear_search_results()  # Clear previous search results
+        # Cache-first: Check if this variant is in cache before searching scrapers
+        cache_data = get_cache(variant)
+        if cache_data:
+            # Found in cache! Use it directly
+            print(f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', []))) } eps disponíveis)")
+            rep.load_from_cache(variant, cache_data)
+            used_query = variant
+            titles_with_sources = [variant]  # Only one "result" - the cached anime
+            metadata = {
+                "variant_tested": variant,
+                "variant_index": current_variant_idx,
+                "total_variants": len(title_variations),
+                "used_query": used_query,
+                "source": "cache",
+            }
+            break  # Exit while loop - found in cache
 
-            if attempt == 0:
-                with loading(f"Buscando '{variant}'..."):
-                    rep.search_anime(variant, verbose=False)
-            else:
-                # Retry after a short delay
-                import time
-                time.sleep(2)
-                with loading(f"Retry: '{variant}'..."):
-                    rep.search_anime(variant, verbose=False)
+        # Not in cache: search scrapers normally
+        rep.clear_search_results()  # Clear previous search results
 
-            # Get metadata from this search attempt
-            search_metadata = rep.get_search_metadata()
-            # Pass original_query for ranking results by relevance
-            used_query = search_metadata.get("used_query", variant)
-            titles_with_sources = rep.get_anime_titles_with_sources(
-                filter_by_query=variant, original_query=used_query
-            )
+        with loading(f"Buscando '{variant}'..."):
+            rep.search_anime(variant, verbose=False)
 
-            if titles_with_sources:
-                # Found results with this variation
-                # Store both the variation tested and the actual query used
-                metadata = {
-                    "variant_tested": variant,
-                    "variant_index": current_variant_idx,
-                    "total_variants": len(title_variations),
-                    "used_query": used_query,
-                    "used_words": search_metadata.get("used_words"),
-                    "total_words": search_metadata.get("total_words"),
-                    "retry_attempt": attempt,
-                }
-                break  # Found results, stop trying
+        # Get metadata from this search attempt
+        search_metadata = rep.get_search_metadata()
+        # Pass original_query for ranking results by relevance
+        used_query = search_metadata.get("used_query", variant)
+        titles_with_sources = rep.get_anime_titles_with_sources(
+            filter_by_query=variant, original_query=used_query
+        )
 
         if titles_with_sources:
+            # Found results with this variation
+            # Store both the variation tested and the actual query used
+            metadata = {
+                "variant_tested": variant,
+                "variant_index": current_variant_idx,
+                "total_variants": len(title_variations),
+                "used_query": used_query,
+                "used_words": search_metadata.get("used_words"),
+                "total_words": search_metadata.get("total_words"),
+            }
             break  # Break while loop
         else:
             # No results, try next variation
@@ -308,21 +318,32 @@ def anilist_anime_flow(
 
         if choice == "🔍 Buscar manualmente":
             manual_query = input("\n🔍 Digite o nome para buscar: ")
-            rep.clear_search_results()  # Clear previous search results
-            with loading(f"Buscando '{manual_query}'..."):
-                rep.search_anime(manual_query, verbose=False)
 
-            # Show what query was actually used after search completes
-            metadata = rep.get_search_metadata()
-            used_query = metadata.get("used_query", manual_query)
-            if used_query != manual_query:
-                print(f"ℹ️  Reduzido para: '{used_query}' ({metadata.get('used_words', '?')}/{metadata.get('total_words', '?')} palavras)")
+            # Cache-first: Check if manual query is in cache
+            cache_data = get_cache(manual_query)
+            if cache_data:
+                print(f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', []))) } eps disponíveis)")
+                rep.load_from_cache(manual_query, cache_data)
+                titles_with_sources = [manual_query]
+                used_query = manual_query
+                manual_search = True
+            else:
+                # Not in cache: search scrapers normally
+                rep.clear_search_results()  # Clear previous search results
+                with loading(f"Buscando '{manual_query}'..."):
+                    rep.search_anime(manual_query, verbose=False)
 
-            # Pass original_query for ranking results by relevance
-            titles_with_sources = rep.get_anime_titles_with_sources(
-                filter_by_query=manual_query, original_query=used_query
-            )
-            manual_search = True
+                # Show what query was actually used after search completes
+                metadata = rep.get_search_metadata()
+                used_query = metadata.get("used_query", manual_query)
+                if used_query != manual_query:
+                    print(f"ℹ️  Reduzido para: '{used_query}' ({metadata.get('used_words', '?')}/{metadata.get('total_words', '?')} palavras)")
+
+                # Pass original_query for ranking results by relevance
+                titles_with_sources = rep.get_anime_titles_with_sources(
+                    filter_by_query=manual_query, original_query=used_query
+                )
+                manual_search = True
 
             if not titles_with_sources:
                 return
@@ -817,6 +838,8 @@ def search_anime_flow(args):
 
     Supports decreasing word count if user wants to see more results.
     Example: "Spy Family Season 2" (4 words) → Try 4 → 3 → 2 words progressively.
+
+    Cache-first: Checks cache before searching scrapers to avoid unnecessary requests.
     """
     query = (
         (input("\n🔍 Pesquise anime: ") if not args.query else args.query)
@@ -825,56 +848,66 @@ def search_anime_flow(args):
     )
 
     from menu import menu_navigate
+    from scraper_cache import get_cache
 
-    # Start with full word count
-    current_word_count = len(query.split())
-    min_words = 2  # Minimum words to search
+    # Cache-first: Check if query is in cache before searching scrapers
+    cache_data = get_cache(query)
+    selected_anime = None
+    if cache_data:
+        print(f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', []))) } eps disponíveis)")
+        # Populate repository from cache
+        rep.load_from_cache(query, cache_data)
+        selected_anime = query
+    else:
+        # Not in cache or expired: search scrapers normally
+        # Start with full word count
+        current_word_count = len(query.split())
+        min_words = 2  # Minimum words to search
 
-    # Progressive search loop: try full query, then reduce words if user wants more
-    while True:
-        rep.clear_search_results()
-        with loading(f"Buscando '{query}'..."):
-            rep.search_anime_with_word_limit(query, current_word_count)
+        # Progressive search loop: try full query, then reduce words if user wants more
+        while True:
+            rep.clear_search_results()
+            with loading(f"Buscando '{query}'..."):
+                rep.search_anime_with_word_limit(query, current_word_count)
 
-        titles_with_sources = rep.get_anime_titles_with_sources(filter_by_query=query)
+            titles_with_sources = rep.get_anime_titles_with_sources(filter_by_query=query)
 
-        # If no results, automatically try with fewer words
-        if not titles_with_sources:
-            current_word_count -= 1
-            if current_word_count < min_words:
-                return None, None  # No results found at all
-            continue
+            # If no results, automatically try with fewer words
+            if not titles_with_sources:
+                current_word_count -= 1
+                if current_word_count < min_words:
+                    return None, None  # No results found at all
+                continue
 
-        # Add "Continue searching" button if we can reduce words further
-        CONTINUE_BUTTON = "🔍 Continuar buscando (menos palavras)"
-        if current_word_count > min_words:
-            titles_with_button = [CONTINUE_BUTTON] + titles_with_sources
-            show_continue_msg = f" (usando {current_word_count} palavras)"
-        else:
-            titles_with_button = titles_with_sources
-            show_continue_msg = ""
+            # Add "Continue searching" button if we can reduce words further
+            CONTINUE_BUTTON = "🔍 Continuar buscando (menos palavras)"
+            if current_word_count > min_words:
+                titles_with_button = [CONTINUE_BUTTON] + titles_with_sources
+                show_continue_msg = f" (usando {current_word_count} palavras)"
+            else:
+                titles_with_button = titles_with_sources
+                show_continue_msg = ""
 
-        selected_anime_with_source = menu_navigate(
-            titles_with_button,
-            msg=f"Escolha o Anime.{show_continue_msg}",
-        )
+            selected_anime_with_source = menu_navigate(
+                titles_with_button,
+                msg=f"Escolha o Anime.{show_continue_msg}",
+            )
 
-        if not selected_anime_with_source:
-            return None, None  # User cancelled
+            if not selected_anime_with_source:
+                return None, None  # User cancelled
 
-        # Check if user selected "Continue searching"
-        if selected_anime_with_source == CONTINUE_BUTTON:
-            current_word_count -= 1
-            if current_word_count < min_words:
-                current_word_count = min_words
-            continue  # Loop back and search with fewer words
+            # Check if user selected "Continue searching"
+            if selected_anime_with_source == CONTINUE_BUTTON:
+                current_word_count -= 1
+                if current_word_count < min_words:
+                    current_word_count = min_words
+                continue  # Loop back and search with fewer words
 
-        # User selected an anime - break out of loop
-        break
+            # User selected an anime - break out of loop
+            selected_anime = selected_anime_with_source.split(" [")[0]
+            break
 
-    # Remove source tag from selected anime
-    selected_anime = selected_anime_with_source.split(" [")[0]
-
+    # At this point, selected_anime is set from either cache or scrapers
     with loading("Carregando episódios..."):
         rep.search_episodes(selected_anime)
     episode_list = rep.get_episode_list(selected_anime)
@@ -1254,6 +1287,10 @@ def reset_history(anime) -> None:
 
 def cli() -> None:
     """Entry point para CLI."""
+    # Migrate old JSON cache to new SQLite-based cache system on first run
+    from migrate_json_cache import migrate_old_json_cache
+    migrate_old_json_cache()
+
     parser = argparse.ArgumentParser(
         prog="ani-tupi",
         description="Veja anime sem sair do terminal.",
@@ -1309,16 +1346,23 @@ def cli() -> None:
 
     # Handle --clear-cache before other commands
     if args.clear_cache is not None:
-        from scraper_cache import clear_cache
+        from cache_manager import clear_cache_all, clear_cache_by_prefix
+        from anilist_discovery import auto_discover_anilist_id
 
         if args.clear_cache is True:
             # Clear all cache
-            clear_cache()
+            clear_cache_all()
             print("✅ Cache completamente limpo!")
         else:
-            # Clear specific anime
-            clear_cache(args.clear_cache)
-            print(f"✅ Cache de '{args.clear_cache}' foi limpo!")
+            # Try to discover AniList ID for more precise clearing
+            anilist_id = auto_discover_anilist_id(args.clear_cache)
+            if anilist_id:
+                clear_cache_by_prefix(f":{anilist_id}:")
+                print(f"✅ Cache de '{args.clear_cache}' (AniList ID {anilist_id}) foi limpo!")
+            else:
+                # Fallback: clear by title prefix
+                clear_cache_by_prefix(f":{args.clear_cache}:")
+                print(f"✅ Cache de '{args.clear_cache}' foi limpo!")
         return
 
     # Handle commands
