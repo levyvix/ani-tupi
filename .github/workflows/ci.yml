@@ -38,7 +38,6 @@ jobs:
         uv run python -m py_compile manga_tupi.py
         uv run python -m py_compile loader.py
         uv run python -m py_compile repository.py
-        uv run python -m py_compile menu.py
         uv run python -m py_compile video_player.py
 
     - name: Verificar plugins
