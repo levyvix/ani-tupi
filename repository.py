@@ -1,4 +1,5 @@
 import asyncio
+import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.pool import ThreadPool
@@ -35,6 +36,14 @@ class Repository:
     def register(self, plugin: PluginInterface) -> None:
         self.sources[plugin.name] = plugin
 
+    def get_active_sources(self) -> list[str]:
+        """Get list of currently registered plugin names.
+
+        Returns:
+            List of plugin names (e.g., ["animefire", "animesonlinecc"])
+        """
+        return sorted(list(self.sources.keys()))
+
     def clear_search_results(self) -> None:
         """Clear all search results, keeping registered plugins."""
         self.anime_to_urls = defaultdict(list)
@@ -57,9 +66,7 @@ class Repository:
 
         # If query has fewer or equal to min_words, just search normally
         if len(words) <= min_words:
-            with ThreadPool(min(len(self.sources), cpu_count())) as pool:
-                for source in self.sources:
-                    pool.apply(self.sources[source].search_anime, args=(query,))
+            self._search_with_incremental_results(query, verbose)
             return
 
         # Progressive search: min_words, min_words+1, ..., all words
@@ -69,16 +76,65 @@ class Repository:
             # Clear previous attempt results
             self.clear_search_results()
 
-            # Search with current query
-            with ThreadPool(min(len(self.sources), cpu_count())) as pool:
-                for source in self.sources:
-                    pool.apply(self.sources[source].search_anime, args=(partial_query,))
+            # Search with current query (incremental)
+            self._search_with_incremental_results(partial_query, verbose=False)
 
             # If found results, stop
             if self.anime_to_urls:
                 if verbose and num_words < len(words):
                     print(f"ℹ️  Busca com: '{partial_query}' ({num_words}/{len(words)} palavras)")
                 break
+
+    def _search_with_incremental_results(self, query: str, verbose: bool = True) -> None:
+        """Search anime with incremental results, with 5s timeout for slow sources."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        if verbose:
+            print(f"⠼ Buscando '{query}'...")
+
+        TIMEOUT_SECONDS = 5.0
+        start_time = time.time()
+        timed_out = False
+
+        with ThreadPoolExecutor(max_workers=min(len(self.sources), cpu_count())) as executor:
+            # Submit all search tasks
+            future_to_source = {
+                executor.submit(self.sources[source].search_anime, query): source
+                for source in self.sources
+            }
+
+            # Process results as they complete
+            completed = 0
+            for future in as_completed(future_to_source):
+                source = future_to_source[future]
+
+                # Check timeout
+                elapsed = time.time() - start_time
+                if elapsed > TIMEOUT_SECONDS:
+                    timed_out = True
+                    if verbose:
+                        remaining = len(self.sources) - completed
+                        print(f"⏱️ Timeout ({TIMEOUT_SECONDS}s) - {remaining} fonte(s) lenta(s) ignorada(s)")
+                    break
+
+                try:
+                    future.result()  # Wait for this source to complete
+                    completed += 1
+                    if verbose and len(self.sources) > 1:
+                        # Show progress: X/N sources completed + result count
+                        count = len(self.anime_to_urls)
+                        print(f"✓ {source} ({count} resultados, {completed}/{len(self.sources)} fontes)", end="\r")
+                except Exception as e:
+                    print(f"❌ Erro em {source}: {e}")
+
+            # Clear progress line
+            if verbose and len(self.sources) > 1:
+                print(" " * 70 + "\r", end="")
+
+            # Show final count if timed out
+            if timed_out and verbose:
+                count = len(self.anime_to_urls)
+                print(f"📊 {count} resultado(s) de {completed}/{len(self.sources)} fonte(s)")
 
     def add_anime(self, title: str, url: str, source: str, params=None) -> None:
         """Add anime with exact deduplication.
@@ -119,7 +175,7 @@ class Repository:
         """Get anime titles, optionally filtered by exact match to query.
 
         Args:
-            filter_by_query: If provided, only return titles that contain this query (case-insensitive)
+            filter_by_query: If provided, only return titles matching query.
             min_score: Ignored (kept for API compatibility)
 
         Returns:
@@ -135,12 +191,48 @@ class Repository:
         filtered = [title for title in titles if query_lower in title.lower()]
         return sorted(filtered)
 
+    def get_anime_titles_with_sources(
+        self, filter_by_query: str = None
+    ) -> list[str]:
+        """Get anime titles with source indicators.
+
+        Shows which sources have each anime, helpful for multi-source scenarios.
+        Format: "Anime Title [source1, source2]"
+
+        Args:
+            filter_by_query: If provided, only return titles matching query.
+
+        Returns:
+            Sorted list of anime titles with source indicators
+        """
+        titles = list(self.anime_to_urls.keys())
+
+        if filter_by_query:
+            query_lower = filter_by_query.lower()
+            titles = [title for title in titles if query_lower in title.lower()]
+
+        # Build titles with sources
+        result = []
+        for title in sorted(titles):
+            urls_and_sources = self.anime_to_urls[title]
+            sources = set(source for _url, source, _params in urls_and_sources)
+            sources_str = ", ".join(sorted(sources))
+            result.append(f"{title} [{sources_str}]")
+
+        return result
+
     def search_episodes(self, anime: str) -> None:
         if anime in self.anime_episodes_titles:
             return self.anime_episode_titles[anime]
 
         urls_and_scrapers = rep.anime_to_urls[anime]
-        threads = [Thread(target=self.sources[source].search_episodes, args=(anime, url, params )) for url, source, params in urls_and_scrapers]
+        threads = [
+            Thread(
+                target=self.sources[source].search_episodes,
+                args=(anime, url, params),
+            )
+            for url, source, params in urls_and_scrapers
+        ]
 
         for th in threads:
             th.start()
@@ -175,10 +267,15 @@ class Repository:
         self.anime_episodes_urls[anime].append((episode_data.episode_urls, source))
 
     def get_episode_list(self, anime: str):
-        return sorted(self.anime_episodes_titles[anime], key=lambda title_list: len(title_list))[-1]
+        episode_list = sorted(self.anime_episodes_titles[anime], key=lambda title_list: len(title_list))[-1]
+        return list(reversed(episode_list))
 
     def search_player(self, anime: str, episode_num: int) -> None:
-        """This method assumes all episode lists to be the same size, plugin devs should guarantee that OVA's are not considered."""
+        """Search for video URLs.
+
+        Assumes all episode lists are the same size.
+        Plugin devs should guarantee that OVAs are not considered.
+        """
         selected_urls = []
         for urls, source in self.anime_episodes_urls[anime]:
             if len(urls) >= episode_num:
@@ -190,8 +287,19 @@ class Repository:
             container = []
             loop = asyncio.get_running_loop()
             with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
-                tasks = [loop.run_in_executor(executor, self.sources[source].search_player_src, url, container, event) for url, source in selected_urls]
-                _done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                tasks = [
+                    loop.run_in_executor(
+                        executor,
+                        self.sources[source].search_player_src,
+                        url,
+                        container,
+                        event,
+                    )
+                    for url, source in selected_urls
+                ]
+                _done, _pending = await asyncio.wait(
+                    tasks, return_when=asyncio.FIRST_COMPLETED
+                )
 
                 return container[0]
 
