@@ -4,7 +4,7 @@ from json import dump, load
 from sys import exit
 
 import loader
-from config import get_data_path
+from config import get_data_path, settings
 from loading import loading
 from manga_tupi import main as manga_tupi
 from menu import menu
@@ -50,13 +50,22 @@ def save_anilist_mapping(anilist_id: int, scraper_title: str) -> None:
 
 
 def normalize_anime_title(title: str):
-    """Gera variações progressivas do título em lowercase, removendo palavras do final.
-    Exemplo: "Attack on Titan Season 2" → ["attack on titan", "attack on", "attack"]
-    Todas as saídas são sempre minúsculas.
+    """Generate sensible title variations for searching.
+
+    For AniList titles with format "Romaji / English", extracts just the romaji part.
+    Example: "Kimetsu no Yaiba: Hashira Geiko-hen / Demon Slayer..."
+             → ["kimetsu no yaiba hashira geiko hen", "kimetsu no yaiba hashira", "kimetsu no yaiba"]
+
+    Returns variations in lowercase, from most specific to most generic.
     """
     import re
 
-    # 1. Remove partes de temporada / cour / part / etc
+    # 1. Handle AniList bilingual format "Romaji / English"
+    # Take only the romaji part (before the " / ")
+    if " / " in title:
+        title = title.split(" / ")[0]
+
+    # 2. Remove season/part/episode suffixes
     season_patterns = [
         r"\s+Season\s+\d+",
         r"\s+\d+(?:st|nd|rd|th)\s+Season",
@@ -67,34 +76,49 @@ def normalize_anime_title(title: str):
         r"\s+Final\s+Season",
         r"\s+2nd\s+Season",
         r"[:−-]\s*Season\s+\d+",
+        r"\s+Geiko.+$",  # Remove "Geiko-hen" and everything after
+        r"\s+Training.+$",  # Remove "Training Arc" and everything after
+        r"\s+Dublado.*$",  # Remove "Dublado" suffix
     ]
 
     cleaned = title
     for pattern in season_patterns:
         cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
 
-    # 2. Mantém apenas letras, números e espaços — remove tudo o mais
+    # 3. Keep only letters, numbers and spaces
     cleaned = re.sub(r"[^A-Za-z0-9\s]", " ", cleaned)
-    # Remove espaços múltiplos e trim
+    # Remove multiple spaces and trim
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
     if not cleaned:
-        return [title.strip().lower()]  # fallback em minúsculas
+        return [title.strip().lower()]  # fallback
 
-    # 3. Converte tudo para lowercase desde o início
+    # 4. Convert to lowercase
     cleaned = cleaned.lower()
 
-    # 4. Divide em palavras
+    # 5. Get words
     words = cleaned.split()
 
-    # 5. Gera as variações (da mais longa para a mais curta)
+    # 6. Generate variations intelligently (from most specific to least)
+    # For AniList: start with title as-is, then progressively shorter
     variations = []
-    for i in range(len(words), 0, -1):
-        variant = " ".join(words[:i])
-        if variant and variant not in variations:
-            variations.append(variant)
 
-    # Remove duplicatas (embora improvável com essa lógica) e mantém ordem
+    if len(words) > 0:
+        # Always include full query first (most specific)
+        variations.append(" ".join(words))
+
+    # Then progressively shorter versions
+    if len(words) > 3:
+        # Medium: try 3 words
+        variations.append(" ".join(words[:3]))
+    if len(words) > 2:
+        # Shorter: try 2 words
+        variations.append(" ".join(words[:2]))
+    if len(words) > 1:
+        # Minimal: try 1 word
+        variations.append(" ".join(words[:1]))
+
+    # Remove duplicates while preserving order
     seen = set()
     result = []
     for v in variations:
@@ -212,22 +236,65 @@ def anilist_anime_flow(
 
     loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
 
-    # Try different title variations
+    # Show active sources
+    active_sources = rep.get_active_sources()
+    if active_sources:
+        print(f"ℹ️  Fontes ativas: {', '.join(active_sources)}")
+
+    # Try different title variations with support for "Continue searching with fewer words"
     title_variations = normalize_anime_title(anime_title)
     titles = []
     used_query = None  # Track which query was actually used
+    metadata = {}  # Track search metadata
+    current_variant_idx = 0  # Track which variation we're currently using
 
-    for variant in title_variations:
-        rep.clear_search_results()  # Clear previous search results
-        with loading(f"Buscando '{variant}'..."):
-            rep.search_anime(variant, verbose=False)
-        titles = rep.get_anime_titles(filter_by_query=variant, min_score=85)
-        if titles:
-            used_query = variant
-            break  # Found results, stop trying
+    while current_variant_idx < len(title_variations):
+        variant = title_variations[current_variant_idx]
+
+        # Try up to 2 times per variation (in case of rate limiting/timeout)
+        for attempt in range(2):
+            rep.clear_search_results()  # Clear previous search results
+
+            if attempt == 0:
+                with loading(f"Buscando '{variant}'..."):
+                    rep.search_anime(variant, verbose=False)
+            else:
+                # Retry after a short delay
+                import time
+                time.sleep(2)
+                with loading(f"Retry: '{variant}'..."):
+                    rep.search_anime(variant, verbose=False)
+
+            # Get metadata from this search attempt
+            search_metadata = rep.get_search_metadata()
+            # Pass original_query for ranking results by relevance
+            used_query = search_metadata.get("used_query", variant)
+            titles_with_sources = rep.get_anime_titles_with_sources(
+                filter_by_query=variant, original_query=used_query
+            )
+
+            if titles_with_sources:
+                # Found results with this variation
+                # Store both the variation tested and the actual query used
+                metadata = {
+                    "variant_tested": variant,
+                    "variant_index": current_variant_idx,
+                    "total_variants": len(title_variations),
+                    "used_query": used_query,
+                    "used_words": search_metadata.get("used_words"),
+                    "total_words": search_metadata.get("total_words"),
+                    "retry_attempt": attempt,
+                }
+                break  # Found results, stop trying
+
+        if titles_with_sources:
+            break  # Break while loop
+        else:
+            # No results, try next variation
+            current_variant_idx += 1
 
     manual_search = False
-    if not titles:
+    if not titles_with_sources:
 
         # Offer manual search
         from menu import menu_navigate
@@ -243,12 +310,21 @@ def anilist_anime_flow(
             manual_query = input("\n🔍 Digite o nome para buscar: ")
             rep.clear_search_results()  # Clear previous search results
             with loading(f"Buscando '{manual_query}'..."):
-                rep.search_anime(manual_query)
-            titles = rep.get_anime_titles(filter_by_query=manual_query, min_score=85)
-            used_query = manual_query
+                rep.search_anime(manual_query, verbose=False)
+
+            # Show what query was actually used after search completes
+            metadata = rep.get_search_metadata()
+            used_query = metadata.get("used_query", manual_query)
+            if used_query != manual_query:
+                print(f"ℹ️  Reduzido para: '{used_query}' ({metadata.get('used_words', '?')}/{metadata.get('total_words', '?')} palavras)")
+
+            # Pass original_query for ranking results by relevance
+            titles_with_sources = rep.get_anime_titles_with_sources(
+                filter_by_query=manual_query, original_query=used_query
+            )
             manual_search = True
 
-            if not titles:
+            if not titles_with_sources:
                 return
         else:
             return  # Back to AniList menu
@@ -258,43 +334,109 @@ def anilist_anime_flow(
 
     saved_title = load_anilist_mapping(anilist_id) if anilist_id else None
 
-    # If we have a saved title and it's in the current results, ask user if they want to keep it
-    if saved_title and saved_title in titles:
-        # Ask user if they want to continue with saved choice
-        choice = menu_navigate(
-            ["✅ Continuar com este", "🔄 Escolher outro"],
-            msg=f"Você usou '{saved_title}' antes.\nQuer continuar?",
-        )
+    # Convert titles with sources to plain titles for saved title check
+    titles = [t.split(" [")[0] for t in titles_with_sources]
 
-        if not choice:
-            return  # User cancelled
+    # Loop to allow "Continue searching with fewer words"
+    selected_anime = None
+    while selected_anime is None:
+        # If we have a saved title and it's in the current results, ask user if they want to keep it
+        if saved_title and saved_title in titles:
+            # Ask user if they want to continue with saved choice
+            choice = menu_navigate(
+                ["✅ Continuar com este", "🔄 Escolher outro"],
+                msg=f"Você usou '{saved_title}' antes.\nQuer continuar?",
+            )
 
-        if choice == "✅ Continuar com este":
-            selected_anime = saved_title
-        else:
-            # User wants to choose a different title - show full menu
-            menu_title = f"📺 Anime do AniList: '{display_title}'\n"
-            if manual_search:
-                menu_title += f"🔍 Busca manual: '{used_query}'\n"
-            else:
-                menu_title += f"🔍 Busca usada: '{used_query}'\n"
-            menu_title += f"\nEncontrados {len(titles)} resultados. Escolha:"
-
-            selected_anime = menu_navigate(titles, msg=menu_title)
-            if not selected_anime:
+            if not choice:
                 return  # User cancelled
-    else:
-        # No saved title or not in results - show full menu
+
+            if choice == "✅ Continuar com este":
+                selected_anime = saved_title
+                break  # Exit while loop
+
+        # Show full menu with "Continue searching" option if we have more variations available
         menu_title = f"📺 Anime do AniList: '{display_title}'\n"
         if manual_search:
             menu_title += f"🔍 Busca manual: '{used_query}'\n"
         else:
             menu_title += f"🔍 Busca usada: '{used_query}'\n"
-        menu_title += f"\nEncontrados {len(titles)} resultados. Escolha:"
+            # Show if query was reduced (either internally or by trying fewer variations)
+            if metadata.get('variant_index', 0) > 0:
+                # Skipped earlier variations
+                menu_title += f"   ⚠️  Saltou {metadata.get('variant_index')} variação(ões) (nenhum resultado)\n"
+            if metadata.get('used_words', 0) and metadata.get('total_words', 0) and metadata.get('used_words') < metadata.get('total_words'):
+                # Reduced within the search
+                menu_title += f"   ({metadata.get('used_words')}/{metadata.get('total_words')} palavras)\n"
+        menu_title += f"\nEncontrados {len(titles_with_sources)} resultados. Escolha:"
 
-        selected_anime = menu_navigate(titles, msg=menu_title)
-        if not selected_anime:
+        # Pagination: show top N results + "See more" button if needed
+        CONTINUE_BUTTON = "🔍 Continuar buscando (menos palavras)"
+        SHOW_MORE_BUTTON = "📋 Ver todos os resultados"
+
+        # Prepare menu options with pagination
+        top_limit = settings.search.top_results_limit
+        titles_to_show = titles_with_sources[:top_limit]
+        has_more = len(titles_with_sources) > top_limit
+
+        # Build button list with "Show more" if needed
+        titles_with_button = []
+        if current_variant_idx < len(title_variations) - 1:
+            titles_with_button.append(CONTINUE_BUTTON)
+        if has_more:
+            titles_with_button.append(SHOW_MORE_BUTTON)
+        titles_with_button.extend(titles_to_show)
+
+        selected_anime_with_source = menu_navigate(titles_with_button, msg=menu_title)
+
+        # Handle "Show all" button
+        if selected_anime_with_source == SHOW_MORE_BUTTON:
+            # Show all results in next menu
+            titles_to_show = titles_with_sources
+            titles_with_button = []
+            if current_variant_idx < len(title_variations) - 1:
+                titles_with_button.append(CONTINUE_BUTTON)
+            titles_with_button.extend(titles_to_show)
+            selected_anime_with_source = menu_navigate(titles_with_button, msg=menu_title)
+
+        if not selected_anime_with_source:
             return  # User cancelled
+
+        # Check if user clicked "Continue searching"
+        if selected_anime_with_source == CONTINUE_BUTTON:
+            # Try next variation (fewer words)
+            current_variant_idx += 1
+            if current_variant_idx < len(title_variations):
+                variant = title_variations[current_variant_idx]
+                rep.clear_search_results()
+                with loading(f"Buscando '{variant}'..."):
+                    rep.search_anime(variant, verbose=False)
+
+                search_metadata = rep.get_search_metadata()
+                # Pass original_query for ranking results by relevance
+                used_query = search_metadata.get("used_query", variant)
+                titles_with_sources = rep.get_anime_titles_with_sources(
+                    filter_by_query=variant, original_query=used_query
+                )
+                titles = [t.split(" [")[0] for t in titles_with_sources]
+
+                if titles_with_sources:
+                    metadata = {
+                        "variant_tested": variant,
+                        "variant_index": current_variant_idx,
+                        "total_variants": len(title_variations),
+                        "used_query": used_query,
+                        "used_words": search_metadata.get("used_words"),
+                        "total_words": search_metadata.get("total_words"),
+                    }
+                    # Loop continues to show new results
+                    continue
+            # No more variations
+            return
+        else:
+            # Remove source tag from selected anime
+            selected_anime = selected_anime_with_source.split(" [")[0]
+            break  # Exit while loop
 
     # Save the choice for next time
     if anilist_id:
@@ -382,6 +524,7 @@ def anilist_anime_flow(
 
         # Add option to choose any episode
         options.append("📋 Escolher outro episódio")
+        options.append("🔄 Começar do zero")
 
         # Build menu message with episode availability info
         menu_msg = f"{selected_anime} - De onde quer continuar?"
@@ -401,6 +544,20 @@ def anilist_anime_flow(
             if not selected_episode:
                 return
             episode_idx = episode_list.index(selected_episode)
+        elif choice == "🔄 Começar do zero":
+            # Confirm before resetting
+            from menu import menu_navigate
+
+            confirm_reset = menu_navigate(
+                ["✅ Sim, resetar", "❌ Cancelar"],
+                msg="Tem certeza que quer começar do zero? Seu progresso será perdido.",
+            )
+            if confirm_reset == "✅ Sim, resetar":
+                reset_history(selected_anime)
+                episode_idx = 0
+                print("✅ Histórico resetado! Começando do episódio 1...")
+            else:
+                return  # User cancelled
         else:
             episode_idx = option_to_idx[choice]
             # Check if episode is unavailable (marked as None)
@@ -501,7 +658,7 @@ def anilist_anime_flow(
                 continue  # Stay in current episode menu
             episode_idx = episode_list.index(selected_episode)
         elif selected_opt == "🔄 Trocar fonte":
-            new_anime, new_episode_idx = switch_anime_source(selected_anime, args)
+            new_anime, new_episode_idx = switch_anime_source(selected_anime, args, anilist_id)
             if new_anime:
                 selected_anime = new_anime
                 episode_idx = new_episode_idx
@@ -509,15 +666,19 @@ def anilist_anime_flow(
                 # Continue loop with new anime/episode
 
 
-def switch_anime_source(current_anime: str, args) -> tuple[str, int] | tuple[None, None]:
+def switch_anime_source(
+    current_anime: str, args, anilist_id: int | None = None
+) -> tuple[str, int] | tuple[None, None]:
     """Allow user to switch to a different anime source/title.
 
     Shows all available variations (dubbed/subtitled/different scrapers) found
     for the base anime name. Uses same search criteria as original search.
+    Maintains progress from local history and AniList (as fallback).
 
     Args:
         current_anime: Current anime title being watched
         args: CLI arguments
+        anilist_id: Optional AniList ID for progress fallback
 
     Returns: (new_anime_title, episode_idx) or (None, None) if cancelled
     """
@@ -547,14 +708,96 @@ def switch_anime_source(current_anime: str, args) -> tuple[str, int] | tuple[Non
     with loading("Carregando episódios..."):
         rep.search_episodes(selected_anime)
 
-    # 6. Show episode selection menu
+    # 6. Get episode list from new source
     episode_list = rep.get_episode_list(selected_anime)
-    selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
 
-    if not selected_episode:
-        return None, None  # User cancelled
+    # 7. Check progress from both sources (AniList as primary source of truth)
+    local_progress = 0
+    anilist_progress = 0
+    progress_source = ""
 
-    episode_idx = episode_list.index(selected_episode)
+    # First check local history
+    try:
+        history_file = HISTORY_PATH / "history.json"
+        with history_file.open() as f:
+            history_data = load(f)
+            if selected_anime in history_data:
+                # history stores episode_idx (0-based), progress is 1-based
+                local_progress = history_data[selected_anime][1] + 1
+    except (FileNotFoundError, KeyError, IndexError):
+        pass  # No local history
+
+    # 8. If have anilist_id, always check AniList (source of truth)
+    # Use AniList as primary when available (you might have watched via web/mobile)
+    if anilist_id:
+        from anilist import anilist_client
+
+        if anilist_client.is_authenticated():
+            # Get media list entry for this anime
+            entry = anilist_client.get_media_list_entry(anilist_id)
+            if entry and entry.get("progress"):
+                anilist_progress = entry["progress"]
+
+    # Use maximum progress available, preferring AniList when it's ahead
+    max_progress = max(local_progress, anilist_progress)
+    if max_progress > 0:
+        if anilist_progress > local_progress:
+            # AniList is ahead - user probably watched on web/mobile
+            progress_source = "AniList"
+        elif anilist_progress == local_progress and anilist_progress > 0:
+            # Both equal and from AniList source
+            progress_source = "AniList"
+        else:
+            # Local is ahead or AniList not available
+            progress_source = "Local"
+
+    # 9. If user has progress, offer -1/0/+1 options
+    if max_progress > 0 and max_progress <= len(episode_list):
+        options = []
+        option_to_idx = {}
+
+        # Previous episode (-1)
+        if max_progress > 1:
+            prev_ep = f"◀️  Episódio {max_progress - 1} (anterior)"
+            options.append(prev_ep)
+            option_to_idx[prev_ep] = max_progress - 2
+
+        # Current episode
+        current_ep = f"▶️  Episódio {max_progress} ({progress_source})"
+        options.append(current_ep)
+        option_to_idx[current_ep] = max_progress - 1
+
+        # Next episode (+1)
+        if max_progress < len(episode_list):
+            next_ep = f"⏭️  Episódio {max_progress + 1} (próximo)"
+            options.append(next_ep)
+            option_to_idx[next_ep] = max_progress
+
+        # Add option to choose any episode
+        options.append("📋 Escolher outro episódio")
+
+        choice = menu_navigate(options, msg=f"{selected_anime} - De onde quer continuar?")
+
+        if not choice:
+            return None, None  # User cancelled
+
+        if choice == "📋 Escolher outro episódio":
+            # Let user choose from full episode list
+            selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+            if not selected_episode:
+                return None, None
+            episode_idx = episode_list.index(selected_episode)
+        else:
+            episode_idx = option_to_idx[choice]
+    else:
+        # No progress - show full episode list
+        selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+
+        if not selected_episode:
+            return None, None  # User cancelled
+
+        episode_idx = episode_list.index(selected_episode)
+
     return selected_anime, episode_idx
 
 
@@ -570,26 +813,67 @@ def show_main_menu():
 
 
 def search_anime_flow(args):
-    """Flow for searching and selecting an anime."""
+    """Flow for searching and selecting an anime with progressive search support.
+
+    Supports decreasing word count if user wants to see more results.
+    Example: "Spy Family Season 2" (4 words) → Try 4 → 3 → 2 words progressively.
+    """
     query = (
         (input("\n🔍 Pesquise anime: ") if not args.query else args.query)
         if not args.debug
         else "eva"
     )
-    rep.clear_search_results()  # Clear previous search results
-    with loading(f"Buscando '{query}'..."):
-        rep.search_anime(query)
-    titles = rep.get_anime_titles(filter_by_query=query, min_score=85)
-
-    if not titles:
-        return None, None
 
     from menu import menu_navigate
 
-    selected_anime = menu_navigate(titles, msg="Escolha o Anime.")
+    # Start with full word count
+    current_word_count = len(query.split())
+    min_words = 2  # Minimum words to search
 
-    if not selected_anime:
-        return None, None  # User cancelled
+    # Progressive search loop: try full query, then reduce words if user wants more
+    while True:
+        rep.clear_search_results()
+        with loading(f"Buscando '{query}'..."):
+            rep.search_anime_with_word_limit(query, current_word_count)
+
+        titles_with_sources = rep.get_anime_titles_with_sources(filter_by_query=query)
+
+        # If no results, automatically try with fewer words
+        if not titles_with_sources:
+            current_word_count -= 1
+            if current_word_count < min_words:
+                return None, None  # No results found at all
+            continue
+
+        # Add "Continue searching" button if we can reduce words further
+        CONTINUE_BUTTON = "🔍 Continuar buscando (menos palavras)"
+        if current_word_count > min_words:
+            titles_with_button = [CONTINUE_BUTTON] + titles_with_sources
+            show_continue_msg = f" (usando {current_word_count} palavras)"
+        else:
+            titles_with_button = titles_with_sources
+            show_continue_msg = ""
+
+        selected_anime_with_source = menu_navigate(
+            titles_with_button,
+            msg=f"Escolha o Anime.{show_continue_msg}",
+        )
+
+        if not selected_anime_with_source:
+            return None, None  # User cancelled
+
+        # Check if user selected "Continue searching"
+        if selected_anime_with_source == CONTINUE_BUTTON:
+            current_word_count -= 1
+            if current_word_count < min_words:
+                current_word_count = min_words
+            continue  # Loop back and search with fewer words
+
+        # User selected an anime - break out of loop
+        break
+
+    # Remove source tag from selected anime
+    selected_anime = selected_anime_with_source.split(" [")[0]
 
     with loading("Carregando episódios..."):
         rep.search_episodes(selected_anime)
@@ -605,6 +889,11 @@ def search_anime_flow(args):
 
 def main(args) -> None:
     loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
+
+    # Show active sources
+    active_sources = rep.get_active_sources()
+    if active_sources:
+        print(f"ℹ️  Fontes ativas: {', '.join(active_sources)}")
 
     # Variables for AniList integration
     anilist_id = None
@@ -646,6 +935,8 @@ def main(args) -> None:
             manga_tupi()
             return
 
+    # Get episode list for playback (needed after any selection flow)
+    episode_list = rep.get_episode_list(selected_anime)
     num_episodes = len(episode_list)
     while True:
         episode = episode_idx + 1
@@ -654,23 +945,27 @@ def main(args) -> None:
         if args.debug:
             pass
         play_video(player_url, args.debug)
-        save_history(selected_anime, episode_idx, anilist_id)
+
+        # Ask if watched until the end (always ask, not just for AniList)
+        from menu import menu_navigate
+
+        confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
+        confirm = menu_navigate(
+            confirm_options, msg=f"Você assistiu o episódio {episode} até o final?"
+        )
+
+        # Only save history if user watched until the end
+        if confirm == "✅ Sim, assisti até o final":
+            save_history(selected_anime, episode_idx, anilist_id)
+        else:
+            # User didn't finish - go back to episode menu without saving
+            continue
 
         # AniList sync (if coming from continue watching with anilist_id)
         if anilist_id:
             from anilist import anilist_client
-            from menu import menu_navigate
 
             if anilist_client.is_authenticated():
-                confirm_options = [
-                    "✅ Sim, assisti até o final",
-                    "❌ Não, parei antes.",
-                ]
-                confirm = menu_navigate(
-                    confirm_options,
-                    msg=f"Você assistiu o episódio {episode} até o final?",
-                )
-
                 if confirm == "✅ Sim, assisti até o final":
                     # Check if anime is in any list
                     if not anilist_client.is_in_any_list(anilist_id):
@@ -731,7 +1026,7 @@ def main(args) -> None:
                 continue  # Stay in current episode menu
             episode_idx = episode_list.index(selected_episode)
         elif selected_opt == "🔄 Trocar fonte":
-            new_anime, new_episode_idx = switch_anime_source(selected_anime, args)
+            new_anime, new_episode_idx = switch_anime_source(selected_anime, args, anilist_id)
             if new_anime:
                 selected_anime = new_anime
                 episode_idx = new_episode_idx
@@ -788,11 +1083,14 @@ def load_history():
                 exit()  # User cancelled continue watching
 
             anime = selected[: -titles[selected]]
-            last_episode_idx = data[anime][1]
+            local_episode_idx = data[anime][1]
             anilist_id = data[anime][2] if len(data[anime]) > 2 else None
 
-            # If we have anilist_id, get the original AniList title
+            # If we have anilist_id, check AniList for progress (source of truth)
             anilist_title = None
+            anilist_episode_idx = -1
+            progress_source = "Local"
+
             if anilist_id:
                 from anilist import anilist_client
 
@@ -800,8 +1098,19 @@ def load_history():
                 if anime_info:
                     # Use romaji title as primary
                     anilist_title = anime_info.get("title", {}).get("romaji")
-                else:
-                    pass
+
+                # Get progress from AniList (source of truth)
+                entry = anilist_client.get_media_list_entry(anilist_id)
+                if entry and entry.get("progress"):
+                    anilist_episode_idx = entry["progress"] - 1  # Convert to 0-based index
+
+            # Use maximum progress from both sources, never go backwards
+            if anilist_episode_idx > local_episode_idx:
+                last_episode_idx = anilist_episode_idx
+                progress_source = "AniList"
+            else:
+                last_episode_idx = local_episode_idx
+                # Keep "Local" as default if both are equal or local is higher
 
             # Search for episodes to offer -1/0/+1 options
             rep.clear_search_results()
@@ -825,8 +1134,8 @@ def load_history():
                 options.append(prev_ep)
                 option_to_idx[prev_ep] = last_episode_idx - 1
 
-            # Current episode (0)
-            current_ep = f"▶️  Episódio {last_ep_num} (último assistido)"
+            # Current episode (0) - show source of progress
+            current_ep = f"▶️  Episódio {last_ep_num} ({progress_source})"
             options.append(current_ep)
             option_to_idx[current_ep] = last_episode_idx
 
@@ -844,6 +1153,7 @@ def load_history():
 
             # Add option to choose any episode
             options.append("📋 Escolher outro episódio")
+            options.append("🔄 Começar do zero")
 
             choice = menu_navigate(options, msg=f"{anime} - De onde quer continuar?")
 
@@ -858,6 +1168,18 @@ def load_history():
                 if not selected_episode:
                     exit()
                 episode_idx = episode_list.index(selected_episode)
+            elif choice == "🔄 Começar do zero":
+                # Confirm before resetting
+                confirm_reset = menu_navigate(
+                    ["✅ Sim, resetar", "❌ Cancelar"],
+                    msg="Tem certeza que quer começar do zero? Seu progresso será perdido.",
+                )
+                if confirm_reset == "✅ Sim, resetar":
+                    reset_history(anime)
+                    episode_idx = 0
+                    print("✅ Histórico resetado! Começando do episódio 1...")
+                else:
+                    exit()  # User cancelled
             else:
                 episode_idx = option_to_idx[choice]
                 # Check if episode is unavailable (marked as None)
@@ -904,6 +1226,32 @@ def save_history(anime, episode, anilist_id=None) -> None:
         return
 
 
+def reset_history(anime) -> None:
+    """Remove anime from watch history (reset to episode 0).
+
+    Args:
+        anime: Anime title to reset
+    """
+    file_path = HISTORY_PATH / "history.json"
+    try:
+        with file_path.open("r") as f:
+            data = load(f)
+
+        # Remove the anime from history if it exists
+        if anime in data:
+            del data[anime]
+
+        with file_path.open("w") as f:
+            dump(data, f)
+
+    except FileNotFoundError:
+        # File doesn't exist, nothing to reset
+        pass
+    except PermissionError:
+        # Can't write to file, silently fail
+        pass
+
+
 def cli() -> None:
     """Entry point para CLI."""
     parser = argparse.ArgumentParser(
@@ -933,6 +1281,11 @@ def cli() -> None:
     parser.add_argument("--continue_watching", "-c", action="store_true")
     parser.add_argument("--manga", "-m", action="store_true")
     parser.add_argument(
+        "--list-sources",
+        action="store_true",
+        help="Listar todas as fontes de anime disponíveis",
+    )
+    parser.add_argument(
         "--clear-cache",
         nargs="?",
         const=True,
@@ -941,6 +1294,18 @@ def cli() -> None:
     )
 
     args = parser.parse_args()
+
+    # Handle --list-sources before other commands
+    if args.list_sources:
+        loader.load_plugins({"pt-br"})
+        sources = rep.get_active_sources()
+        if sources:
+            print("\n🔌 Fontes de anime disponíveis:")
+            for i, source in enumerate(sources, 1):
+                print(f"   {i}. {source}")
+        else:
+            print("\n❌ Nenhuma fonte de anime encontrada!")
+        return
 
     # Handle --clear-cache before other commands
     if args.clear_cache is not None:

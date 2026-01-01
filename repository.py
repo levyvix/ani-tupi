@@ -27,6 +27,7 @@ class Repository:
         self.anime_episodes_titles = defaultdict(list)
         self.anime_episodes_urls = defaultdict(list)
         self.norm_titles = {}
+        self._last_search_metadata = {}
 
     def __new__(cls):
         if not Repository._instance:
@@ -57,20 +58,16 @@ class Repository:
             print("Verifique se os plugins estão instalados em plugins/")
             return
 
-        # Progressive search: start with configured min_words, increase if no results
+        # Progressive search: start with all words, decrease if no results
         words = query.split()
         min_words = settings.search.progressive_search_min_words
 
         # Store original query for later filtering
         self._last_query = query
 
-        # If query has fewer or equal to min_words, just search normally
-        if len(words) <= min_words:
-            self._search_with_incremental_results(query, verbose)
-            return
-
-        # Progressive search: min_words, min_words+1, ..., all words
-        for num_words in range(min_words, len(words) + 1):
+        # Progressive search (DECRESCENTE): len(words), len(words)-1, ..., min_words
+        # Tries full query first, then progressively removes words from the end
+        for num_words in range(len(words), min_words - 1, -1):
             partial_query = " ".join(words[:num_words])
 
             # Clear previous attempt results
@@ -80,19 +77,130 @@ class Repository:
             self._search_with_incremental_results(partial_query, verbose=False)
 
             # If found results, stop
-            if self.anime_to_urls:
+            results_found = len(self.anime_to_urls)
+            if results_found > 0:
                 if verbose and num_words < len(words):
                     print(f"ℹ️  Busca com: '{partial_query}' ({num_words}/{len(words)} palavras)")
+                # Store metadata about the search
+                self._last_search_metadata = {
+                    "original_query": query,
+                    "used_query": partial_query,
+                    "used_words": num_words,
+                    "total_words": len(words),
+                    "min_words": min_words,
+                }
                 break
+            elif verbose and num_words < len(words):
+                # No results with this word count, will try fewer words
+                print(f"ℹ️  0 resultados com '{partial_query}' ({num_words} palavras) → tentando com menos...")
+
+    def search_anime_with_word_limit(
+        self, query: str, word_limit: int, verbose: bool = True
+    ) -> None:
+        """Search anime with a word limit.
+
+        Searches using only the first `word_limit` words of the query.
+        Useful for progressive search where user wants to continue with fewer words.
+
+        Args:
+            query: Original query (may have more words than word_limit)
+            word_limit: Number of words to use from the start of query
+            verbose: Show progress messages
+
+        Example:
+            search_anime_with_word_limit("Dan Da Dan Season 2", 2)
+            # Searches for "Dan Da"
+        """
+        if not self.sources:
+            print("\n❌ Erro: Nenhum plugin carregado!")
+            print("Verifique se os plugins estão instalados em plugins/")
+            return
+
+        words = query.split()
+        min_words = settings.search.progressive_search_min_words
+
+        # Ensure word_limit is within valid range
+        word_limit = max(min_words, min(word_limit, len(words)))
+
+        # Create limited query
+        limited_query = " ".join(words[:word_limit])
+
+        # Store metadata
+        self._last_search_metadata = {
+            "original_query": query,
+            "used_query": limited_query,
+            "used_words": word_limit,
+            "total_words": len(words),
+            "min_words": min_words,
+        }
+
+        # Clear previous results
+        self.clear_search_results()
+
+        # Execute search
+        self._search_with_incremental_results(limited_query, verbose)
+
+    def get_search_metadata(self) -> dict:
+        """Get metadata about the last search performed.
+
+        Returns:
+            Dict with keys:
+            - original_query: The full query user typed
+            - used_query: The actual query used (after reduction)
+            - used_words: Number of words used in final search
+            - total_words: Total number of words in original query
+            - min_words: Minimum word limit (from config)
+
+            Returns empty dict if no search has been performed yet.
+        """
+        return self._last_search_metadata
+
+    @staticmethod
+    def _normalize_for_filter(text: str) -> str:
+        """Normalize text for filtering (same logic as add_anime).
+
+        Removes punctuation, converts to lowercase, removes multiple spaces.
+        Used for both queries and titles before comparison.
+        """
+        text = text.lower()
+        # Remove punctuation and special characters
+        for char in ["-", ":", "(", ")", "!", "?", "."]:
+            text = text.replace(char, " ")
+        # Remove multiple spaces
+        text = " ".join(text.split())
+        return text
+
+    @staticmethod
+    def _calculate_timeout(query: str) -> float:
+        """Calculate adaptive timeout based on query specificity.
+
+        Queries with more words are more specific and may take longer to find results.
+
+        Args:
+            query: The search query
+
+        Returns:
+            Timeout in seconds: 10s for 1-2 words, 15s for 3-4 words, 20s for 5+ words
+        """
+        word_count = len(query.split())
+
+        if word_count <= 2:
+            return 10.0  # Generic search
+        elif word_count <= 4:
+            return 15.0  # Specific search
+        else:
+            return 20.0  # Very specific search
 
     def _search_with_incremental_results(self, query: str, verbose: bool = True) -> None:
-        """Search anime with incremental results, with 5s hard timeout for slow sources."""
+        """Search anime with incremental results, with adaptive timeout for slow sources."""
         from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 
         if verbose:
             print(f"⠼ Buscando '{query}'...")
 
-        TIMEOUT_SECONDS = 5.0
+        # Adaptive timeout based on query specificity
+        # More specific queries (more words) = more time for scrapers
+        TIMEOUT_SECONDS = self._calculate_timeout(query)
 
         executor = ThreadPoolExecutor(max_workers=min(len(self.sources), cpu_count()))
 
@@ -198,32 +306,54 @@ class Repository:
         return sorted(filtered)
 
     def get_anime_titles_with_sources(
-        self, filter_by_query: str = None
+        self, filter_by_query: str = None, original_query: str = None
     ) -> list[str]:
-        """Get anime titles with source indicators.
+        """Get anime titles with source indicators, ranked by relevance.
 
         Shows which sources have each anime, helpful for multi-source scenarios.
         Format: "Anime Title [source1, source2]"
 
         Args:
             filter_by_query: If provided, only return titles matching query.
+            original_query: If provided, rank results by fuzzy matching score.
 
         Returns:
-            Sorted list of anime titles with source indicators
+            List of anime titles with source indicators, ranked by relevance
         """
+        from fuzzywuzzy import fuzz
+
         titles = list(self.anime_to_urls.keys())
 
         if filter_by_query:
-            query_lower = filter_by_query.lower()
-            titles = [title for title in titles if query_lower in title.lower()]
+            # Improved filtering: normalize both query and titles before matching
+            query_normalized = self._normalize_for_filter(filter_by_query)
+            titles = [
+                title for title in titles
+                if query_normalized in self._normalize_for_filter(title)
+            ]
 
         # Build titles with sources
         result = []
-        for title in sorted(titles):
+        for title in titles:
             urls_and_sources = self.anime_to_urls[title]
             sources = set(source for _url, source, _params in urls_and_sources)
             sources_str = ", ".join(sorted(sources))
-            result.append(f"{title} [{sources_str}]")
+            result.append((f"{title} [{sources_str}]", title))
+
+        # Rank by relevance if original_query provided
+        if original_query:
+            # Calculate fuzzy matching score for each title
+            scored_results = []
+            for result_with_source, original_title in result:
+                score = fuzz.ratio(original_query.lower(), original_title.lower())
+                scored_results.append((result_with_source, score))
+
+            # Sort by score (descending), then alphabetically by title
+            scored_results.sort(key=lambda x: (-x[1], x[0]))
+            result = [item[0] for item in scored_results]
+        else:
+            # Default: sort alphabetically by title
+            result = [item[0] for item in sorted(result, key=lambda x: x[1])]
 
         return result
 

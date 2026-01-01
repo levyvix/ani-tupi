@@ -76,6 +76,12 @@ class SearchSettings(BaseModel):
         le=10,
         description="Minimum words to use in progressive search",
     )
+    top_results_limit: int = Field(
+        10,
+        ge=5,
+        le=50,
+        description="Maximum results to show initially (before 'Show all' button)",
+    )
 
 
 class MangaSettings(BaseModel):

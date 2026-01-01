@@ -447,6 +447,7 @@ def _show_recent_history() -> None:
 
         # Get anime info for display and total episodes
         total_episodes = None
+        anilist_progress = 0
         if saved_anilist_id:
             anime_info = anilist_client.get_anime_by_id(saved_anilist_id)
             if anime_info:
@@ -458,12 +459,21 @@ def _show_recent_history() -> None:
                 )
                 # Get total episodes from AniList
                 total_episodes = anime_info.get("episodes")
+
+                # Get progress from AniList (source of truth)
+                entry = anilist_client.get_media_list_entry(saved_anilist_id)
+                if entry and entry.get("progress"):
+                    anilist_progress = entry["progress"]
             else:
                 display_title = anime_name
                 search_title = anime_name
         else:
             display_title = anime_name
             search_title = anime_name
+
+        # Use AniList progress as primary source, fall back to local history
+        # This ensures we always have the most up-to-date progress
+        starting_progress = max(anilist_progress, episode_idx)
 
         # Import here to avoid circular import
         import argparse
@@ -473,13 +483,13 @@ def _show_recent_history() -> None:
         # Create args object
         args = argparse.Namespace(debug=False)
 
-        # Watch the anime starting from saved episode
-        # Pass episode_idx as anilist_progress so it starts from the right episode
+        # Watch the anime starting from AniList progress (source of truth)
+        # Use max of AniList and local history to never go backwards
         anilist_anime_flow(
             search_title,
             saved_anilist_id,
             args,
-            anilist_progress=episode_idx,  # Start from saved episode index
+            anilist_progress=starting_progress,  # Use AniList as source of truth
             display_title=display_title,
             total_episodes=total_episodes,  # Pass total episodes from AniList
         )
