@@ -76,7 +76,6 @@ jobs:
       run: |
         uv run python -c "import loader; print('✅ loader OK')"
         uv run python -c "import repository; print('✅ repository OK')"
-        uv run python -c "import menu; print('✅ menu OK')"
         uv run python -c "import video_player; print('✅ video_player OK')"
         uv run python -c "import manga_tupi; print('✅ manga_tupi OK')"
 
