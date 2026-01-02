@@ -80,6 +80,10 @@ def anime(args) -> None:
             if exit_code == 2:
                 print("    (Possível erro ao reproduzir ou janela fechada)")
 
+        # Clear terminal before asking confirmation
+        import os
+        os.system("clear")
+
         # Ask if watched until the end
         confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
         confirm = menu_navigate(

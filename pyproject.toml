@@ -32,6 +32,8 @@ dependencies = [
     "fuzzywuzzy>=0.18.0",
     "python-levenshtein>=0.27.3",
     "diskcache>=5.6.3",
+    "python-mpv>=1.0.8",
+    "loguru>=0.7.3",
 ]
 
 [project.scripts]

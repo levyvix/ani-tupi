@@ -1,998 +1,513 @@
-<!-- OPENSPEC:START -->
-# OpenSpec Instructions
-
-These instructions are for AI assistants working in this project.
-
-Always open `@/openspec/AGENTS.md` when the request:
-- Mentions planning or proposals (words like proposal, spec, change, plan)
-- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
-- Sounds ambiguous and you need the authoritative spec before coding
-
-Use `@/openspec/AGENTS.md` to learn:
-- How to create and apply change proposals
-- Spec format and conventions
-- Project structure and guidelines
-
-Keep this managed block so 'openspec update' can refresh the instructions.
-
-<!-- OPENSPEC:END -->
-
-## Clean Error Messages - IMPROVED ✓
-
-### Change (2026-01-01)
-Removed verbose error messages and Selenium stacktraces that cluttered user output during fallback attempts.
-
-### What Changed
-
-**Before:**
-```
-⚠️  Erro ao extrair source do vídeo: Message: Unable to locate element:
-[id="my-video_html5_api"]; For documentation on this error, please visit:
-https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#no-such-element-exception
-Stacktrace:
-RemoteError@chrome://remote/content/shared/RemoteError.sys.mjs:8:8
-WebDriverError@chrome://remote/content/shared/webdriver/Errors.sys.mjs:202:5
-NoSuchElementError@chrome://remote/content/shared/webdriver/Errors.sys.mjs:555:5
-dom.find/</<@chrome://remote/content/shared/DOM.sys.mjs:136:16
-```
-
-**After:**
-```
-🔄 Tentando fontes: animefire, animesonlinecc
-❌ animefire falhou: Unable to locate element: [id="my-video_html5_api"]
-✅ Vídeo encontrado em: animesonlinecc
-```
-
-### Implementation
-
-**Changes in `plugins/animefire.py`:**
-- Removed all intermediate error prints from functions:
-  - `extract_quality_options()` - Removed error prints at lines 85, 131, 146
-  - `extract_blogger_video_url()` - Removed error prints at lines 193, 209, 216, 220, 236, 253
-  - Removed `traceback.print_exc()` call
-- Functions now either return None silently or raise exceptions for repository to handle
-
-**Existing Clean Handling in `repository.py`:**
-- `safe_plugin_call()` already implemented (lines 546-555)
-- Catches exceptions and shows only first line (max 80 chars)
-- Format: `❌ {source} falhou: {error[:80]}`
-
-**User Experience:**
-- Multi-source fallback still works perfectly
-- Errors are now concise and actionable
-- No overwhelming stacktraces in terminal
-- Success/failure clearly indicated with emojis
-
-### Files Modified
-- `plugins/animefire.py` (removed error prints from multiple functions)
-
----
-
-## Multi-Source Fallback System - IMPLEMENTED ✓
-
-### Feature (2026-01-01)
-Automatic fallback between multiple anime sources when one fails.
-
-### How It Works
-
-**Source Registration:**
-- Multiple plugins can be active simultaneously (animefire, animesonlinecc)
-- Each plugin registers itself in the repository
-- Sources are tried in parallel when extracting video URLs
-
-**Fallback Flow:**
-```
-Episode selected → Extract video URL from all sources in parallel →
-→ First successful source wins → If all fail, show clear error message
-```
-
-**Example Output:**
-```
-🔄 Tentando fontes: animefire, animesonlinecc
-❌ animefire falhou: Unable to locate element: [id="my-video_html5_api"]
-✅ Vídeo encontrado em: animesonlinecc
-```
-
-### Implementation Details
-
-**Error Handling** (`repository.py::search_player`):
-- `safe_plugin_call()` wrapper catches exceptions from plugins
-- Errors are logged but don't stop execution
-- Other sources continue attempting extraction
-- Returns None only if ALL sources fail
-
-**User Feedback:**
-- Shows which sources are being tried
-- Shows which source succeeded/failed
-- Shows first line of error (avoids huge stack traces)
-- Clear error message if no sources succeed
-
-**None Protection** (`main.py`, `core/anime_service.py`):
-- Checks if video URL is None before calling `play_video()`
-- Shows helpful error message suggesting retry or different episode
-- Returns to episode menu instead of crashing
-
-### Files Modified
-- `repository.py` (lines 540-555) - Added exception handling wrapper
-- `main.py` (lines 122-127) - Added None check and error message
-- `core/anime_service.py` (lines 641-646) - Added None check and error message
-- `plugins/animesonlinecc.py` - Restored from commit 40fae3e, updated to selectolax
-
-### Troubleshooting
-
-**One source always fails:**
-- Normal behavior if site structure changed
-- Other sources will automatically be tried
-- Error message shows which source failed and why
-
-**All sources fail:**
-- Episode may be unavailable on all sites
-- Try another episode or different anime
-- Check if sites are accessible via browser
-
-**Plugin not loading:**
-- Check `plugin_manager.py` for disabled plugins
-- Ensure plugin is in `plugins/` directory
-- Verify plugin has `load()` function
-
----
-
-## Video Quality Selection - IMPLEMENTED ✓
-
-### Feature (2026-01-01)
-Users can now select video quality before playback (720p, 480p, 360p, etc) for AnimeFire videos.
-
-### How It Works
-
-**AnimeFire Quality Detection** (primary method):
-1. **Page Inspection**: Uses Selenium to inspect episode page on AnimeFire
-2. **Quality Extraction**: Extracts available qualities from page controls (`<div class="video-ql">`)
-3. **Direct URLs**: Builds direct MP4 URLs from pattern: `https://lightspeedst.net/s5/mp4_temp/{anime}/{ep}/{quality}.mp4`
-4. **Quality Menu**: Shows available qualities with current quality marked
-5. **Direct Playback**: Passes MP4 URL directly to MPV (no yt-dlp needed)
-
-**Example Flow:**
-```
-Episode page URL → Selenium extracts qualities → User selects → Direct MP4 playback
-https://animefire.io/animes/shokuba/1 → [720p, 480p, 360p] → 720p → lightspeedst.net/.../720p.mp4
-```
-
-### Implementation Details
-
-**New Files:**
-- `plugins/animefire.py::extract_quality_options(url_episode)` - Extracts qualities from page
-- `video_player.py::select_quality_animefire(url, qualities)` - Quality selection menu
-- `repository.py::get_episode_url_and_source(anime, ep)` - Get episode URL and source name
-
-**Integration Points:**
-- `main.py` (line ~98): Detects AnimeFire source, extracts qualities, shows menu
-- `core/anime_service.py` (line ~617): Same integration for AniList flow
-
-**Quality Detection Process:**
-1. Selenium loads episode page (headless Firefox)
-2. Closes banner/popup if present
-3. Extracts current video source to get base URL
-4. Finds quality control elements (`id-720p`, `id-360p`, etc)
-5. Filters disabled qualities (have `text-gray` class)
-6. Returns list of available qualities with URLs
-
-**Testing:**
-```bash
-# Test quality extraction from page
-uv run --with selenium test_extract_qualities.py
-
-# Test full integration
-uv run test_quality_integration.py
-
-# Real usage
-uv run ani-tupi
-# → Select anime
-# → Select episode
-# → Quality menu appears automatically for AnimeFire
-```
-
-**Menu Behavior:**
-- Shows only available qualities (disabled ones filtered out)
-- Current quality marked with ▶️ marker
-- ESC/Voltar cancels and skips episode
-- Arrow keys to navigate, Enter to select
-
-**Fallback:**
-- If quality detection fails, falls back to `search_player()` async flow
-- Other sources (non-AnimeFire) still use original Blogger extraction
-
-### Troubleshooting
-
-**No qualities detected:**
-- Check Selenium/geckodriver installed: `sudo pacman -S firefox geckodriver`
-- AnimeFire may have changed page structure
-- Check console output for extraction errors
-
-**Quality menu slow:**
-- First load takes ~3-5s (Selenium page load + extraction)
-- Loading spinner shows "Detectando qualidades disponíveis..."
-- Browser runs headless (invisible)
-
-**Wrong quality plays:**
-- URL pattern may have changed on AnimeFire
-- Check browser Network tab for actual video URLs
-- Verify URL pattern in `extract_quality_options()`
-
-**Banner blocks extraction:**
-- Function tries common close selectors automatically
-- If banner persists, may need to update close selectors in code
-
----
-
-## Blogger Video URLs & yt-dlp Integration - SOLVED ✓
-
-### Issue (2026-01-01)
-MPV was failing to play videos from AnimeFire with exit code 2. URLs were from Blogger with temporary tokens.
-
-### Root Cause
-1. **Video URL caching** - URLs with temporary tokens were being cached and reused after expiration
-2. **yt-dlp missing** - MPV requires yt-dlp to process Blogger video pages
-3. **Manual extraction attempted** - Tried extracting VIDEO_CONFIG from Blogger pages, but tokens expired during processing
-
-### Solution Implemented (2026-01-01)
-
-**1. Installed yt-dlp:**
-```bash
-sudo pacman -S yt-dlp
-```
-
-**2. Disabled video URL caching** (`repository.py` lines 513-515, 551-553):
-- Removed cache lookup for video URLs (tokens expire too quickly)
-- Only episode lists are cached, not video stream URLs
-- This prevents playback failures from expired cached URLs
-
-**3. Removed manual Blogger extraction** (`plugins/animefire.py` lines 195-200):
-- Pass Blogger URLs directly to MPV
-- yt-dlp processes URLs in real-time (no delay = no expiration)
-- Much more reliable than manual extraction
-
-**4. Added VLC fallback** (`video_player.py` lines 45-73):
-- If MPV fails (exit code 2), automatically tries VLC
-- Removed `check=True` to prevent exceptions on non-zero exit codes
-- Always asks user if they watched until the end (regardless of exit code)
-
-### How It Works Now
-```
-Selenium extracts iframe URL (2-3s)
-  → Passes Blogger URL directly to MPV
-  → MPV calls yt-dlp automatically
-  → yt-dlp extracts stream in real-time
-  → Video plays ✅
-```
-
-### Test Results
-- ✅ **Dan Da Dan Ep 1**: Works perfectly (yt-dlp processes successfully)
-- ❌ **Wotaku Ep 1**: "Video is unavailable" on Blogger (not our fault - video removed from source)
-
-**UPDATE (2026-01-01 - Evening):**
-Fixed critical bug preventing yt-dlp integration:
-- **Bug**: `--ytdl-raw-options=concurrent-fragments=3-5` was invalid (yt-dlp expects integer, not range)
-- **Error**: `yt-dlp: error: option --concurrent-fragments: invalid integer value: '3-5'`
-- **Fix**: Changed to `concurrent-fragments=5` in `video_player.py` line 252
-- **Impact**: MPV can now properly invoke yt-dlp to process Blogger URLs
-
-### Verification
-Test with fresh URLs:
-```bash
-uv run test_real_flow.py  # Simulates complete flow with yt-dlp
-```
-
-### Important Notes
-- **Some videos will be unavailable** - this is expected (content removed from AnimeFire/Blogger)
-- **Always test with different anime/episodes** if one fails
-- **Cache cleared**: `rm ~/.local/state/ani-tupi/scraper_cache.json` if needed
-- **yt-dlp handles tokens automatically** - no manual extraction needed
-
-### Files Modified
-- `repository.py` - Disabled video URL caching
-- `plugins/animefire.py` - Removed manual Blogger extraction
-- `video_player.py` - Added VLC fallback, better error handling
-- `test_real_flow.py`, `test_ytdlp.py` - Debug/test scripts
-
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Quick Start Commands
 
-ani-tupi is a terminal-based anime/manga streaming application in Brazilian Portuguese that follows a **modular architecture**:
+All commands use **UV** for Python package management (never pip):
 
-- **Core Services** (`core/`): Business logic and external API integrations
-  - `core/anilist_service.py` - AniList GraphQL client
-  - `core/history_service.py` - Watch history management
-- **UI Layer** (`ui/`): User interface components and menus
-  - `ui/components.py` - Reusable menu widgets (Rich + InquirerPy)
-  - `ui/anilist_menus.py` - AniList browsing interface
-- **Data Layer**: Singleton data store and models
-  - `repository.py` - Central data store managing anime/episode/video URL mappings
-  - `models.py` - Pydantic models for type-safe data
-  - `config.py` - Centralized configuration
-- **Plugin System** (`loader.py` + `plugins/*`): Extensible scraper system for anime sources
-- **Entry Points**:
-  - `cli.py` - Main CLI entry point for ani-tupi
-  - `manga_tupi.py` - Manga mode entry point
-  - `main.py` - Legacy controller (to be refactored)
+```bash
+# Install dependencies
+uv sync
+
+# Run ani-tupi
+uv run ani-tupi              # Interactive menu
+uv run ani-tupi -q "search"  # Search directly
+
+# Run tests
+uv run pytest                # All tests
+uv run pytest tests/test_repository.py::TestClass::test_method  # Specific test
+
+# Add dependencies (use instead of modifying pyproject.toml)
+uv add package-name          # Add runtime dependency
+uv add --dev pytest-plugin   # Add dev dependency
+
+# Lint code
+uvx ruff check .
+uvx ruff format .
+```
+
+**Important:** Always use UV, never pip or direct Python commands. For standalone scripts: `uv run --with package1 --with package2 script.py`
+
+---
+
+## Architecture Overview
+
+ani-tupi uses **MVCP (Model-View-Controller-Plugin)** architecture:
+
+### Core Layers
+
+1. **Models Layer** (`models/`)
+   - `config.py` - Pydantic v2 settings management (OS-specific paths, AniList, cache)
+   - `models.py` - Data classes: `AnimeMetadata`, `EpisodeData`, `MangaMetadata`
+   - Central source of truth for data structures
+
+2. **Services Layer** (`services/`)
+   - `repository.py` - Singleton containing scraped data, title mappings, and search results
+   - `anilist_service.py` - GraphQL API client for AniList OAuth + list operations
+   - `history_service.py` - Persistence: anime/manga watch history (JSON files in `~/.local/state/ani-tupi/`)
+   - `anime_service.py` - Business logic: search, episode caching, player control
+   - `manga_service.py` - MangaDex API client for manga reading
+
+3. **Scrapers** (`scrapers/`)
+   - `loader.py` - Plugin system: discovers and loads scraper plugins from `plugins/` directory
+   - `plugins/` - Individual scrapers (animefire, animesonlinecc) implementing `PluginInterface`
+   - Plugins inherit `PluginInterface` and register with Repository on load
+   - Selenium + geckodriver for dynamic site rendering
+
+4. **UI Layer** (`ui/`)
+   - `components.py` - Reusable Rich + InquirerPy components (menus, input, progress)
+   - `anilist_menus.py` - AniList-specific UI (list navigation, account info)
+   - Rich for styling, InquirerPy for interactive selection
+
+5. **Commands** (`commands/`)
+   - `anime.py` - Main anime search/watch flow
+   - `anilist.py` - AniList menu navigation and auth
+   - `manga.py` - Manga search/read flow
+   - `sources.py` - Manage active scraper sources
+
+### Data Flow
+
+```
+User Input (menu/CLI)
+    ↓
+Command Handler (commands/anime.py, etc)
+    ↓
+Service Layer (anime_service.py)
+    ↓
+Repository (singleton, holds search state)
+    ↓
+Plugin System (scrapers/loader.py loads plugins)
+    ↓
+Individual Scrapers (plugins/) → websites
+    ↓
+Models (AnimeMetadata, EpisodeData)
+    ↓
+Persistence (history_service.py) → ~/.local/state/ani-tupi/
+```
+
+### Key Design Patterns
+
+- **Singleton Repository** - Single source of truth for anime data (in `services/repository.py:13-28`)
+- **Plugin Interface** - All scrapers must implement `PluginInterface` with `search()`, `get_episodes()`, `get_stream_url()`
+- **Pydantic Models** - Centralized validation via `models.py`
+- **Config via Settings** - `models/config.py` handles all environment variables with defaults
+- **DiskCache** - `diskcache` library for SQLite-backed scraper cache (better than old JSON approach)
+
+---
 
 ## Development Commands
 
 ### Running the Application
 
 ```bash
-# Development mode (no installation)
-uv run ani-tupi                      # Run anime mode
-uv run manga-tupi                    # Run manga mode
-uv run main.py --debug               # Debug mode (skips video playback)
-uv run main.py -q "dandadan"         # Direct search query
-uv run main.py --continue-watching   # Resume last watched
+# Development mode - run without global installation
+uv run ani-tupi
 
-# Cache management
-uv run ani-tupi --clear-cache        # Clear all cache
-uv run ani-tupi --clear-cache "Dandadan"  # Clear cache for specific anime
+# With debug output
+uv run main.py --debug
 
-# AniList integration
-uv run ani-tupi anilist auth         # Authenticate with AniList
-uv run ani-tupi anilist              # Browse AniList lists (trending, watching, etc)
+# Direct query search
+uv run main.py -q "dandadan"
 
-# Install as global CLI tool (recommended for testing)
-python3 install-cli.py               # Installs to ~/.local/bin/
-ani-tupi                             # Use globally after install
-
-# Uninstall global CLI
-uv tool uninstall ani-tupi
+# Continue last watched
+uv run main.py -c
 ```
 
-### Dependency Management
-
-```bash
-# Install/sync dependencies
-uv sync                              # Install all dependencies
-
-# Add new dependency
-uv add package-name                  # NEVER edit pyproject.toml directly
-
-# Add dev dependency
-uv add --dev package-name
-```
-
-### Code Linting
-
-```bash
-# Run ruff linter
-uvx ruff check .
-
-# Auto-fix issues
-uvx ruff check --fix .
-
-# Format code
-uvx ruff format .
-```
-
-**Ruff Configuration:**
-The project uses a custom ruff configuration in `pyproject.toml` that ignores less critical rules while maintaining code quality. The configuration is tailored for this codebase's pragmatic approach to linting:
-
-- **Ignored rules include**: Overly strict docstring requirements (D107, D205, D401), complexity metrics (C901, PLR*), type annotation requirements (ANN*), and security checks that don't apply to this use case (S603, S607 for mpv subprocess calls).
-- **Line length**: Set to 100 characters (more flexible than the default 88).
-- **Key fixes applied**: Changed `open()` to `Path.open()` where practical, removed commented-out code, improved docstring formatting.
-
-If you encounter new lint errors, consider whether they represent real issues or if the rule should be added to the ignore list in `pyproject.toml`.
-
-### Running Tests
+### Testing
 
 ```bash
 # Run all tests
-uv run pytest
-
-# Run with verbose output
 uv run pytest -v
 
-# Run with coverage report
+# Run unit tests only
+uv run pytest -m unit
+
+# Run integration tests
+uv run pytest -m integration
+
+# Run E2E tests (slower, realistic)
+uv run pytest -m e2e
+
+# Run single test file
+uv run pytest tests/test_repository.py -v
+
+# Run single test method
+uv run pytest tests/test_repository.py::TestClass::test_method -v
+
+# With coverage report
 uv run pytest --cov=. --cov-report=term-missing
 
-# Run specific test file
-uv run pytest tests/test_models.py -v
+# Show output + verbose
+uv run pytest -v -s
 
-# Run specific test by name pattern
-uv run pytest -k "test_save" -v
-
-# Run in parallel (faster)
+# Run parallel (faster)
 uv run pytest -n auto
 ```
 
-**Test Structure:**
-- **Unit Tests:** `tests/test_*.py` - Fast, isolated tests for individual modules
-- **Integration Tests:** Multiple files prefixed with `test_*_integration.py`
-- **E2E Tests:** `tests/test_e2e_*.py` - Complete workflow tests
-- **Documentation:** `tests/README.md` - Full testing guide
-
-**Test Suite Coverage (155+ tests):**
-- Models validation (`test_models.py` - 10+ tests)
-- Configuration (`test_config.py` - 10+ tests)
-- Plugin loading (`test_plugin_loader.py` - 10+ tests)
-- AniList service (`test_anilist_service.py` - 12+ tests)
-- Search workflows (`test_e2e_search.py` - 5+ tests)
-- Video extraction (`test_e2e_video_extraction.py` - 5+ tests)
-- AniList integration (`test_e2e_anilist.py` - 4+ tests)
-
-See `tests/README.md` for comprehensive testing documentation.
-
-### Installing as CLI Tool
+### Code Quality
 
 ```bash
-# Recommended: Install globally using install-cli.py
-python3 install-cli.py               # Installs to ~/.local/bin/ via uv tool install
-ani-tupi                             # Use globally after install
+# Check style with Ruff
+uvx ruff check .
 
-# Uninstall
+# Auto-fix style issues
+uvx ruff format .
+
+# Check specific file
+uvx ruff check services/repository.py
+
+# View full diagnostic
+uvx ruff check . --show-files
+```
+
+### Building & Installation
+
+```bash
+# Install as global CLI (development)
+uv tool install --force .
+
+# Uninstall global CLI
 uv tool uninstall ani-tupi
 
-# Force reinstall (after code changes)
-uv tool install --reinstall .        # Required to pick up source code changes
+# Build standalone executable
+uv run build.py
+
+# The executable appears in dist/ folder
 ```
 
-### Common Issues
+---
 
-**FileNotFoundError when running from outside project directory:**
-- **Problem**: `loader.py` uses `get_resource_path()` to locate plugins
-- **Root cause**: Using `abspath(".")` returns current working directory, not installation path
-- **Solution**: Changed to `dirname(abspath(__file__))` which returns the module's install location
-- **After fixing**: Must use `uv tool install --reinstall .` to rebuild the package (UV caches builds)
-
-**Video player won't open when selecting an episode:**
-- **Problem**: App shows "Buscando vídeo..." but player never launches; goes straight to "Did you watch to the end?" prompt
-- **Root cause**: `geckodriver` is missing. The animefire plugin uses Selenium + Firefox to extract video URLs, and Selenium requires geckodriver
-- **Solution**: Install geckodriver via `sudo pacman -S geckodriver` (or via Omarchy GUI: `Super + Alt + Space → Install > Package`)
-- **Verification**: Run `which geckodriver && geckodriver --version` to confirm installation
-- **Also fixed**: Added error handling in `repository.py::search_player()` to prevent IndexError when video URL extraction fails
-
-## Configuration Management
-
-### Pydantic Configuration (`config.py`)
-
-As of 2025-12-31, ani-tupi uses **Pydantic v2** for runtime type validation and centralized configuration.
-
-**Key Features:**
-- **Type Safety**: Runtime validation of all configuration values
-- **Centralized Settings**: Single source of truth in `config.py` instead of scattered magic numbers
-- **Environment Variable Support**: Override settings via `ANI_TUPI__*` env vars
-- **OS-Aware Paths**: Single `get_data_path()` replaces duplicated platform-specific logic
-- **Validation**: Invalid config values raise clear errors on startup
-
-**Available Settings:**
-
-```python
-from config import settings
-
-# AniList API
-settings.anilist.api_url         # GraphQL endpoint (default: graphql.anilist.co)
-settings.anilist.auth_url        # OAuth authorization URL
-settings.anilist.client_id       # Public OAuth client ID
-settings.anilist.token_file      # Path to access token (auto-resolved OS path)
-
-# Cache
-settings.cache.duration_hours    # Cache validity (1-72 hours, default 6)
-settings.cache.cache_file        # Path to cache JSON (auto-resolved OS path)
-
-# Search
-settings.search.progressive_search_min_words  # Min words for progressive search (1-10, default 2)
-```
-
-**Environment Variable Override:**
-
-```bash
-# Override any setting with ANI_TUPI__SECTION__SETTING=value
-export ANI_TUPI__SEARCH__FUZZY_THRESHOLD=85
-export ANI_TUPI__CACHE__DURATION_HOURS=12
-export ANI_TUPI__ANILIST__CLIENT_ID=12345
-
-uv run ani-tupi  # Uses custom config
-```
-
-**Local Development (.env file):**
-
-```bash
-# Copy .env.example to .env and customize
-cp .env.example .env
-# Edit .env with your settings
-uv run ani-tupi  # Automatically loads .env
-```
-
-**Path Resolution:**
-
-```python
-from config import get_data_path
-
-path = get_data_path()  # ~/.local/state/ani-tupi (Linux/macOS)
-                        # C:\Program Files\ani-tupi (Windows)
-```
-
-All config-aware modules import `settings` from `config.py`:
-- `repository.py` - Uses progressive_search_min_words
-- `core/anilist_service.py` - Uses API URLs, client_id, token_file
-- `scraper_cache.py` - Uses cache_file and duration_hours
-- `main.py`, `ui/anilist_menus.py`, `core/history_service.py` - Use get_data_path() for history/mappings
-
-### Data Models (`models.py`)
-
-Pydantic models for structured data validation:
-
-```python
-from models import AnimeMetadata, EpisodeData, VideoUrl
-
-# AnimeMetadata: Anime from scraper
-anime = AnimeMetadata(
-    title="Dandadan",
-    url="https://example.com/dandadan",
-    source="animefire",
-    params=None  # Optional scraper params
-)
-
-# EpisodeData: Episode list (validates title/URL length match)
-episodes = EpisodeData(
-    anime_title="Dandadan",
-    episode_titles=["Ep1", "Ep2"],
-    episode_urls=["url1", "url2"],
-    source="animefire"
-)
-
-# VideoUrl: Playback URL with optional headers
-video = VideoUrl(
-    url="https://example.com/stream.m3u8",
-    headers={"User-Agent": "Mozilla/5.0"}
-)
-```
-
-## Architecture Deep Dive
-
-### Module Organization (as of 2026-01-02)
-
-The codebase is now organized into a clean, modular folder-based structure with clear separation of concerns:
+## Project Structure Reference
 
 ```
 ani-tupi/
-├── main.py                      # Single unified CLI entry point
-├── manga_tupi.py                # Manga mode entry point (imported by commands/manga.py)
-├── plugin_manager.py            # Plugin preference management
-│
-├── commands/                    # Command handlers (new routing layer)
-│   ├── __init__.py
-│   ├── anime.py                 # Anime search & playback
-│   ├── anilist.py               # AniList menu & sync
-│   ├── manga.py                 # Manga reader
-│   └── sources.py               # Plugin management
-│
-├── services/                    # Business logic layer (organized)
-│   ├── __init__.py
-│   ├── anime_service.py         # [moved from core/]
-│   ├── anilist_service.py       # [moved from core/]
-│   ├── history_service.py       # [moved from core/]
-│   ├── manga_service.py         # Manga business logic
-│   └── repository.py            # Central data store
-│
-├── utils/                       # Utilities (consolidated)
-│   ├── __init__.py
-│   ├── video_player.py          # MPV integration
-│   ├── scraper_cache.py         # SQLite caching
-│   ├── cache_manager.py         # Cache operations
-│   └── anilist_discovery.py     # AniList ID discovery
-│
-├── scrapers/                    # Plugin system (organized)
-│   ├── __init__.py
-│   ├── loader.py                # Plugin discovery & loading
-│   └── plugins/                 # Plugin implementations
+├── main.py                 # CLI entry point, routes commands
+├── models/
+│   ├── config.py          # Pydantic settings (environment variables, paths)
+│   └── models.py          # Data classes: AnimeMetadata, EpisodeData, etc
+├── services/
+│   ├── repository.py      # CORE: Singleton holding all search data
+│   ├── anilist_service.py # GraphQL client for AniList API
+│   ├── history_service.py # Save/load watch history JSON
+│   ├── anime_service.py   # Business logic: search, caching, playback
+│   └── manga_service.py   # MangaDex API client
+├── scrapers/
+│   ├── loader.py          # Plugin loader system
+│   └── plugins/
 │       ├── animefire.py
 │       └── animesonlinecc.py
-│
-├── models/                      # Data models (organized)
-│   ├── __init__.py
-│   ├── models.py                # Pydantic data models
-│   └── config.py                # Centralized configuration
-│
-├── ui/                          # User interface layer
-│   ├── __init__.py
-│   ├── components.py            # Reusable menu widgets
-│   └── anilist_menus.py         # AniList browsing interface
-│
-└── tests/                       # Testing (unchanged structure)
+├── commands/              # Command handlers (CLI routes)
+│   ├── anime.py
+│   ├── anilist.py
+│   └── manga.py
+├── ui/
+│   ├── components.py      # Rich + InquirerPy components
+│   └── anilist_menus.py   # AniList UI
+├── utils/
+│   ├── cache_manager.py   # Cache operations
+│   └── anilist_discovery.py  # Fuzzy matching anime titles
+├── tests/
+│   ├── conftest.py        # Pytest fixtures
+│   ├── test_repository.py
+│   ├── test_anilist_service.py
+│   └── ... (other test files)
+├── pyproject.toml         # Dependencies (use 'uv add' to modify)
+└── .github/workflows/     # CI/CD automation
+
+Data Storage (persistent):
+~/.local/state/ani-tupi/
+├── anime_history.json     # Watch history
+├── manga_history.json     # Manga read history
+├── cache/                 # DiskCache SQLite cache
+└── anilist_token.json     # AniList OAuth token
 ```
 
-**Dependency Rules:**
-- `main.py` routes to `commands/` handlers
-- `commands/` imports from `services/`, `ui/`, `utils/`
-- `services/` imports from `models/`, `utils/`, `scrapers/`
-- `utils/` imports from `services/` (late imports to avoid cycles)
-- `scrapers/` imports from `models/`, `services/`
-- All imports to `ui/` are last (UI doesn't import services)
+---
 
-**Key Improvements:**
-- **Single entry point:** `main.py` consolidates `cli.py` + `main.py` + `manga_tupi.py` logic
-- **Clear routing:** Each `commands/` file handles one user flow
-- **Organized utilities:** All utilities grouped in `utils/`
-- **Better discovery:** Plugin system under `scrapers/`
-- **No scattered files:** Root directory only has 3 files (main.py, manga_tupi.py, plugin_manager.py)
+## Important Architecture Details
 
-### TUI System (Rich + InquirerPy)
+### Repository (Singleton)
 
-**Architecture:** As of 2025-12-31, the TUI has been refactored from Textual to Rich + InquirerPy for better performance and simplicity.
+Located in `services/repository.py` lines 13-28:
 
-**Core Components:**
-- `ui/components.py` - Interactive menus using InquirerPy (arrow keys, ESC, Q) + loading spinners using Rich
-- `ui/anilist_menus.py` - AniList browsing interface
+- **Only one instance exists per session** - manages all search state
+- Stores:
+  - `sources` - registered plugin names
+  - `anime_to_urls` - anime title → list of source URLs
+  - `anime_episodes_titles` - cached episode names per anime
+  - `anime_episodes_urls` - cached video URLs per episode
+  - `norm_titles` - normalized title → original title mapping
+  - `anime_to_anilist_id` - anime title → AniList ID (for caching)
 
-**Key Features:**
-- **Stateless Functions**: No app instances, functions return immediately
-- **Loading Indicators**: Spinners show during API calls (search, episode fetch, video URL discovery)
-- **Catppuccin Mocha Theme**: Purple (#cba6f7) highlights, dark background (#1e1e2e)
-- **Keyboard Navigation**: Arrows to navigate, Enter to select, ESC to go back, Q to quit
-- **Fuzzy Search**: Always enabled - type to filter options instantly in any menu
-
-**Performance:**
-- Menu transitions: ~50ms (was ~500ms with Textual)
-- No flickering or app recreation
-- Code reduced by 65% (527 lines → 175 lines in menu.py)
-
-**Adding Loading Spinners to New Code:**
-```python
-from ui.components import loading
-
-# Wrap slow operations with spinner
-with loading("Buscando animes..."):
-    rep.search_anime(query)
-
-# Spinner automatically disappears when done
-```
-
-**Using Menus with Search:**
-```python
-from ui.components import menu, menu_navigate
-
-# Basic menu (fuzzy search enabled by default)
-selected = menu(["Option 1", "Option 2"], "Choose")
-
-# Navigation menu (fuzzy search enabled by default)
-selected = menu_navigate(["Item 1", "Item 2"], "Select")
-
-# Disable search if needed (use arrow keys only)
-selected = menu(options, "Choose", enable_search=False)
-
-# Fuzzy search is ALWAYS enabled by default:
-# - Type to filter options (fuzzy matching)
-# - Arrow keys to navigate filtered results
-# - ESC to go back, Q to quit
-```
-
-### Application Flow (Anime Mode)
-
-```
-CLI → Plugin Loading → Search Anime → Select Anime → Get Episodes →
-→ Select Episode → [Video Playback Loop: Get URL → Play → Save History → Next/Previous/Exit]
-```
-
-**Critical: Video URL Discovery** uses async race pattern (`repository.py::search_player`):
-- Runs all plugins in parallel using `asyncio.wait(return_when=FIRST_COMPLETED)`
-- Returns first successful video URL
-- Uses container/event pattern to prevent race conditions
+- Called by: `anime_service.py` for search operations
+- Must be cleared between searches: `repo.clear_search_results()`
 
 ### Plugin System
 
-**Creating a New Plugin:**
+Located in `scrapers/loader.py`:
 
-1. Create `plugins/yourplugin.py`
-2. Implement `PluginInterface` (ABC from `loader.py`):
+- Discovers all `.py` files in `scrapers/plugins/` directory
+- Each plugin must implement:
+  ```python
+  class MyPlugin(PluginInterface):
+      name: str  # unique identifier
+      def search(self, query: str) -> list[AnimeMetadata]
+      def get_episodes(self, anime: AnimeMetadata) -> list[EpisodeData]
+      def get_stream_url(self, episode: EpisodeData) -> str
+  ```
+- On startup: `loader.load_plugins()` registers all plugins with Repository
+- Usage: `anime_service.py` searches all registered plugins in parallel using ThreadPoolExecutor
+
+### Configuration System
+
+Located in `models/config.py`:
+
+- **Pydantic v2 BaseSettings** - automatically reads environment variables
+- Env var format: `ANI_TUPI__SECTION__KEY` (double underscore)
+- Examples:
+  ```bash
+  ANI_TUPI__ANILIST__CLIENT_ID=12345
+  ANI_TUPI__CACHE__DURATION_HOURS=48
+  ANI_TUPI__MANGA__OUTPUT_DIRECTORY=~/Mangas
+  ```
+- OS-specific data paths:
+  - Linux/macOS: `~/.local/state/ani-tupi/`
+  - Windows: `C:\\Program Files\\ani-tupi`
+- Import in code: `from models.config import settings`
+
+### AniList Integration
+
+Located in `services/anilist_service.py`:
+
+- OAuth flow: opens browser for user to authorize, stores token
+- GraphQL queries for trending, user lists (Watching, Planning, Completed), status updates
+- Token stored at: `~/.local/state/ani-tupi/anilist_token.json`
+- Fuzzy matching to find AniList entries when searching via scraper
+
+### Cache System
+
+Located in `services/anime_service.py`:
+
+- **Episode Cache** - stores list of episodes for each anime per source
+- **Scraper Cache** - stores anime search results
+- **Backed by DiskCache** - SQLite-based, more reliable than JSON
+- Cache location: `~/.local/state/ani-tupi/cache/`
+- Duration: configurable via `ANI_TUPI__CACHE__DURATION_HOURS`
+
+---
+
+## Testing Guidelines
+
+### Test Organization
+
+All tests in `tests/` folder. Three categories marked with pytest marks:
+
+- **Unit** (`@pytest.mark.unit`) - fast, no external calls
+- **Integration** (`@pytest.mark.integration`) - component interactions, mocked APIs
+- **E2E** (`@pytest.mark.e2e`) - full workflows, minimal mocking
+
+### Test Files Overview
+
+| File | Type | Coverage |
+|------|------|----------|
+| `test_repository.py` | Unit | Singleton behavior, anime storage, title normalization |
+| `test_models.py` | Unit | Pydantic models validation |
+| `test_config.py` | Unit | Configuration loading and defaults |
+| `test_history_service.py` | Unit | History JSON persistence |
+| `test_plugin_loader.py` | Integration | Plugin discovery and registration |
+| `test_anilist_service.py` | Integration | GraphQL queries (mocked API) |
+| `test_repository_integration.py` | Integration | Repository + plugins together |
+| `test_e2e_search.py` | E2E | Full search → select → cache flow |
+| `test_e2e_anilist.py` | E2E | AniList menu + playback flow |
+
+### Common Test Fixtures (in `conftest.py`)
+
+```python
+repo_fresh           # Fresh Repository instance
+sample_anime_dandadan  # Test anime metadata
+sample_episodes_dandadan  # Test episode list
+mock_anilist_response_trending  # Mock API response
+temp_history_file    # Temporary JSON file for tests
+```
+
+### When Adding New Code
+
+1. Add corresponding test file: `tests/test_new_module.py`
+2. Add docstring explaining coverage
+3. Aim for >70% coverage on new module
+4. Use existing fixtures when possible
+5. Run locally: `uv run pytest -v` before pushing
+
+---
+
+## Common Tasks
+
+### Adding a New Scraper Plugin
+
+1. Create file: `scrapers/plugins/my_scraper.py`
+2. Implement `PluginInterface`:
    ```python
-   class YourPlugin(PluginInterface):
-       name = "yourplugin"
-       languages = ["pt-br"]
+   from scrapers.loader import PluginInterface
+   from models.models import AnimeMetadata, EpisodeData
 
-       @staticmethod
-       def search_anime(query: str) -> None:
-           # Scrape search results
-           # Call: rep.add_anime(title, url, YourPlugin.name)
+   class MyPlugin(PluginInterface):
+       name = "my_scraper"
 
-       @staticmethod
-       def search_episodes(anime: str, url: str, params) -> None:
-           # Scrape episode list
-           # Call: rep.add_episode_list(anime, titles, urls, YourPlugin.name)
+       def search(self, query: str) -> list[AnimeMetadata]:
+           # Return list of AnimeMetadata with url, title, etc
+           pass
 
-       @staticmethod
-       def search_player_src(url_episode: str, container: list, event: asyncio.Event) -> None:
-           # Extract video URL (m3u8/mp4)
-           # If found: container.append(url) and event.set()
+       def get_episodes(self, anime: AnimeMetadata) -> list[EpisodeData]:
+           # Return list of EpisodeData with urls, numbers, titles
+           pass
 
-   def load(languages_dict):
-       if "pt-br" in languages_dict:
-           rep.register(YourPlugin)
+       def get_stream_url(self, episode: EpisodeData) -> str:
+           # Return video URL (mpv will play it)
+           pass
    ```
+3. Plugin auto-loads on startup via `loader.load_plugins()`
+4. Add tests: `tests/test_my_scraper.py`
 
-3. Plugin auto-discovered on next run (no registration needed)
+### Adding Configuration Option
 
-**Plugin Discovery:**
-- `loader.py::load_plugins()` scans `plugins/` directory
-- Excludes `__init__.py` and `utils.py`
-- Only loads plugins matching requested languages (default: `["pt-br"]`)
+1. Edit `models/config.py` - add new field to appropriate Settings class
+2. Use Pydantic Field with defaults and validators
+3. Access in code: `from models.config import settings; settings.your_new_field`
+4. Can override via env var: `ANI_TUPI__SECTION__FIELD_NAME=value`
+5. Add test in `tests/test_config.py`
 
-### Repository Pattern (Singleton)
+### Modifying Data Models
 
-`repository.py` maintains central data structures:
+1. Edit `models/models.py`
+2. Update Pydantic model with new fields
+3. Add validation if needed
+4. Update any code that constructs these models
+5. Add/update tests in `tests/test_models.py`
 
-```python
-self.sources = dict()                           # {plugin_name: PluginClass}
-self.anime_to_urls = defaultdict(list)          # {title: [(url, source, params)]}
-self.anime_episodes_titles = defaultdict(list)  # {anime: [[title_list]]}
-self.anime_episodes_urls = defaultdict(list)    # {anime: [(url_list, source)]}
-self.norm_titles = dict()                       # {title: normalized_title}
-```
+### Adding New Command
 
-**Fuzzy Matching Logic:**
-- Normalizes titles (removes accents, punctuation, "temporada" → "season")
-- Uses `fuzzywuzzy.fuzz.ratio()` with 95% threshold
-- Deduplicates similar anime across sources (e.g., "Dan Da Dan" vs "DanDaDan")
+1. Create handler in `commands/new_command.py`
+2. Import and route in `main.py:cli()` function
+3. Call `repo = Repository()` if you need search data
+4. Use components from `ui/components.py` for menus
+5. Add tests in `tests/test_e2e_new_command.py`
 
-**Parallel Execution:**
-- `search_anime()`: ThreadPool across all plugins (workers = min(num_plugins, cpu_count))
-- `search_episodes()`: One thread per source
-- `search_player()`: Asyncio race pattern (returns first result)
+---
 
-### Video Playback
+## Debugging Tips
 
-`video_player.py` is minimal:
-```python
-subprocess.run(["mpv", url, "--fullscreen", "--cursor-autohide-fs-only", "--log-file=log.txt"])
-```
+### Enable Debug Output
 
-**Dependencies:**
-- Requires `mpv` on system PATH
-- Requires `firefox` for Selenium scrapers
-- Supports snap Firefox via `/snap/bin/geckodriver`
-
-### History System
-
-**Location:** `~/.local/state/ani-tupi/history.json` (Linux/macOS) or `C:\Program Files\ani-tupi\` (Windows)
-
-**Format:**
-```json
-{
-    "Anime Title": [timestamp, episode_index]
-}
-```
-
-**Continue Watching Flow:**
-1. Read history.json
-2. Display menu with last watched episode: "Anime (Ultimo episódio assistido N)"
-3. Strip suffix before lookup, jump to saved episode
-
-### Curses TUI (`menu.py`)
-
-**Color Scheme:**
-- Pair 1: Black on Yellow (selected)
-- Pair 2: Yellow on Black (title/normal)
-
-**Features:**
-- Arrow key navigation with viewport scrolling
-- Auto-appends "Sair" (Exit) option
-- Wraps around (first ↔ last)
-- Handles terminal resize via `screen_height - 2`
-
-## Build System Details
-
-### Two Distribution Methods
-
-1. **CLI Tool (Recommended):** `python3 install-cli.py` → Installs to `~/.local/bin/` via `uv tool install`
-2. **Development Mode:** `uv run ani-tupi` → No installation required
-
-### Plugin Loading
-
-All plugin loading uses `get_resource_path()` helper in `loader.py` to handle different execution contexts (development vs installed).
-
-### Cross-Platform Considerations
-
-**Windows-specific:**
-- `windows-curses` dependency (conditional in pyproject.toml)
-- UTF-8 encoding reconfiguration in main.py
-- Different history path: `C:\Program Files\ani-tupi\`
-
-**Snap Firefox Detection:**
-```python
-def is_firefox_installed_as_snap() -> bool:
-    result = subprocess.run(["snap", "list", "firefox"], capture_output=True)
-    return result.returncode == 0
-```
-
-## Common Modification Scenarios
-
-### Adding a New Anime Source
-
-1. Create `plugins/newsource.py` implementing `PluginInterface`
-2. Set `name` and `languages = ["pt-br"]`
-3. Implement three static methods (search_anime, search_episodes, search_player_src)
-4. Add `load()` function calling `rep.register(YourClass)`
-5. Test: `uv run main.py --debug -q "test anime"`
-
-**Note:** Use Selenium + BeautifulSoup pattern from existing plugins (animefire.py, animesonlinecc.py)
-
-### Changing UI Colors
-
-Edit `menu.py::menu()` function:
-```python
-curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_YELLOW)  # Selected
-curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)  # Normal
-```
-
-### Modifying Video Player Behavior
-
-Edit `video_player.py::play_video()`:
-- Add MPV flags to subprocess.run() command
-- Example: Add `"--sub-auto=fuzzy"` for auto-subtitle loading
-
-### Adding New Data Fields
-
-1. Add to Repository class in `repository.py` (likely a new `defaultdict`)
-2. Create getter/setter methods
-3. Update plugins to populate the data via repository methods
-
-## Debug Mode
-
-**Flag:** `--debug` or environment variable check in main.py
-
-**Effects:**
-- Skips actual video playback (`video_player.py` returns immediately)
-- Useful for testing search/episode extraction without MPV
-- Logs still written to `log.txt`
-
-**Usage:**
 ```bash
-uv run main.py --debug -q "anime name"
+uv run main.py --debug  # Sets logging level to DEBUG
 ```
 
-## AniList Integration
+### Inspect Repository State
 
-### Overview
-
-AniList.co integration allows users to:
-- Browse trending anime
-- Access their watch lists (Watching, Planning, Completed, etc)
-- Automatically sync progress after watching episodes
-- Get personalized recommendations
-
-### Architecture
-
-**Files:**
-- `anilist.py` - GraphQL client for AniList API
-- `anilist_menu.py` - Curses menu for browsing AniList data
-- `main.py::anilist_anime_flow()` - Integration with normal playback flow
-
-**Flow:**
-```
-ani-tupi anilist → Menu (Trending/Lists) → Select Anime →
-→ Search in scrapers → Select Episode → Watch → Update AniList progress
-```
-
-### GraphQL Client (`anilist.py`)
-
-**Authentication:**
-- Uses OAuth implicit grant flow (no client secret needed)
-- Client ID: 21576 (public)
-- Token stored at `~/.local/state/ani-tupi/anilist_token.json`
-- Browser-based auth: Opens AniList.co, user copies token
-
-**Key Methods:**
+During development, add:
 ```python
-anilist_client.authenticate()                  # OAuth flow
-anilist_client.get_trending(per_page=50)       # Trending anime
-anilist_client.get_user_list("CURRENT")        # User's watching list
-anilist_client.update_progress(anime_id, ep)   # Sync progress
-anilist_client.search_anime(query)             # Search by title
+from services.repository import rep
+print(f"Anime found: {rep.get_anime_list()}")
+print(f"Active sources: {rep.get_active_sources()}")
 ```
 
-**Available List Types:**
-- `CURRENT` - Currently watching
-- `PLANNING` - Plan to watch
-- `COMPLETED` - Finished
-- `PAUSED` - On hold
-- `DROPPED` - Dropped
-- `REPEATING` - Rewatching
+### Test a Single Component
 
-### Menu System (`anilist_menu.py`)
-
-**Main Menu:**
-- Shows "Trending" always (no login required)
-- If logged in: Shows username + all list types
-- Uses same curses styling as main menu (yellow/black)
-
-**Anime List View:**
-- Displays anime with progress: `Title (3/12) ⭐85%`
-- Handles both trending (no progress) and user lists (with progress)
-- Returns `(anime_title, anilist_id)` tuple on selection
-
-### Integration with Scrapers
-
-**Title Matching:**
-1. User selects anime from AniList (e.g., "Dan Da Dan")
-2. `anilist_anime_flow()` searches scrapers using that title
-3. If multiple results, user picks correct match
-4. Normal episode selection flow continues
-5. After watching: Updates both local history AND AniList
-
-**Progress Sync:**
-- Happens automatically after each episode
-- Uses AniList ID to ensure correct anime
-- Silent on success, shows warning on failure
-- Non-blocking (doesn't interrupt playback if fails)
-
-### OAuth Setup
-
-**First-time auth:**
 ```bash
-ani-tupi anilist auth
-# 1. Browser opens to AniList.co
-# 2. User authorizes ani-tupi
-# 3. Redirected to: https://anilist.co/api/v2/oauth/pin?access_token=...
-# 4. User copies token and pastes into terminal
-# 5. Token validated and saved
+# Test just plugin loader
+uv run pytest tests/test_plugin_loader.py -v -s
+
+# Test repository with debug output
+uv run pytest tests/test_repository.py::TestClass -v -s --tb=short
 ```
 
-**Token persistence:**
-- Saved to `~/.local/state/ani-tupi/anilist_token.json`
-- Valid indefinitely (until user revokes)
-- No refresh needed (implicit grant)
+### Check Cache Contents
 
-### Adding AniList Features
+```python
+from models.config import settings
+import diskcache
+cache = diskcache.Cache(str(settings.cache.cache_dir))
+print(list(cache.keys())[:10])  # First 10 cache keys
+```
 
-**To add new GraphQL query:**
-1. Add method to `AniListClient` in `anilist.py`
-2. Define GraphQL query string
-3. Call `self._query(query, variables)`
-4. Handle response
+---
 
-**To add menu option:**
-1. Add to `anilist_menu.py::anilist_main_menu()`
-2. Create handler function (similar to `_show_anime_list()`)
-3. Return result or call `anilist_main_menu()` to loop
+## Known Patterns & Conventions
 
-## Key Files Reference
+### Naming Conventions
 
-**Entry Points:**
-- `cli.py` - NEW: Main CLI entry point (thin wrapper for now)
-- `manga_tupi.py` - Manga mode entry point (MangaDex API)
+- **Plugin names** - lowercase with underscores: `animefire`, `animesonlinecc`
+- **Models** - PascalCase: `AnimeMetadata`, `EpisodeData`
+- **Service classes** - PascalCase: `AniListService`, `HistoryService`
+- **Functions** - snake_case: `normalize_title()`, `get_anime_list()`
 
-**Core Services:**
-- `core/anilist_service.py` - AniList GraphQL API client
-- `core/history_service.py` - Watch history management (load/save/reset)
+### Import Organization
 
-**UI Layer:**
-- `ui/components.py` - Reusable menu widgets (menu, menu_navigate, loading)
-- `ui/anilist_menus.py` - AniList browsing interface
+Grouped in order:
+1. Standard library (`os`, `pathlib`, `typing`)
+2. External packages (`pydantic`, `requests`, `rich`)
+3. Local modules (`models.config`, `services.repository`)
 
-**Data & Business Logic:**
-- `main.py` - Legacy controller (contains most business logic - to be refactored)
-- `repository.py` - Singleton data store, search orchestration
-- `models.py` - Pydantic data models (AnimeMetadata, EpisodeData, VideoUrl)
-- `config.py` - Centralized configuration (Pydantic Settings)
+### Error Handling
 
-**Plugin System:**
-- `loader.py` - Plugin discovery and loading system
-- `plugins/animefire.py` - Example scraper plugin (animefire.plus)
-- `plugins/animesonlinecc.py` - Example scraper plugin (animesonlinecc.to)
+- Validation errors use Pydantic's `ValidationError`
+- File operations catch `FileNotFoundError` and create directories
+- Network failures caught and logged (don't crash app)
+- Ruff linter configured to allow bare `except` for scraping failures
 
-**Utilities:**
-- `video_player.py` - MPV subprocess wrapper
-- `install-cli.py` - Global CLI installer
-- `pyproject.toml` - Project configuration (dependencies, entry points)
+### Configuration Precedence
 
-## CI/CD (GitHub Actions)
+1. Environment variable (highest priority): `ANI_TUPI__CACHE__DURATION_HOURS=12`
+2. `.env` file in project root
+3. Hardcoded defaults in `models/config.py` (lowest priority)
 
-Located in `.github/workflows/`:
-- `ci.yml` - Fast validation on push/PR (syntax checks, dependency validation)
-- `build-test.yml` - Tests install-cli.py on multiple platforms
+---
 
-## Future Enhancement Ideas (from todo.txt)
+## CI/CD & Deployment
 
-- Watch lists implementation
-- Switch to pytermgui for richer TUI (better than curses)
-- Use python-mpv for programmatic video control
-- AI recommendation system (Gemini/LLaMA)
-- Cython optimization for repository/model layer
+### GitHub Actions
+
+- **On push/PR:** Runs `uv sync` → `pytest --cov`
+- **Build test:** Validates PyInstaller executable creation
+- **Workflow file:** `.github/workflows/ci.yml`
+
+### Manual Testing Before PR
+
+```bash
+# Full local CI simulation
+uv sync
+uv run pytest -v --cov --cov-report=html
+uv run build.py  # Test executable creation
+```
+
+---
+
+## File Modification Gotchas
+
+### Never Edit These Directly
+
+- `.github/workflows/` - controlled by project
+- `pyproject.toml` - use `uv add package_name` instead
+- `uv.lock` - generated automatically
+
+### Always Use UV
+
+- Adding dependency? Use `uv add`, not pip
+- Running script? Use `uv run`, not `python`
+- Never `pip install` - breaks UV's lock file
+
+### Preserve Test Fixtures
+
+- `tests/conftest.py` - shared across all tests, verify changes don't break other tests
+- `tests/fixtures/` - JSON mock data, keep format consistent
+- Use `repo_fresh` fixture to avoid state pollution
+
+---
+
+## Related Documentation
+
+- **Tests guide:** `tests/README.md`
+- **Main README:** `README.md` (installation, usage, legal basis)
+- **OpenSpec changes:** `openspec/` (design docs for major refactors)
+

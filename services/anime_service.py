@@ -11,7 +11,6 @@ Used by: main.py, ui modules
 """
 
 import re
-from json import dump, load
 
 from scrapers import loader
 from models.config import get_data_path, settings
@@ -20,40 +19,35 @@ from services.history_service import reset_history, save_history
 from services.repository import rep
 from ui.components import loading, menu_navigate
 from utils.video_player import play_video
+from utils.persistence import JSONStore
+from utils.exceptions import PersistenceError
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Use centralized path function from config
 HISTORY_PATH = get_data_path()
 
 # AniList to scraper title mappings cache
-ANILIST_MAPPINGS_FILE = HISTORY_PATH / "anilist_mappings.json"
+_anilist_mappings_store = JSONStore(HISTORY_PATH / "anilist_mappings.json")
 
 
 def load_anilist_mapping(anilist_id: int) -> str | None:
     """Load saved scraper title for an AniList ID."""
-    try:
-        with ANILIST_MAPPINGS_FILE.open() as f:
-            mappings = load(f)
-            mapping = mappings.get(str(anilist_id))
-            # Handle both old format (string) and new format (dict)
-            if isinstance(mapping, dict):
-                return mapping.get("scraper_title")
-            return mapping
-    except (FileNotFoundError, ValueError):
-        return None
+    mapping = _anilist_mappings_store.get(str(anilist_id))
+    # Handle both old format (string) and new format (dict)
+    if isinstance(mapping, dict):
+        return mapping.get("scraper_title")
+    return mapping
 
 
 def load_anilist_search_title(anilist_id: int) -> str | None:
     """Load the original search/display title used for an AniList ID."""
-    try:
-        with ANILIST_MAPPINGS_FILE.open() as f:
-            mappings = load(f)
-            mapping = mappings.get(str(anilist_id))
-            # Only new format (dict) has search_title
-            if isinstance(mapping, dict):
-                return mapping.get("search_title")
-            return None
-    except (FileNotFoundError, ValueError):
-        return None
+    mapping = _anilist_mappings_store.get(str(anilist_id))
+    # Only new format (dict) has search_title
+    if isinstance(mapping, dict):
+        return mapping.get("search_title")
+    return None
 
 
 def save_anilist_mapping(
@@ -67,32 +61,22 @@ def save_anilist_mapping(
         search_title: The original search/display title used to find it
     """
     try:
-        # Load existing mappings
-        try:
-            with ANILIST_MAPPINGS_FILE.open() as f:
-                mappings = load(f)
-        except (FileNotFoundError, ValueError):
-            mappings = {}
-
-        # Update mapping with new dict format
         mapping_id = str(anilist_id)
         # Preserve existing search_title if not provided
-        existing = mappings.get(mapping_id, {})
+        existing = _anilist_mappings_store.get(mapping_id, {})
         if isinstance(existing, str):
             # Migrate old format to new format
             existing = {"scraper_title": existing}
 
-        mappings[mapping_id] = {
-            "scraper_title": scraper_title,
-            "search_title": search_title or existing.get("search_title"),
-        }
-
-        # Save
-        HISTORY_PATH.mkdir(parents=True, exist_ok=True)
-        with ANILIST_MAPPINGS_FILE.open("w") as f:
-            dump(mappings, f, indent=2)
-    except Exception:
-        pass
+        _anilist_mappings_store.set(
+            mapping_id,
+            {
+                "scraper_title": scraper_title,
+                "search_title": search_title or existing.get("search_title"),
+            },
+        )
+    except PersistenceError as e:
+        logger.error(f"Failed to save AniList mapping: {e}")
 
 
 def normalize_anime_title(title: str):
@@ -666,10 +650,16 @@ def anilist_anime_flow(
                 print(" (Possível erro ao reproduzir ou janela fechada)")
                 continue
 
+        # Clear terminal before asking confirmation
+        import os
+
+        os.system("clear")
+
         # Ask if watched until the end before saving/updating anything
         confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
         confirm = menu_navigate(
-            confirm_options, msg=f"Você assistiu o episódio {episode} até o final?"
+            confirm_options,
+            msg=f"Você assistiu o episódio {episode} de '{selected_anime}' até o final?",
         )
 
         # Only save history and update AniList if user confirmed

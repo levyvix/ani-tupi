@@ -12,9 +12,20 @@ Defines DTOs (Data Transfer Objects) for:
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, TypeAlias
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+# Type aliases for common patterns
+AnimeTitle: TypeAlias = str
+EpisodeNumber: TypeAlias = int
+AnimeURL: TypeAlias = str
+PluginName: TypeAlias = str
+AnimeTuple: TypeAlias = tuple[str, str, dict[str, Any] | None]  # (url, source, params)
+EpisodeList: TypeAlias = list[str]
+EpisodeURLList: TypeAlias = list[str]
+AniListID: TypeAlias = int | None
+TimestampSeconds: TypeAlias = int
 
 
 class AnimeMetadata(BaseModel):
@@ -47,17 +58,27 @@ class EpisodeData(BaseModel):
     Attributes:
         anime_title: Title of the anime
         episode_titles: List of episode titles
-        episode_urls: List of episode URLs
+        episode_urls: List of episode URLs (must be http/https)
         source: Plugin source name
 
     Validation:
         - episode_titles and episode_urls must have same length
+        - All episode URLs must be valid http(s) URLs
     """
 
     anime_title: str = Field(..., min_length=1, description="Anime title")
     episode_titles: list[str] = Field(..., description="Episode titles")
-    episode_urls: list[str] = Field(..., description="Episode URLs")
+    episode_urls: list[str] = Field(..., description="Episode URLs (must be http/https)")
     source: str = Field(..., min_length=1, description="Plugin source name")
+
+    @field_validator("episode_urls", mode="before")
+    @classmethod
+    def validate_episode_urls(cls, v: list[str]) -> list[str]:
+        """Validate all episode URLs are properly formatted."""
+        for url in v:
+            if not url.startswith(("http://", "https://")):
+                raise ValueError(f"Episode URL must be http(s), got: {url}")
+        return v
 
     @model_validator(mode="after")
     def validate_lengths(self) -> "EpisodeData":

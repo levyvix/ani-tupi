@@ -1,21 +1,21 @@
 import importlib
 import sys
-from abc import ABC, abstractstaticmethod
 from os import listdir
 from os.path import abspath, dirname, isfile, join
+from typing import Protocol
 
 
-class PluginInterface(ABC):
-    """Abstract base class for anime scraper plugins.
+class PluginProtocol(Protocol):
+    """Protocol for anime scraper plugins.
 
-    All plugins must implement these static methods.
+    Plugins implementing this protocol provide anime search and playback functionality.
+    Uses structural typing (duck typing) - no inheritance required.
     """
 
-    name: str = ""  # Plugin identifier (e.g., "animefire")
-    languages: list[str] = []  # Supported languages (e.g., ["pt-br"])
+    name: str  # Plugin identifier (e.g., "animefire")
+    languages: list[str]  # Supported languages (e.g., ["pt-br"])
 
-    @abstractstaticmethod
-    def search_anime(query: str) -> None:
+    def search_anime(self, query: str) -> None:
         """Search for anime by title.
 
         Args:
@@ -23,10 +23,9 @@ class PluginInterface(ABC):
 
         Must call: Repository.add_anime(title, url, source, params)
         """
-        raise NotImplementedError
+        ...
 
-    @abstractstaticmethod
-    def search_episodes(anime: str, url: str, params: dict | None) -> None:
+    def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
         """Fetch episode list for anime.
 
         Args:
@@ -36,10 +35,9 @@ class PluginInterface(ABC):
 
         Must call: Repository.add_episode_list(anime, titles, urls, source)
         """
-        raise NotImplementedError
+        ...
 
-    @abstractstaticmethod
-    def search_player_src(url: str, container: list, event) -> None:
+    def search_player_src(self, url: str, container: list, event) -> None:
         """Extract video playback URL from episode URL.
 
         Args:
@@ -53,7 +51,11 @@ class PluginInterface(ABC):
             3. event.set()
             4. Return immediately (runs in thread pool)
         """
-        raise NotImplementedError
+        ...
+
+
+# For backwards compatibility with existing code
+PluginInterface = PluginProtocol
 
 
 def get_resource_path(relative_path):
