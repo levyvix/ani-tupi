@@ -112,6 +112,8 @@ python3 install-cli.py
 ```bash
 ani-tupi                      # Buscar e assistir anime
 ani-tupi --continue-watching  # Continuar último anime
+ani-tupi anilist auth         # Autenticar com AniList.co
+ani-tupi anilist              # Navegar suas listas no AniList
 manga-tupi                    # Ler mangá
 ```
 
@@ -160,12 +162,21 @@ ani-tupi -c
 ani-tupi --query "dandadan"
 ani-tupi -q "dandadan"
 
+# AniList - Sincronizar com AniList.co
+ani-tupi anilist auth      # Fazer login (apenas uma vez)
+ani-tupi anilist           # Navegar listas e trending
+
 # Ler mangá
 manga-tupi
 
 # Ver ajuda
 ani-tupi --help
 ```
+
+**AniList Integration:**
+- `ani-tupi anilist auth` - Autentica com AniList.co (necessário apenas uma vez)
+- `ani-tupi anilist` - Navega trending, watching, planning, completed e outras listas
+- Sincronização automática - Seu progresso atualiza automaticamente após assistir cada episódio
 
 ### Ler Mangá
 
