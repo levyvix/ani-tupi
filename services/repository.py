@@ -19,8 +19,19 @@ class Repository:
     """
 
     _instance = None
+    _initialized = False
+
+    def __new__(cls):
+        if not Repository._instance:
+            Repository._instance = super().__new__(cls)
+            Repository._initialized = False
+        return Repository._instance
 
     def __init__(self) -> None:
+        # Only initialize once to prevent resetting state on subsequent calls
+        if Repository._initialized:
+            return
+
         self.sources = {}
         self.anime_to_urls = defaultdict(list)
         self.anime_episodes_titles = defaultdict(list)
@@ -30,10 +41,7 @@ class Repository:
         # Mapping from anime title to AniList ID (for cache key)
         self.anime_to_anilist_id = {}
 
-    def __new__(cls):
-        if not Repository._instance:
-            Repository._instance = super().__new__(cls)
-        return Repository._instance
+        Repository._initialized = True
 
     def register(self, plugin: PluginInterface) -> None:
         self.sources[plugin.name] = plugin
@@ -52,6 +60,12 @@ class Repository:
         self.anime_episodes_titles = defaultdict(list)
         self.anime_episodes_urls = defaultdict(list)
         self.norm_titles = {}
+
+    @classmethod
+    def reset_singleton(cls) -> None:
+        """Reset singleton instance for testing. Use only in test fixtures."""
+        cls._instance = None
+        cls._initialized = False
 
     def search_anime(self, query: str, verbose: bool = True) -> None:
         if not self.sources:
@@ -404,10 +418,7 @@ class Repository:
             anime: Anime title to search episodes for
             source_filter: Optional source name to search only that source (e.g., "animefire")
         """
-        if anime in self.anime_episodes_titles:
-            return self.anime_episode_titles[anime]
-
-        urls_and_scrapers = rep.anime_to_urls[anime]
+        urls_and_scrapers = self.anime_to_urls[anime]
 
         # Filter by source if specified
         if source_filter:

@@ -33,11 +33,10 @@ def repo_fresh():
 
 @pytest.fixture(autouse=True)
 def reset_repository():
-    """Auto-reset Repository before each test to prevent cross-test pollution."""
-    repo = Repository()
-    repo.clear_search_results()
+    """Auto-reset Repository singleton before each test to prevent cross-test pollution."""
+    Repository.reset_singleton()
     yield
-    repo.clear_search_results()
+    Repository.reset_singleton()
 
 
 # ========== Sample Data Fixtures ==========
