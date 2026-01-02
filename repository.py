@@ -1,8 +1,7 @@
 import asyncio
-import time
+from typing import Optional
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from multiprocessing.pool import ThreadPool
 from os import cpu_count
 from threading import Thread
 
@@ -64,6 +63,7 @@ class Repository:
         cache_key = f"search:{query.lower()}"
         try:
             from cache_manager import get_cache as get_dc
+
             dc = get_dc()
             cached_results = dc.get(cache_key)
         except Exception as e:
@@ -83,6 +83,7 @@ class Repository:
             # Still auto-discover IDs for cached results
             if settings.cache.anilist_auto_discover:
                 from anilist_discovery import auto_discover_anilist_id
+
                 for anime_title in self.anime_to_urls.keys():
                     if anime_title not in self.anime_to_anilist_id:
                         anilist_id = auto_discover_anilist_id(anime_title)
@@ -134,11 +135,14 @@ class Repository:
                 break
             elif verbose and num_words < len(words):
                 # No results with this word count, will try fewer words
-                print(f"ℹ️  0 resultados com '{partial_query}' ({num_words} palavras) → tentando com menos...")
+                print(
+                    f"ℹ️  0 resultados com '{partial_query}' ({num_words} palavras) → tentando com menos..."
+                )
 
         # Auto-discover AniList IDs for search results (non-blocking)
         if settings.cache.anilist_auto_discover:
             from anilist_discovery import auto_discover_anilist_id
+
             for anime_title in self.anime_to_urls.keys():
                 if anime_title not in self.anime_to_anilist_id:
                     anilist_id = auto_discover_anilist_id(anime_title)
@@ -149,6 +153,7 @@ class Repository:
         if len(self.anime_to_urls) > 0:
             try:
                 from cache_manager import get_cache as get_dc
+
                 dc = get_dc()
                 cache_key = f"search:{query.lower()}"
                 # Convert anime_to_urls to dict format for caching
@@ -241,7 +246,11 @@ class Repository:
         if verbose:
             print(f"⠼ Buscando '{query}'...")
 
-        executor = ThreadPoolExecutor(max_workers=min(len(self.sources), cpu_count()))
+        n_cpu = cpu_count()
+        if not n_cpu:
+            n_cpu = 10
+
+        executor = ThreadPoolExecutor(max_workers=min(len(self.sources), n_cpu))
 
         try:
             # Submit all search tasks
@@ -251,10 +260,7 @@ class Repository:
             }
 
             # Wait for all tasks to complete
-            done, pending = wait(
-                future_to_source.keys(),
-                return_when=ALL_COMPLETED
-            )
+            done, _ = wait(future_to_source.keys(), return_when=ALL_COMPLETED)
 
             # Process completed futures
             for future in done:
@@ -316,7 +322,7 @@ class Repository:
         self.anime_to_urls[title].append((url, source, params))
 
     def get_anime_titles(
-        self, filter_by_query: str = None, min_score: int | None = None
+        self, filter_by_query: Optional[str] = None, min_score: int | None = None
     ) -> list[str]:
         """Get anime titles, optionally filtered by exact match to query.
 
@@ -338,7 +344,7 @@ class Repository:
         return sorted(filtered)
 
     def get_anime_titles_with_sources(
-        self, filter_by_query: str = None, original_query: str = None
+        self, filter_by_query: Optional[str] = None, original_query: Optional[str] = None
     ) -> list[str]:
         """Get anime titles with source indicators, ranked by relevance.
 
@@ -360,8 +366,7 @@ class Repository:
             # Improved filtering: normalize both query and titles before matching
             query_normalized = self._normalize_for_filter(filter_by_query)
             titles = [
-                title for title in titles
-                if query_normalized in self._normalize_for_filter(title)
+                title for title in titles if query_normalized in self._normalize_for_filter(title)
             ]
 
         # Build titles with sources
@@ -474,7 +479,7 @@ class Repository:
             return
 
         # Generate episode titles from URLs (format: "Episódio 1", "Episódio 2", etc)
-        episode_titles = [f"Episódio {i+1}" for i in range(len(episode_urls))]
+        episode_titles = [f"Episódio {i + 1}" for i in range(len(episode_urls))]
 
         # Add to repository as if it came from a "cache" source
         self.anime_episodes_titles[anime].append(episode_titles)
@@ -485,6 +490,22 @@ class Repository:
         if anime not in self.anime_to_urls:
             self.anime_to_urls[anime].append(("cached", "cache", None))
 
+    def get_episode_url_and_source(self, anime: str, episode_num: int) -> tuple[str, str] | None:
+        """Get episode URL and source name for a specific episode.
+
+        Args:
+            anime: Anime title
+            episode_num: Episode number (1-indexed)
+
+        Returns:
+            Tuple of (episode_url, source_name) or None if not found
+        """
+        for urls, source in self.anime_episodes_urls[anime]:
+            if len(urls) >= episode_num:
+                return (urls[episode_num - 1], source)
+
+        return None
+
     def search_player(self, anime: str, episode_num: int) -> None:
         """Search for video URLs with caching.
 
@@ -492,7 +513,6 @@ class Repository:
         Assumes all episode lists are the same size.
         Plugin devs should guarantee that OVAs are not considered.
         """
-        from cache_manager import get_cached_video_url, save_video_url
         from anilist_discovery import auto_discover_anilist_id
 
         selected_urls = []
@@ -510,11 +530,9 @@ class Repository:
         # Use anilist_id if available, fallback to anime title
         cache_key = anilist_id if anilist_id else anime
 
-        # CACHE CHECK: Check all sources for cached video URL
-        for _url, source in selected_urls:
-            cached_url = get_cached_video_url(cache_key, episode_num, source)
-            if cached_url:
-                return cached_url
+        # CACHE DISABLED for video URLs - tokens expire too quickly
+        # Blogger URLs with tokens expire in minutes, caching causes playback failures
+        # Only episode lists are cached, not video stream URLs
 
         # Cache miss - search all sources in parallel
         async def search_all_sources():
@@ -522,23 +540,39 @@ class Repository:
             event = asyncio.Event()
             container = []
             loop = asyncio.get_running_loop()
+
+            # Show which sources are being tried
+            sources_list = [source for _, source in selected_urls]
+            if len(sources_list) > 1:
+                print(f"   🔄 Tentando fontes: {', '.join(sources_list)}")
+
+            # Wrapper to catch exceptions from plugins
+            def safe_plugin_call(plugin_func, url, source):
+                try:
+                    plugin_func(url, container, event)
+                    if container:  # Only print if this source succeeded
+                        print(f"   ✅ Vídeo encontrado em: {source}")
+                except Exception as e:
+                    # Extract just the first line of error (avoid huge stack traces)
+                    error_msg = str(e).split("\n")[0]
+                    print(f"   ❌ {source} falhou: {error_msg[:80]}")
+                    # Don't re-raise - let other sources try
+
             with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
                 tasks = [
                     loop.run_in_executor(
                         executor,
+                        safe_plugin_call,
                         self.sources[source].search_player_src,
                         url,
-                        container,
-                        event,
+                        source,
                     )
                     for url, source in selected_urls
                 ]
 
                 # Wait for all tasks to complete (any task that finds a URL will set event)
                 # Continue until all tasks finish or one succeeds
-                _done, _pending = await asyncio.wait(
-                    tasks, return_when=asyncio.FIRST_COMPLETED
-                )
+                _done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
                 # If container is empty after first task, wait for remaining tasks
                 while not container and _pending:
@@ -550,17 +584,14 @@ class Repository:
                 video_url = container[0] if container else None
 
                 # Save to cache for future use
-                # Try to identify which source returned this URL
-                if video_url:
-                    for _url, source in selected_urls:
-                        save_video_url(cache_key, episode_num, source, video_url)
-                        break  # Only cache for first source that returned result
-
+                # DON'T cache video URLs - they expire too quickly
+                # Caching Blogger URLs causes playback failures due to token expiration
                 return video_url
 
         return asyncio.run(search_all_sources())
 
+
 rep = Repository()
 
-if __name__=="__main__":
+if __name__ == "__main__":
     rep3, rep2 = Repository(), Repository()

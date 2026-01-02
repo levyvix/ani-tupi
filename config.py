@@ -26,7 +26,7 @@ def get_data_path() -> Path:
         Path: ~/.local/state/ani-tupi (Linux/macOS) or C:\\Program Files\\ani-tupi (Windows)
     """
     if os.name == "nt":
-        return Path("C:\\Program Files\\ani-tupi")
+        return Path("C:\\Program Files\\ani-tupi")  # type: ignore
     return Path.home() / ".local" / "state" / "ani-tupi"
 
 
@@ -86,7 +86,7 @@ class SearchSettings(BaseModel):
     """Anime search configuration."""
 
     progressive_search_min_words: int = Field(
-        2,
+        1,  # Changed from 2 to support single-word anime like "Dandadan"
         ge=1,
         le=10,
         description="Minimum words to use in progressive search",

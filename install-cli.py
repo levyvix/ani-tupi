@@ -49,12 +49,13 @@ def install_uv() -> bool:
     # Instala UV via pip
     install_cmd = [pip_cmd, "install", "--user", "uv"]
     if run_command(install_cmd, check=False):
-
         # Adiciona scripts do Python ao PATH
         if platform.system() == "Windows":
             # Windows: Scripts vai para AppData\Roaming\Python\Python3X\Scripts
             python_version = f"Python{sys.version_info.major}{sys.version_info.minor}"
-            scripts_dir = Path.home() / "AppData" / "Roaming" / "Python" / python_version / "Scripts"
+            scripts_dir = (
+                Path.home() / "AppData" / "Roaming" / "Python" / python_version / "Scripts"
+            )
             if scripts_dir.exists():
                 os.environ["PATH"] = f"{scripts_dir};{os.environ['PATH']}"
         elif platform.system() == "Darwin":
@@ -71,7 +72,7 @@ def install_uv() -> bool:
 
         # Se estiver no GitHub Actions, adiciona ao GITHUB_PATH
         if os.getenv("GITHUB_PATH"):
-            with open(os.getenv("GITHUB_PATH"), "a") as f:
+            with open(os.environ.get("GITHUB_PATH"), "a") as f:  # type: ignore
                 f.write(f"{scripts_dir}\n")
 
         return True
@@ -101,7 +102,6 @@ def show_path_info() -> None:
     """Mostra informações sobre o PATH."""
     system = platform.system()
 
-
     if system == "Windows":
         Path.home() / ".cargo" / "bin"
     else:
@@ -110,9 +110,7 @@ def show_path_info() -> None:
         "~/.bashrc" if Path.home() / ".bashrc" else "~/.zshrc"
 
 
-
 def main() -> None:
-
     # Verifica/instala UV
     if not check_uv_installed():
         if not install_uv():

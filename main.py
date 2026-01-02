@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 import loader
 from core import anime_service
@@ -7,6 +8,7 @@ from manga_tupi import main as manga_tupi
 from repository import rep
 from ui.components import loading, menu
 from video_player import play_video
+
 
 # Use centralized path function from config
 def show_main_menu():
@@ -21,9 +23,8 @@ def show_main_menu():
     return menu(options, msg="Ani-Tupi - Menu Principal")
 
 
-
 def main(args) -> None:
-    loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
+    loader.load_plugins({"pt-br"})  # type: ignore
 
     # Show active sources
     active_sources = rep.get_active_sources()
@@ -82,11 +83,35 @@ def main(args) -> None:
     num_episodes = len(episode_list)
     while True:
         episode = episode_idx + 1
+
+        # Get episode URL and source to determine quality extraction method
+        episode_info = rep.get_episode_url_and_source(selected_anime, episode)
+
+        if not episode_info:
+            print(f"❌ Episódio {episode} não encontrado")
+            continue
+
+        episode_url, source = episode_info
+
+        # Get video URL from scraper plugins
         with loading("Buscando vídeo..."):
             player_url = rep.search_player(selected_anime, episode)
-        if args.debug:
-            pass
-        play_video(player_url, args.debug)
+
+        # Check if video URL was found
+        if not player_url:
+            print("\n❌ Nenhuma fonte conseguiu extrair o vídeo.")
+            print("   💡 O episódio pode estar indisponível em todas as fontes.")
+            print("   💡 Tente outro episódio ou espere e tente novamente mais tarde.\n")
+            continue
+
+        # Play video
+        exit_code = play_video(player_url, args.debug)
+
+        # Log MPV exit code if it's not a normal exit
+        if exit_code not in [0, 3]:  # 0=normal, 3=user quit with 'q'
+            print(f"\n⚠️  MPV exit code: {exit_code}")
+            if exit_code == 2:
+                print("    (Possível erro ao reproduzir ou janela fechada)")
 
         # Ask if watched until the end (always ask, not just for AniList)
         from ui.components import menu_navigate
@@ -139,7 +164,7 @@ def main(args) -> None:
 
                     # Check for sequels when last episode is watched
                     if episode == num_episodes:
-                        if anime_service.offer_sequel_and_continue(anilist_id, selected_anime, args):
+                        if anime_service.offer_sequel_and_continue(anilist_id, args):
                             return  # Sequel started, exit this flow
 
         opts = []
@@ -171,12 +196,15 @@ def main(args) -> None:
                 continue  # Stay in current episode menu
             episode_idx = episode_list.index(selected_episode)
         elif selected_opt == "🔄 Trocar fonte":
-            new_anime, new_episode_idx = anime_service.switch_anime_source(selected_anime, args, anilist_id)
+            new_anime, new_episode_idx = anime_service.switch_anime_source(
+                selected_anime, args, anilist_id
+            )
             if new_anime:
                 selected_anime = new_anime
                 episode_idx = new_episode_idx
                 num_episodes = len(rep.get_episode_list(selected_anime))
                 # Continue loop with new anime/episode
+
 
 def cli() -> None:
     """Entry point para CLI."""
@@ -236,10 +264,10 @@ def cli() -> None:
                 print(f"   {i}. {source}")
         else:
             print("\n❌ Nenhuma fonte de anime encontrada!")
-        return
+        sys.exit(0)
 
     # Handle --clear-cache before other commands
-    if args.clear_cache is not None:
+    if args.clear_cache:
         from cache_manager import clear_cache_all, clear_cache_by_prefix
         from anilist_discovery import auto_discover_anilist_id
 
@@ -257,7 +285,7 @@ def cli() -> None:
                 # Fallback: clear by title prefix
                 clear_cache_by_prefix(f":{args.clear_cache}:")
                 print(f"✅ Cache de '{args.clear_cache}' foi limpo!")
-        return
+        sys.exit(0)
 
     # Handle commands
     if args.command == "anilist":
@@ -265,6 +293,7 @@ def cli() -> None:
 
         if args.action == "auth":
             authenticate_flow()
+            sys.exit(0)
         else:  # menu
             # Loop to allow watching multiple anime without restarting
             while True:

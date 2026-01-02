@@ -17,6 +17,283 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
 
+## Clean Error Messages - IMPROVED ✓
+
+### Change (2026-01-01)
+Removed verbose error messages and Selenium stacktraces that cluttered user output during fallback attempts.
+
+### What Changed
+
+**Before:**
+```
+⚠️  Erro ao extrair source do vídeo: Message: Unable to locate element:
+[id="my-video_html5_api"]; For documentation on this error, please visit:
+https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#no-such-element-exception
+Stacktrace:
+RemoteError@chrome://remote/content/shared/RemoteError.sys.mjs:8:8
+WebDriverError@chrome://remote/content/shared/webdriver/Errors.sys.mjs:202:5
+NoSuchElementError@chrome://remote/content/shared/webdriver/Errors.sys.mjs:555:5
+dom.find/</<@chrome://remote/content/shared/DOM.sys.mjs:136:16
+```
+
+**After:**
+```
+🔄 Tentando fontes: animefire, animesonlinecc
+❌ animefire falhou: Unable to locate element: [id="my-video_html5_api"]
+✅ Vídeo encontrado em: animesonlinecc
+```
+
+### Implementation
+
+**Changes in `plugins/animefire.py`:**
+- Removed all intermediate error prints from functions:
+  - `extract_quality_options()` - Removed error prints at lines 85, 131, 146
+  - `extract_blogger_video_url()` - Removed error prints at lines 193, 209, 216, 220, 236, 253
+  - Removed `traceback.print_exc()` call
+- Functions now either return None silently or raise exceptions for repository to handle
+
+**Existing Clean Handling in `repository.py`:**
+- `safe_plugin_call()` already implemented (lines 546-555)
+- Catches exceptions and shows only first line (max 80 chars)
+- Format: `❌ {source} falhou: {error[:80]}`
+
+**User Experience:**
+- Multi-source fallback still works perfectly
+- Errors are now concise and actionable
+- No overwhelming stacktraces in terminal
+- Success/failure clearly indicated with emojis
+
+### Files Modified
+- `plugins/animefire.py` (removed error prints from multiple functions)
+
+---
+
+## Multi-Source Fallback System - IMPLEMENTED ✓
+
+### Feature (2026-01-01)
+Automatic fallback between multiple anime sources when one fails.
+
+### How It Works
+
+**Source Registration:**
+- Multiple plugins can be active simultaneously (animefire, animesonlinecc)
+- Each plugin registers itself in the repository
+- Sources are tried in parallel when extracting video URLs
+
+**Fallback Flow:**
+```
+Episode selected → Extract video URL from all sources in parallel →
+→ First successful source wins → If all fail, show clear error message
+```
+
+**Example Output:**
+```
+🔄 Tentando fontes: animefire, animesonlinecc
+❌ animefire falhou: Unable to locate element: [id="my-video_html5_api"]
+✅ Vídeo encontrado em: animesonlinecc
+```
+
+### Implementation Details
+
+**Error Handling** (`repository.py::search_player`):
+- `safe_plugin_call()` wrapper catches exceptions from plugins
+- Errors are logged but don't stop execution
+- Other sources continue attempting extraction
+- Returns None only if ALL sources fail
+
+**User Feedback:**
+- Shows which sources are being tried
+- Shows which source succeeded/failed
+- Shows first line of error (avoids huge stack traces)
+- Clear error message if no sources succeed
+
+**None Protection** (`main.py`, `core/anime_service.py`):
+- Checks if video URL is None before calling `play_video()`
+- Shows helpful error message suggesting retry or different episode
+- Returns to episode menu instead of crashing
+
+### Files Modified
+- `repository.py` (lines 540-555) - Added exception handling wrapper
+- `main.py` (lines 122-127) - Added None check and error message
+- `core/anime_service.py` (lines 641-646) - Added None check and error message
+- `plugins/animesonlinecc.py` - Restored from commit 40fae3e, updated to selectolax
+
+### Troubleshooting
+
+**One source always fails:**
+- Normal behavior if site structure changed
+- Other sources will automatically be tried
+- Error message shows which source failed and why
+
+**All sources fail:**
+- Episode may be unavailable on all sites
+- Try another episode or different anime
+- Check if sites are accessible via browser
+
+**Plugin not loading:**
+- Check `plugin_manager.py` for disabled plugins
+- Ensure plugin is in `plugins/` directory
+- Verify plugin has `load()` function
+
+---
+
+## Video Quality Selection - IMPLEMENTED ✓
+
+### Feature (2026-01-01)
+Users can now select video quality before playback (720p, 480p, 360p, etc) for AnimeFire videos.
+
+### How It Works
+
+**AnimeFire Quality Detection** (primary method):
+1. **Page Inspection**: Uses Selenium to inspect episode page on AnimeFire
+2. **Quality Extraction**: Extracts available qualities from page controls (`<div class="video-ql">`)
+3. **Direct URLs**: Builds direct MP4 URLs from pattern: `https://lightspeedst.net/s5/mp4_temp/{anime}/{ep}/{quality}.mp4`
+4. **Quality Menu**: Shows available qualities with current quality marked
+5. **Direct Playback**: Passes MP4 URL directly to MPV (no yt-dlp needed)
+
+**Example Flow:**
+```
+Episode page URL → Selenium extracts qualities → User selects → Direct MP4 playback
+https://animefire.io/animes/shokuba/1 → [720p, 480p, 360p] → 720p → lightspeedst.net/.../720p.mp4
+```
+
+### Implementation Details
+
+**New Files:**
+- `plugins/animefire.py::extract_quality_options(url_episode)` - Extracts qualities from page
+- `video_player.py::select_quality_animefire(url, qualities)` - Quality selection menu
+- `repository.py::get_episode_url_and_source(anime, ep)` - Get episode URL and source name
+
+**Integration Points:**
+- `main.py` (line ~98): Detects AnimeFire source, extracts qualities, shows menu
+- `core/anime_service.py` (line ~617): Same integration for AniList flow
+
+**Quality Detection Process:**
+1. Selenium loads episode page (headless Firefox)
+2. Closes banner/popup if present
+3. Extracts current video source to get base URL
+4. Finds quality control elements (`id-720p`, `id-360p`, etc)
+5. Filters disabled qualities (have `text-gray` class)
+6. Returns list of available qualities with URLs
+
+**Testing:**
+```bash
+# Test quality extraction from page
+uv run --with selenium test_extract_qualities.py
+
+# Test full integration
+uv run test_quality_integration.py
+
+# Real usage
+uv run ani-tupi
+# → Select anime
+# → Select episode
+# → Quality menu appears automatically for AnimeFire
+```
+
+**Menu Behavior:**
+- Shows only available qualities (disabled ones filtered out)
+- Current quality marked with ▶️ marker
+- ESC/Voltar cancels and skips episode
+- Arrow keys to navigate, Enter to select
+
+**Fallback:**
+- If quality detection fails, falls back to `search_player()` async flow
+- Other sources (non-AnimeFire) still use original Blogger extraction
+
+### Troubleshooting
+
+**No qualities detected:**
+- Check Selenium/geckodriver installed: `sudo pacman -S firefox geckodriver`
+- AnimeFire may have changed page structure
+- Check console output for extraction errors
+
+**Quality menu slow:**
+- First load takes ~3-5s (Selenium page load + extraction)
+- Loading spinner shows "Detectando qualidades disponíveis..."
+- Browser runs headless (invisible)
+
+**Wrong quality plays:**
+- URL pattern may have changed on AnimeFire
+- Check browser Network tab for actual video URLs
+- Verify URL pattern in `extract_quality_options()`
+
+**Banner blocks extraction:**
+- Function tries common close selectors automatically
+- If banner persists, may need to update close selectors in code
+
+---
+
+## Blogger Video URLs & yt-dlp Integration - SOLVED ✓
+
+### Issue (2026-01-01)
+MPV was failing to play videos from AnimeFire with exit code 2. URLs were from Blogger with temporary tokens.
+
+### Root Cause
+1. **Video URL caching** - URLs with temporary tokens were being cached and reused after expiration
+2. **yt-dlp missing** - MPV requires yt-dlp to process Blogger video pages
+3. **Manual extraction attempted** - Tried extracting VIDEO_CONFIG from Blogger pages, but tokens expired during processing
+
+### Solution Implemented (2026-01-01)
+
+**1. Installed yt-dlp:**
+```bash
+sudo pacman -S yt-dlp
+```
+
+**2. Disabled video URL caching** (`repository.py` lines 513-515, 551-553):
+- Removed cache lookup for video URLs (tokens expire too quickly)
+- Only episode lists are cached, not video stream URLs
+- This prevents playback failures from expired cached URLs
+
+**3. Removed manual Blogger extraction** (`plugins/animefire.py` lines 195-200):
+- Pass Blogger URLs directly to MPV
+- yt-dlp processes URLs in real-time (no delay = no expiration)
+- Much more reliable than manual extraction
+
+**4. Added VLC fallback** (`video_player.py` lines 45-73):
+- If MPV fails (exit code 2), automatically tries VLC
+- Removed `check=True` to prevent exceptions on non-zero exit codes
+- Always asks user if they watched until the end (regardless of exit code)
+
+### How It Works Now
+```
+Selenium extracts iframe URL (2-3s)
+  → Passes Blogger URL directly to MPV
+  → MPV calls yt-dlp automatically
+  → yt-dlp extracts stream in real-time
+  → Video plays ✅
+```
+
+### Test Results
+- ✅ **Dan Da Dan Ep 1**: Works perfectly (yt-dlp processes successfully)
+- ❌ **Wotaku Ep 1**: "Video is unavailable" on Blogger (not our fault - video removed from source)
+
+**UPDATE (2026-01-01 - Evening):**
+Fixed critical bug preventing yt-dlp integration:
+- **Bug**: `--ytdl-raw-options=concurrent-fragments=3-5` was invalid (yt-dlp expects integer, not range)
+- **Error**: `yt-dlp: error: option --concurrent-fragments: invalid integer value: '3-5'`
+- **Fix**: Changed to `concurrent-fragments=5` in `video_player.py` line 252
+- **Impact**: MPV can now properly invoke yt-dlp to process Blogger URLs
+
+### Verification
+Test with fresh URLs:
+```bash
+uv run test_real_flow.py  # Simulates complete flow with yt-dlp
+```
+
+### Important Notes
+- **Some videos will be unavailable** - this is expected (content removed from AnimeFire/Blogger)
+- **Always test with different anime/episodes** if one fails
+- **Cache cleared**: `rm ~/.local/state/ani-tupi/scraper_cache.json` if needed
+- **yt-dlp handles tokens automatically** - no manual extraction needed
+
+### Files Modified
+- `repository.py` - Disabled video URL caching
+- `plugins/animefire.py` - Removed manual Blogger extraction
+- `video_player.py` - Added VLC fallback, better error handling
+- `test_real_flow.py`, `test_ytdlp.py` - Debug/test scripts
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

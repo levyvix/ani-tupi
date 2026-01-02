@@ -71,7 +71,7 @@ def normalize_anime_title(title: str):
     # 1. Handle AniList bilingual format "Romaji / English"
     # Take only the romaji part (before the " / ")
     if " / " in title:
-        title = title.split(" / ")[0]
+        title = title.split(" / ")[1]
 
     # 2. Remove season/part/episode suffixes
     season_patterns = [
@@ -84,8 +84,6 @@ def normalize_anime_title(title: str):
         r"\s+Final\s+Season",
         r"\s+2nd\s+Season",
         r"[:−-]\s*Season\s+\d+",
-        r"\s+Geiko.+$",  # Remove "Geiko-hen" and everything after
-        r"\s+Training.+$",  # Remove "Training Arc" and everything after
         r"\s+Dublado.*$",  # Remove "Dublado" suffix
     ]
 
@@ -137,12 +135,11 @@ def normalize_anime_title(title: str):
     return result
 
 
-def offer_sequel_and_continue(anilist_id: int, current_anime: str, args) -> bool:
+def offer_sequel_and_continue(anilist_id: int, args) -> bool:
     """Check for sequels when last episode is watched and offer to continue.
 
     Args:
         anilist_id: AniList ID of the anime just watched
-        current_anime: Title of the anime being watched
         args: Command line arguments
 
     Returns:
@@ -196,8 +193,9 @@ def offer_sequel_and_continue(anilist_id: int, current_anime: str, args) -> bool
 
         if choice and choice != "❌ Não, parar aqui":
             # Find selected sequel
-            selected_sequel = next((s for s in sequels
-                                   if anilist_client.format_title(s["title"]) == choice), None)
+            selected_sequel = next(
+                (s for s in sequels if anilist_client.format_title(s["title"]) == choice), None
+            )
             if selected_sequel:
                 sequel_title = anilist_client.format_title(selected_sequel["title"])
                 anilist_anime_flow(
@@ -238,7 +236,7 @@ def anilist_anime_flow(
         display_title = anime_title
     from scraper_cache import get_cache, set_cache
 
-    loader.load_plugins({"pt-br"}, None if not args.debug else ["animesonlinecc"])
+    loader.load_plugins({"pt-br"})  # type: ignore
 
     # Store anilist_id in repository for caching (cache key)
     if anilist_id:
@@ -265,7 +263,9 @@ def anilist_anime_flow(
         cache_data = get_cache(variant)
         if cache_data:
             # Found in cache! Use it directly
-            print(f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', []))) } eps disponíveis)")
+            print(
+                f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', [])))} eps disponíveis)"
+            )
             rep.load_from_cache(variant, cache_data)
             used_query = variant
             titles_with_sources = [variant]  # Only one "result" - the cached anime
@@ -310,7 +310,6 @@ def anilist_anime_flow(
 
     manual_search = False
     if not titles_with_sources:
-
         # Offer manual search
         choice = menu_navigate(
             ["🔍 Buscar manualmente", "🔙 Voltar ao AniList"], msg="O que deseja fazer?"
@@ -325,7 +324,9 @@ def anilist_anime_flow(
             # Cache-first: Check if manual query is in cache
             cache_data = get_cache(manual_query)
             if cache_data:
-                print(f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', []))) } eps disponíveis)")
+                print(
+                    f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', [])))} eps disponíveis)"
+                )
                 rep.load_from_cache(manual_query, cache_data)
                 titles_with_sources = [manual_query]
                 used_query = manual_query
@@ -340,7 +341,9 @@ def anilist_anime_flow(
                 metadata = rep.get_search_metadata()
                 used_query = metadata.get("used_query", manual_query)
                 if used_query != manual_query:
-                    print(f"ℹ️  Reduzido para: '{used_query}' ({metadata.get('used_words', '?')}/{metadata.get('total_words', '?')} palavras)")
+                    print(
+                        f"ℹ️  Reduzido para: '{used_query}' ({metadata.get('used_words', '?')}/{metadata.get('total_words', '?')} palavras)"
+                    )
 
                 # Pass original_query for ranking results by relevance
                 titles_with_sources = rep.get_anime_titles_with_sources(
@@ -384,12 +387,18 @@ def anilist_anime_flow(
         else:
             menu_title += f"🔍 Busca usada: '{used_query}'\n"
             # Show if query was reduced (either internally or by trying fewer variations)
-            if metadata.get('variant_index', 0) > 0:
+            if int(metadata.get("variant_index", 0)) > 0:
                 # Skipped earlier variations
                 menu_title += f"   ⚠️  Saltou {metadata.get('variant_index')} variação(ões) (nenhum resultado)\n"
-            if metadata.get('used_words', 0) and metadata.get('total_words', 0) and metadata.get('used_words') < metadata.get('total_words'):
+            if (
+                metadata.get("used_words", 0)
+                and metadata.get("total_words", 0)
+                and metadata.get("used_words") < metadata.get("total_words")
+            ):
                 # Reduced within the search
-                menu_title += f"   ({metadata.get('used_words')}/{metadata.get('total_words')} palavras)\n"
+                menu_title += (
+                    f"   ({metadata.get('used_words')}/{metadata.get('total_words')} palavras)\n"
+                )
         menu_title += f"\nEncontrados {len(titles_with_sources)} resultados. Escolha:"
 
         # Pagination: show top N results + "See more" button if needed
@@ -584,9 +593,7 @@ def anilist_anime_flow(
             episode_idx = option_to_idx[choice]
             # Check if episode is unavailable (marked as None)
             if episode_idx is None:
-                print(
-                    f"\n⏳ Episódio {max_progress + 1} ainda não disponível nos scrapers."
-                )
+                print(f"\n⏳ Episódio {max_progress + 1} ainda não disponível nos scrapers.")
                 input("\nPressione Enter para voltar...")
                 return
     else:
@@ -602,23 +609,39 @@ def anilist_anime_flow(
     # Playback loop (with AniList sync)
     while True:
         episode = episode_idx + 1
+
+        # Get video URL from scraper plugins
         with loading("Buscando vídeo..."):
             player_url = rep.search_player(selected_anime, episode)
-        if args.debug:
-            pass
+
+        # Check if video URL was found
         if not player_url:
-            return
-        play_video(player_url, args.debug)
-        save_history(selected_anime, episode_idx, anilist_id, source)
+            print("❌ Nenhuma fonte conseguiu extrair o vídeo.")
+            print("   💡 O episódio está indisponível em todas as fontes.")
+            continue
 
-        # Ask if watched until the end before updating AniList
-        if anilist_client.is_authenticated() and anilist_id:
-            confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
-            confirm = menu_navigate(
-                confirm_options, msg=f"Você assistiu o episódio {episode} até o final?"
-            )
+        # Play video
+        exit_code = play_video(player_url, args.debug)
 
-            if confirm == "✅ Sim, assisti até o final":
+        # Log MPV exit code if it's not a normal exit
+        if exit_code not in [0, 3]:  # 0=normal, 3=user quit with 'q'
+            print(f"⚠️  MPV exit code: {exit_code}")
+            if exit_code == 2:
+                print(" (Possível erro ao reproduzir ou janela fechada)")
+                continue
+
+        # Ask if watched until the end before saving/updating anything
+        confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
+        confirm = menu_navigate(
+            confirm_options, msg=f"Você assistiu o episódio {episode} até o final?"
+        )
+
+        # Only save history and update AniList if user confirmed
+        if confirm == "✅ Sim, assisti até o final":
+            save_history(selected_anime, episode_idx, anilist_id, source)
+
+            # Update AniList if authenticated
+            if anilist_client.is_authenticated() and anilist_id:
                 # Check if anime is in any list
                 if not anilist_client.is_in_any_list(anilist_id):
                     print("\n📝 Adicionando à sua lista do AniList...")
@@ -649,8 +672,11 @@ def anilist_anime_flow(
 
                 # Check for sequels when last episode is watched
                 if episode == num_episodes:
-                    if offer_sequel_and_continue(anilist_id, selected_anime, args):
+                    if offer_sequel_and_continue(anilist_id, args):
                         return  # Sequel started, exit this flow
+        else:
+            # User didn't finish - don't save anything, just continue to menu
+            pass
 
         opts = []
         if episode_idx < num_episodes - 1:
@@ -838,7 +864,9 @@ def search_anime_flow(args):
     cache_data = get_cache(query)
     selected_anime = None
     if cache_data:
-        print(f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', []))) } eps disponíveis)")
+        print(
+            f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', [])))} eps disponíveis)"
+        )
         # Populate repository from cache
         rep.load_from_cache(query, cache_data)
         selected_anime = query
@@ -846,7 +874,7 @@ def search_anime_flow(args):
         # Not in cache or expired: search scrapers normally
         # Start with full word count
         current_word_count = len(query.split())
-        min_words = 2  # Minimum words to search
+        min_words = 1  # Minimum words to search (support single-word anime like "Dandadan")
 
         # Progressive search loop: try full query, then reduce words if user wants more
         while True:
@@ -860,7 +888,7 @@ def search_anime_flow(args):
             if not titles_with_sources:
                 current_word_count -= 1
                 if current_word_count < min_words:
-                    return None, None  # No results found at all
+                    return None, None, None  # No results found at all
                 continue
 
             # Add "Continue searching" button if we can reduce words further
@@ -878,7 +906,7 @@ def search_anime_flow(args):
             )
 
             if not selected_anime_with_source:
-                return None, None  # User cancelled
+                return None, None, None  # User cancelled
 
             # Check if user selected "Continue searching"
             if selected_anime_with_source == CONTINUE_BUTTON:

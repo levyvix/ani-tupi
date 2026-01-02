@@ -7,6 +7,8 @@ Provides decorators for caching:
 - AniList metadata
 """
 
+from typing import Optional
+
 from diskcache import FanoutCache
 
 from config import settings
@@ -39,7 +41,7 @@ def cache_video_url(func):
     This is the BIGGEST performance win: 7-15 seconds → <100ms!
     """
 
-    def wrapper(cache_key, episode: int, source: str = None):
+    def wrapper(cache_key, episode: int, source: Optional[str] = None):
         """Wrapper that checks cache before calling expensive Selenium.
 
         Args:
@@ -160,7 +162,7 @@ def cache_anilist_metadata(func):
     return wrapper
 
 
-def get_cached_video_url(cache_key, episode: int, source: str = None) -> str | None:
+def get_cached_video_url(cache_key, episode: int, source: Optional[str] = None) -> str | None:
     """Direct cache lookup for video URLs (without calling scraper)."""
     cache = get_cache()
     key = f"video:{cache_key}:{episode}:{source or 'any'}"
