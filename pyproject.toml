@@ -35,7 +35,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ani-tupi = "cli:cli"
+ani-tupi = "main:cli"
 manga-tupi = "manga_tupi:main"
 
 [project.optional-dependencies]
