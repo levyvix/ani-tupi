@@ -36,13 +36,13 @@ jobs:
       run: |
         uv run python -m py_compile main.py
         uv run python -m py_compile manga_tupi.py
-        uv run python -m py_compile loader.py
-        uv run python -m py_compile repository.py
-        uv run python -m py_compile video_player.py
+        uv run python -m py_compile scrapers/loader.py
+        uv run python -m py_compile services/repository.py
+        uv run python -m py_compile utils/video_player.py
 
     - name: Verificar plugins
       run: |
-        for plugin in plugins/*.py; do
+        for plugin in scrapers/plugins/*.py; do
           if [ -f "$plugin" ]; then
             echo "Verificando $plugin..."
             uv run python -m py_compile "$plugin"
@@ -74,21 +74,22 @@ jobs:
 
     - name: Testar imports
       run: |
-        uv run python -c "import loader; print('✅ loader OK')"
-        uv run python -c "import repository; print('✅ repository OK')"
-        uv run python -c "import video_player; print('✅ video_player OK')"
+        uv run python -c "from scrapers import loader; print('✅ loader OK')"
+        uv run python -c "from services import repository; print('✅ repository OK')"
+        uv run python -c "from utils import video_player; print('✅ video_player OK')"
         uv run python -c "import manga_tupi; print('✅ manga_tupi OK')"
+        uv run python -c "from main import cli; print('✅ main.cli OK')"
 
     - name: Verificar estrutura de diretórios
       run: |
         echo "Estrutura do projeto:"
         ls -la
-        echo -e "\nPlugins:"
-        ls -la plugins/
+        echo -e "\nScrapers/Plugins:"
+        ls -la scrapers/plugins/
 
     - name: Testar help do CLI
       run: |
-        uv run python cli.py --help || true
+        uv run python main.py --help || true
         echo "✅ CLI executável"
-        uv run python cli.py anilist --help || true
+        uv run python main.py anilist --help || true
         echo "✅ CLI anilist executável"
