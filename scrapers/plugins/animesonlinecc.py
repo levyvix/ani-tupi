@@ -22,9 +22,9 @@ class AnimesOnlineCC(PluginInterface):
         html_content = requests.get(url, timeout=10)
         tree = HTMLParser(html_content.text)
 
-        divs = tree.css('div.data')
-        titles_urls = [div.css_first('h3 a').attributes.get('href') for div in divs]
-        titles = [div.css_first('h3 a').text() for div in divs]
+        divs = tree.css("div.data")
+        titles_urls = [div.css_first("h3 a").attributes.get("href") for div in divs]
+        titles = [div.css_first("h3 a").text() for div in divs]
 
         for title, url in zip(titles, titles_urls):
             rep.add_anime(title, url, AnimesOnlineCC.name)
@@ -32,7 +32,7 @@ class AnimesOnlineCC(PluginInterface):
         def parse_seasons(title, url):
             html = requests.get(url, timeout=10)
             tree = HTMLParser(html.text)
-            num_seasons = len(tree.css('div.se-c'))
+            num_seasons = len(tree.css("div.se-c"))
             if num_seasons > 1:
                 for n in range(2, num_seasons + 1):
                     rep.add_anime(title + " Temporada " + str(n), url, AnimesOnlineCC.name, n)
@@ -46,15 +46,15 @@ class AnimesOnlineCC(PluginInterface):
         html_episodes_page = requests.get(url, timeout=10)
         tree = HTMLParser(html_episodes_page.text)
 
-        seasons = tree.css('ul.episodios')
+        seasons = tree.css("ul.episodios")
         season_idx = season - 1 if season is not None else 0
         season_ul = seasons[season_idx] if season_idx < len(seasons) else seasons[0]
 
         urls, titles = [], []
-        for div in season_ul.css('div.episodiotitle'):
-            anchor = div.css_first('a')
+        for div in season_ul.css("div.episodiotitle"):
+            anchor = div.css_first("a")
             if anchor:
-                urls.append(anchor.attributes.get('href'))
+                urls.append(anchor.attributes.get("href"))
                 titles.append(anchor.text())
 
         rep.add_episode_list(anime, titles, urls, AnimesOnlineCC.name)
@@ -79,9 +79,7 @@ class AnimesOnlineCC(PluginInterface):
         try:
             xpath = "/html/body/div[1]/div[2]/div[2]/div[2]/div[1]/div[1]/div[1]/iframe"
             params = (By.XPATH, xpath)
-            WebDriverWait(driver, 7).until(
-                EC.visibility_of_all_elements_located(params)
-            )
+            WebDriverWait(driver, 7).until(EC.visibility_of_all_elements_located(params))
         except Exception:
             driver.quit()
             msg = "iframe not found in animesonlinecc page."

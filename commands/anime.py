@@ -125,15 +125,11 @@ def anime(args) -> None:
                             print("⚠️  Token do AniList expirou")
                             print("   Execute: ani-tupi anilist auth")
                         else:
-                            print(
-                                "⚠️  Não foi possível salvar no AniList (continuando...)"
-                            )
+                            print("⚠️  Não foi possível salvar no AniList (continuando...)")
 
                     # Check for sequels when last episode is watched
                     if episode == num_episodes:
-                        if anime_service.offer_sequel_and_continue(
-                            anilist_id, args
-                        ):
+                        if anime_service.offer_sequel_and_continue(anilist_id, args):
                             return  # Sequel started, exit this flow
 
         # Episode navigation menu
@@ -159,9 +155,7 @@ def anime(args) -> None:
             pass
         elif selected_opt == "📋 Escolher outro episódio":
             episode_list = rep.get_episode_list(selected_anime)
-            selected_episode = menu_navigate(
-                episode_list, msg="Escolha o episódio."
-            )
+            selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
             if not selected_episode:
                 continue  # Stay in current episode menu
             episode_idx = episode_list.index(selected_episode)

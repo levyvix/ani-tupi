@@ -8,10 +8,6 @@ Coverage:
 - Complete search workflow
 """
 
-import pytest
-
-from services.repository import Repository
-
 
 class TestE2ESearchWorkflow:
     """Test complete search workflow."""

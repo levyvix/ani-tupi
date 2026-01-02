@@ -56,7 +56,9 @@ def load_anilist_search_title(anilist_id: int) -> str | None:
         return None
 
 
-def save_anilist_mapping(anilist_id: int, scraper_title: str, search_title: str | None = None) -> None:
+def save_anilist_mapping(
+    anilist_id: int, scraper_title: str, search_title: str | None = None
+) -> None:
     """Save scraper title choice and search title for an AniList ID.
 
     Args:
@@ -739,7 +741,9 @@ def anilist_anime_flow(
                 continue  # Stay in current episode menu
             episode_idx = episode_list.index(selected_episode)
         elif selected_opt == "🔄 Trocar fonte":
-            new_anime, new_episode_idx = switch_anime_source(selected_anime, args, anilist_id, display_title)
+            new_anime, new_episode_idx = switch_anime_source(
+                selected_anime, args, anilist_id, display_title
+            )
             if new_anime:
                 selected_anime = new_anime
                 episode_idx = new_episode_idx
@@ -799,7 +803,6 @@ def switch_anime_source(
         titles_with_sources = rep.get_anime_titles_with_sources(
             filter_by_query=variant, original_query=used_query
         )
-        titles = [t.split(" [")[0] for t in titles_with_sources]
 
         # If found results, show interactive menu
         if titles_with_sources:

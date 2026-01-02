@@ -7,14 +7,13 @@ This module provides:
 - Cleanup fixtures for state management
 """
 
-import json
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
-from models.config import settings, get_data_path
+from models.config import settings
 from models.models import AnimeMetadata, EpisodeData, VideoUrl
 from services.repository import Repository
 
@@ -162,9 +161,7 @@ class MockPluginAnimesonlinecc:
             repo = Repository()
             episode_titles = [f"Ep {i}" for i in range(1, 13)]
             episode_urls = [f"{url}/{i}" for i in range(1, 13)]
-            repo.add_episode_list(
-                anime, episode_titles, episode_urls, "mock_animesonlinecc"
-            )
+            repo.add_episode_list(anime, episode_titles, episode_urls, "mock_animesonlinecc")
 
     @staticmethod
     def search_player_src(url_episode: str, container: list, event) -> None:
@@ -231,9 +228,9 @@ def mock_anilist_response_user_list():
                                 "media": {
                                     "id": 1,
                                     "title": {"userPreferred": "Dandadan"},
+                                    "episodes": 12,
                                 },
                                 "progress": 3,
-                                "media": {"episodes": 12},
                             }
                         ],
                     }
@@ -287,6 +284,7 @@ def mock_settings():
 @pytest.fixture
 def monkeypatch_settings(monkeypatch):
     """Monkeypatch settings for tests."""
+
     def set_setting(path: str, value):
         """Set a setting value using dot notation (e.g., 'cache.duration_hours')."""
         parts = path.split(".")

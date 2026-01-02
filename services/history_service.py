@@ -39,9 +39,13 @@ def clean_anime_title_for_search(title: str) -> str:
         "Dandadan 2ª Temporada Dublado" -> "Dandadan 2ª Temporada"
     """
     # Remove common suffixes in parentheses
-    title = re.sub(r'\s*\((Dublado|Legendado|Completo|Dual Audio|PT-BR)\)\s*', '', title, flags=re.IGNORECASE)
+    title = re.sub(
+        r"\s*\((Dublado|Legendado|Completo|Dual Audio|PT-BR)\)\s*", "", title, flags=re.IGNORECASE
+    )
     # Remove standalone "Dublado" or "Legendado" at the end
-    title = re.sub(r'\s+(Dublado|Legendado|Completo|Dual Audio|PT-BR)\s*$', '', title, flags=re.IGNORECASE)
+    title = re.sub(
+        r"\s+(Dublado|Legendado|Completo|Dual Audio|PT-BR)\s*$", "", title, flags=re.IGNORECASE
+    )
     return title.strip()
 
 
@@ -205,9 +209,7 @@ def load_history():
                     "🗑️  Remover do histórico",
                     "← Voltar ao menu de histórico",
                 ]
-                retry_choice = menu_navigate(
-                    retry_options, msg="O que deseja fazer?"
-                )
+                retry_choice = menu_navigate(retry_options, msg="O que deseja fazer?")
 
                 if retry_choice == "🔄 Tentar novamente":
                     # Retry: recursively call load_history() again
@@ -260,9 +262,7 @@ def load_history():
 
             if choice == "📋 Escolher outro episódio":
                 # Let user choose from full episode list
-                selected_episode = menu_navigate(
-                    episode_list, msg="Escolha o episódio."
-                )
+                selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
                 if not selected_episode:
                     exit()
                 episode_idx = episode_list.index(selected_episode)
@@ -282,9 +282,7 @@ def load_history():
                 episode_idx = option_to_idx[choice]
                 # Check if episode is unavailable (marked as None)
                 if episode_idx is None:
-                    print(
-                        f"\n⏳ Episódio {last_ep_num + 1} ainda não disponível nos scrapers."
-                    )
+                    print(f"\n⏳ Episódio {last_ep_num + 1} ainda não disponível nos scrapers.")
                     input("\nPressione Enter para voltar...")
                     exit()
 

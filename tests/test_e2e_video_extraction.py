@@ -8,18 +8,15 @@ Coverage:
 - URL validation
 """
 
-import asyncio
-
 import pytest
 
 from models.models import VideoUrl
-from services.repository import Repository
 
 
 class TestE2EVideoExtraction:
     """Test video URL extraction workflow."""
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_extract_video_url_success(self, mock_plugins_fixture):
         """Should extract video URL from available source."""
         repo = mock_plugins_fixture
@@ -50,7 +47,7 @@ class TestE2EVideoExtraction:
 class TestE2EMultiSourceFallback:
     """Test fallback between multiple sources."""
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_fallback_to_second_source(self, repo_fresh):
         """Should fallback if first source fails."""
         # Add episodes from multiple sources
@@ -71,7 +68,7 @@ class TestE2EMultiSourceFallback:
         # Should have episodes from at least one source
         assert len(episodes) >= 1
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_track_which_source_succeeded(self, repo_fresh):
         """Should track which source provided the result."""
         repo_fresh.add_episode_list(
@@ -122,7 +119,7 @@ class TestE2EVideoURLValidation:
 class TestE2EVideoExtractionErrors:
     """Test error handling in video extraction."""
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_handle_all_sources_fail(self, repo_fresh):
         """Should handle when all sources fail."""
         # This would be tested by actual video extraction
@@ -145,7 +142,7 @@ class TestE2EVideoExtractionErrors:
 class TestE2EVideoURLRetrieval:
     """Test complete video URL retrieval flow."""
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_get_video_after_episode_selection(self, repo_fresh):
         """Should get video URL after selecting episode."""
         repo_fresh.add_episode_list(

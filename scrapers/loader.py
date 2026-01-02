@@ -78,9 +78,7 @@ def load_plugins(languages: dict, plugins=None) -> None:
 
     # Get all available plugin files
     all_plugin_files = [
-        file[:-3]
-        for file in listdir(path)
-        if isfile(join(path, file)) and file not in system
+        file[:-3] for file in listdir(path) if isfile(join(path, file)) and file not in system
     ]
 
     # Apply filtering based on preferences

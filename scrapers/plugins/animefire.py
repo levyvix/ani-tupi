@@ -20,9 +20,7 @@ class AnimeFire(PluginInterface):
         url = "https://animefire.plus/pesquisar/" + "-".join(query.split())
         html_content = requests.get(url)
         tree = HTMLParser(html_content.text)
-        target_class = (
-            "col-6 col-sm-4 col-md-3 col-lg-2 mb-1 minWDanime divCardUltimosEps"
-        )
+        target_class = "col-6 col-sm-4 col-md-3 col-lg-2 mb-1 minWDanime divCardUltimosEps"
         titles_urls = [
             div.css_first("article a").attributes.get("href")
             for div in tree.css(f"div.{target_class.replace(' ', '.')}")
@@ -48,9 +46,7 @@ class AnimeFire(PluginInterface):
 
         try:
             if is_firefox_installed_as_snap():
-                service = webdriver.FirefoxService(
-                    executable_path="/snap/bin/geckodriver"
-                )
+                service = webdriver.FirefoxService(executable_path="/snap/bin/geckodriver")
                 driver = webdriver.Firefox(options=options, service=service)
             else:
                 driver = webdriver.Firefox(options=options)
@@ -61,16 +57,12 @@ class AnimeFire(PluginInterface):
         driver.get(url_episode)
         try:
             params = (By.ID, "my-video_html5_api")
-            WebDriverWait(driver, 7).until(
-                EC.visibility_of_all_elements_located(params)
-            )
+            WebDriverWait(driver, 7).until(EC.visibility_of_all_elements_located(params))
         except:
             try:
                 xpath = "/html/body/div[2]/div[2]/div/div[1]/div[1]/div/div/div[2]/div[4]/iframe"
                 params = (By.XPATH, xpath)
-                WebDriverWait(driver, 7).until(
-                    EC.visibility_of_all_elements_located(params)
-                )
+                WebDriverWait(driver, 7).until(EC.visibility_of_all_elements_located(params))
             except:
                 driver.quit()
                 msg = "nor iframe nor video tags were found in animefire."

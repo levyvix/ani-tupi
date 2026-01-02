@@ -9,27 +9,24 @@ Coverage:
 - Mock plugin creation for testing
 """
 
-import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 
 from scrapers.loader import PluginInterface, get_resource_path, load_plugins
-from services.repository import Repository
 
 
 class TestGetResourcePath:
     """Test get_resource_path utility."""
 
-    @pytest.mark.skip(reason='Tests have incorrect method signatures')
+    @pytest.mark.skip(reason="Tests have incorrect method signatures")
     def test_get_resource_path_returns_path(self):
         """Should return a valid path."""
         path = get_resource_path()
         assert isinstance(path, (str, Path))
         assert len(str(path)) > 0
 
-    @pytest.mark.skip(reason='Tests have incorrect method signatures')
+    @pytest.mark.skip(reason="Tests have incorrect method signatures")
     def test_get_resource_path_contains_loader(self):
         """Should point to directory containing loader module."""
         path = get_resource_path()
@@ -119,7 +116,7 @@ class TestPluginLoading:
         load_plugins(languages=["pt-br", "en"])
         # If no exception, test passes
 
-    @pytest.mark.skip(reason='Tests have incorrect method signatures')
+    @pytest.mark.skip(reason="Tests have incorrect method signatures")
     def test_load_plugins_default_language(self):
         """Should have default language (pt-br)."""
         load_plugins()
@@ -274,7 +271,7 @@ class TestPluginInterfaceValidation:
         with pytest.raises(TypeError):
             InvalidPlugin()
 
-    @pytest.mark.skip(reason='Tests have incorrect method signatures')
+    @pytest.mark.skip(reason="Tests have incorrect method signatures")
     def test_plugin_must_implement_load(self):
         """Plugin must implement load function."""
 

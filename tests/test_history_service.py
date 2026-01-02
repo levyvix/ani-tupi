@@ -11,7 +11,6 @@ Coverage:
 import json
 from pathlib import Path
 
-import pytest
 
 from services import history_service
 

@@ -198,9 +198,8 @@ class TestAniListErrorHandling:
     def test_handle_invalid_token(self):
         """Should handle invalid authentication token."""
         try:
-            from services.anilist_service import AniListClient
+            from services.anilist_service import AniListClient  # noqa: F401
 
-            client = AniListClient()
             # Should have error handling
             assert True
         except ImportError:
@@ -209,9 +208,8 @@ class TestAniListErrorHandling:
     def test_handle_network_error(self):
         """Should handle network errors gracefully."""
         try:
-            from services.anilist_service import AniListClient
+            from services.anilist_service import AniListClient  # noqa: F401
 
-            client = AniListClient()
             # Should have error handling
             assert True
         except ImportError:
@@ -220,9 +218,8 @@ class TestAniListErrorHandling:
     def test_handle_api_rate_limit(self):
         """Should handle API rate limiting."""
         try:
-            from services.anilist_service import AniListClient
+            from services.anilist_service import AniListClient  # noqa: F401
 
-            client = AniListClient()
             # Should have rate limit handling
             assert True
         except ImportError:

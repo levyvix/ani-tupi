@@ -57,12 +57,12 @@ def auto_discover_anilist_id(scraper_title: str) -> int | None:
                 continue
 
             # Check both titles
-            score_romaji = fuzz.ratio(
-                scraper_title.lower(), title_romaji.lower()
-            ) if title_romaji else 0
-            score_english = fuzz.ratio(
-                scraper_title.lower(), title_english.lower()
-            ) if title_english else 0
+            score_romaji = (
+                fuzz.ratio(scraper_title.lower(), title_romaji.lower()) if title_romaji else 0
+            )
+            score_english = (
+                fuzz.ratio(scraper_title.lower(), title_english.lower()) if title_english else 0
+            )
             score = max(score_romaji, score_english)
 
             if score > best_score:

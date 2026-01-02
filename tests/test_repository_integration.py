@@ -9,13 +9,7 @@ Coverage:
 - Error handling when plugin fails
 """
 
-import asyncio
-from unittest.mock import Mock, patch
-
 import pytest
-
-from models.models import VideoUrl
-from services.repository import Repository
 
 
 class TestSearchAnimeIntegration:
@@ -60,7 +54,7 @@ class TestSearchAnimeIntegration:
 class TestSearchEpisodesIntegration:
     """Test search_episodes with plugins."""
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_search_episodes_after_anime_selection(self, repo_fresh, mock_plugins_fixture):
         """Should get episodes after selecting anime."""
         repo_fresh.search_anime("dandadan")
@@ -73,7 +67,7 @@ class TestSearchEpisodesIntegration:
             episodes = repo_fresh.get_episode_list("Dandadan")
             assert len(episodes) > 0
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_search_episodes_multiple_sources(self, repo_fresh, mock_plugins_fixture):
         """Should get episodes from available sources."""
         repo_fresh.search_anime("dandadan")
@@ -87,7 +81,6 @@ class TestSearchEpisodesIntegration:
 
     def test_search_episodes_creates_episodes_data(self, repo_fresh):
         """Should create properly structured EpisodeData."""
-        from models.models import EpisodeData
 
         repo_fresh.add_episode_list(
             "Dandadan",
@@ -174,7 +167,7 @@ class TestErrorHandling:
         # Registering shouldn't cause issues
         repo_fresh.register(FailingPlugin)
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_get_anime_url_not_found(self, repo_fresh):
         """Should return None for anime not found."""
         url = repo_fresh.get_anime_url("Nonexistent Anime")
@@ -203,14 +196,13 @@ class TestPlayerSrcExtraction:
 class TestRepositoryStateManagement:
     """Test Repository state across operations."""
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_clear_preserves_settings(self, repo_fresh):
         """Should clear data but not settings."""
         repo_fresh.set_selected_anime("Dandadan")
         repo_fresh.clear_search_results()
 
         # Selected anime might be cleared too
-        selected = repo_fresh.get_selected_anime()
         # Implementation dependent
 
     def test_multiple_search_cycles(self, repo_fresh, mock_plugins_fixture):

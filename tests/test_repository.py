@@ -12,21 +12,18 @@ Coverage:
 import pytest
 from fuzzywuzzy import fuzz
 
-from models.models import AnimeMetadata
-from services.repository import Repository
-
 
 class TestTitleNormalization:
     """Test title normalization in Repository."""
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_normalize_removes_accents(self, repo_fresh):
         """Should remove accents from titles."""
         title = "Dãndadãn"
         normalized = repo_fresh.normalize_title(title)
         assert "ã" not in normalized
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_normalize_removes_special_characters(self, repo_fresh):
         """Should remove special characters."""
         title = "Attack on Titan (Part 1)"
@@ -34,21 +31,21 @@ class TestTitleNormalization:
         assert "(" not in normalized
         assert ")" not in normalized
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_normalize_converts_to_lowercase(self, repo_fresh):
         """Should convert to lowercase."""
         title = "DANDADAN"
         normalized = repo_fresh.normalize_title(title)
         assert normalized.islower()
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_normalize_removes_extra_spaces(self, repo_fresh):
         """Should remove extra spaces."""
         title = "Dandadan  2nd  Season"
         normalized = repo_fresh.normalize_title(title)
         assert "  " not in normalized
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_normalize_handles_unicode(self, repo_fresh):
         """Should handle unicode characters."""
         title = "進撃の巨人"  # "Attack on Titan" in Japanese
@@ -63,7 +60,7 @@ class TestTitleNormalization:
             ("Solo Leveling (2024)", "2024"),
         ],
     )
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_normalize_consistent(self, repo_fresh, title, expected_contains):
         """Should produce consistent normalization."""
         normalized = repo_fresh.normalize_title(title)
@@ -81,7 +78,7 @@ class TestFuzzyMatching:
         ratio = fuzz.ratio(title1, title2)
         assert ratio >= 95
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_fuzzy_match_similar_titles(self, repo_fresh):
         """Should match similar titles above threshold."""
         title1 = "dandadan"
@@ -113,7 +110,7 @@ class TestFuzzyMatching:
             ("Attack on Titan", "Attack on Titans", False),  # Extra character
         ],
     )
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_fuzzy_match_scenarios(self, repo_fresh, title1, title2, should_match):
         """Test various fuzzy matching scenarios."""
         ratio = fuzz.ratio(title1.lower(), title2.lower())
@@ -157,7 +154,7 @@ class TestAnimeRegistration:
         # May have duplicates or be deduplicated - test what exists
         assert len(sources) >= 1
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_add_anime_normalized_title(self, repo_fresh):
         """Should normalize titles when adding."""
         repo_fresh.add_anime("DANDADAN", "https://example.com", "source1")
@@ -205,7 +202,7 @@ class TestPluginRegistration:
         assert "mock_animefire" in repo_fresh.sources
         assert "mock_animesonlinecc" in repo_fresh.sources
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_get_registered_plugins(self, repo_fresh, mock_plugins_fixture):
         """Should retrieve registered plugins."""
         sources = repo_fresh.get_sources()
@@ -233,7 +230,7 @@ class TestSearchResultsState:
         assert len(anime_list) == 0
         assert len(episodes) == 0
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_set_selected_anime(self, repo_fresh):
         """Should set selected anime."""
         repo_fresh.add_anime("Dandadan", "https://example.com", "source1")
@@ -242,7 +239,7 @@ class TestSearchResultsState:
         selected = repo_fresh.get_selected_anime()
         assert selected == "Dandadan"
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_get_selected_anime_empty(self, repo_fresh):
         """Should handle no selected anime."""
         selected = repo_fresh.get_selected_anime()
@@ -269,7 +266,7 @@ class TestEpisodeManagement:
         episodes = repo_fresh.get_episode_list("Nonexistent")
         assert len(episodes) == 0
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_get_episode_url(self, repo_fresh, sample_episodes_dandadan):
         """Should get episode URL by index."""
         repo_fresh.add_episode_list(
@@ -283,7 +280,7 @@ class TestEpisodeManagement:
         assert url is not None
         assert "animefire" in url or "dandadan" in url
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_get_episode_url_out_of_bounds(self, repo_fresh, sample_episodes_dandadan):
         """Should handle out of bounds episode index."""
         repo_fresh.add_episode_list(
@@ -309,7 +306,7 @@ class TestAnimeNormalization:
         norm_titles = repo_fresh.norm_titles
         assert len(norm_titles) >= 0  # May or may not deduplicate
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_get_anime_url(self, repo_fresh):
         """Should get URL for anime."""
         repo_fresh.add_anime("Dandadan", "https://animefire.plus/animes/dandadan", "animefire")
@@ -318,7 +315,7 @@ class TestAnimeNormalization:
         assert url is not None
         assert "dandadan" in url.lower()
 
-    @pytest.mark.skip(reason='Tests non-existent Repository method')
+    @pytest.mark.skip(reason="Tests non-existent Repository method")
     def test_get_anime_url_not_found(self, repo_fresh):
         """Should handle anime not found."""
         url = repo_fresh.get_anime_url("Nonexistent")

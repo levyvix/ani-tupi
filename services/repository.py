@@ -578,7 +578,9 @@ class Repository:
                     # Don't re-raise - let other sources try
 
             # PRIORIDADE: Separar AnimeFiree das outras fontes
-            animefire_urls = [(url, source) for url, source in selected_urls if source == "animefire"]
+            animefire_urls = [
+                (url, source) for url, source in selected_urls if source == "animefire"
+            ]
             other_urls = [(url, source) for url, source in selected_urls if source != "animefire"]
 
             with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
@@ -598,9 +600,7 @@ class Repository:
                     # Esperar por AnimeFiree (com timeout de 15s)
                     try:
                         _done, _pending = await asyncio.wait(
-                            animefire_tasks,
-                            return_when=asyncio.FIRST_COMPLETED,
-                            timeout=15
+                            animefire_tasks, return_when=asyncio.FIRST_COMPLETED, timeout=15
                         )
                     except asyncio.TimeoutError:
                         _pending = set(animefire_tasks)
@@ -622,8 +622,7 @@ class Repository:
                             for url, source in other_urls
                         ]
                         _done, _pending = await asyncio.wait(
-                            other_tasks,
-                            return_when=asyncio.FIRST_COMPLETED
+                            other_tasks, return_when=asyncio.FIRST_COMPLETED
                         )
 
                         # Se container is empty after first task, wait for remaining tasks

@@ -56,10 +56,8 @@ class AniListClient:
         # Build OAuth URL
         auth_url = f"{settings.anilist.auth_url}?client_id={settings.anilist.client_id}&response_type=token"
 
-
         # Open browser
         webbrowser.open(auth_url, new=2)
-
 
         # Get token from user
         token_input = input("\nCole o token aqui: ").strip()
@@ -561,10 +559,7 @@ class AniListClient:
         }
         """
 
-        variables = {
-            "mediaId": anime_id,
-            "status": status
-        }
+        variables = {"mediaId": anime_id, "status": status}
 
         try:
             result = self._query(mutation, variables)
