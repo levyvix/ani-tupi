@@ -14,8 +14,8 @@ from sys import exit
 
 import re
 
-from config import get_data_path
-from repository import rep
+from models.config import get_data_path
+from services.repository import rep
 from ui.components import loading, menu_navigate
 
 # Use centralized path function from config
@@ -123,7 +123,7 @@ def load_history():
             progress_source = "Local"
 
             if anilist_id:
-                from core.anilist_service import anilist_client
+                from services.anilist_service import anilist_client
 
                 anime_info = anilist_client.get_anime_by_id(anilist_id)
                 if anime_info:

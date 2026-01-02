@@ -10,7 +10,7 @@ Coverage:
 
 import pytest
 
-from repository import Repository
+from services.repository import Repository
 
 
 class TestE2ESearchWorkflow:

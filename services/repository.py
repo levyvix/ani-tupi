@@ -5,9 +5,9 @@ from concurrent.futures import ThreadPoolExecutor
 from os import cpu_count
 from threading import Thread
 
-from config import settings
-from loader import PluginInterface
-from models import EpisodeData
+from models.config import settings
+from scrapers.loader import PluginInterface
+from models.models import EpisodeData
 
 
 class Repository:
@@ -62,7 +62,7 @@ class Repository:
         # CACHE CHECK: Try to get search results from cache first
         cache_key = f"search:{query.lower()}"
         try:
-            from cache_manager import get_cache as get_dc
+            from utils.cache_manager import get_cache as get_dc
 
             dc = get_dc()
             cached_results = dc.get(cache_key)
@@ -82,7 +82,7 @@ class Repository:
 
             # Still auto-discover IDs for cached results
             if settings.cache.anilist_auto_discover:
-                from anilist_discovery import auto_discover_anilist_id
+                from utils.anilist_discovery import auto_discover_anilist_id
 
                 for anime_title in self.anime_to_urls.keys():
                     if anime_title not in self.anime_to_anilist_id:
@@ -141,7 +141,7 @@ class Repository:
 
         # Auto-discover AniList IDs for search results (non-blocking)
         if settings.cache.anilist_auto_discover:
-            from anilist_discovery import auto_discover_anilist_id
+            from utils.anilist_discovery import auto_discover_anilist_id
 
             for anime_title in self.anime_to_urls.keys():
                 if anime_title not in self.anime_to_anilist_id:
@@ -152,7 +152,7 @@ class Repository:
         # CACHE SAVE: Save search results to cache
         if len(self.anime_to_urls) > 0:
             try:
-                from cache_manager import get_cache as get_dc
+                from utils.cache_manager import get_cache as get_dc
 
                 dc = get_dc()
                 cache_key = f"search:{query.lower()}"
@@ -522,7 +522,7 @@ class Repository:
         Assumes all episode lists are the same size.
         Plugin devs should guarantee that OVAs are not considered.
         """
-        from anilist_discovery import auto_discover_anilist_id
+        from utils.anilist_discovery import auto_discover_anilist_id
 
         selected_urls = []
         for urls, source in self.anime_episodes_urls[anime]:
@@ -577,27 +577,83 @@ class Repository:
                     print(f"   ❌ {source} falhou: {error_msg[:80]}")
                     # Don't re-raise - let other sources try
 
+            # PRIORIDADE: Separar AnimeFiree das outras fontes
+            animefire_urls = [(url, source) for url, source in selected_urls if source == "animefire"]
+            other_urls = [(url, source) for url, source in selected_urls if source != "animefire"]
+
             with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
-                tasks = [
-                    loop.run_in_executor(
-                        executor,
-                        safe_plugin_call,
-                        self.sources[source].search_player_src,
-                        url,
-                        source,
-                    )
-                    for url, source in selected_urls
-                ]
+                # Se AnimeFiree está disponível, tentar primeiro
+                if animefire_urls:
+                    animefire_tasks = [
+                        loop.run_in_executor(
+                            executor,
+                            safe_plugin_call,
+                            self.sources[source].search_player_src,
+                            url,
+                            source,
+                        )
+                        for url, source in animefire_urls
+                    ]
 
-                # Wait for all tasks to complete (any task that finds a URL will set event)
-                # Continue until all tasks finish or one succeeds
-                _done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                    # Esperar por AnimeFiree (com timeout de 15s)
+                    try:
+                        _done, _pending = await asyncio.wait(
+                            animefire_tasks,
+                            return_when=asyncio.FIRST_COMPLETED,
+                            timeout=15
+                        )
+                    except asyncio.TimeoutError:
+                        _pending = set(animefire_tasks)
 
-                # If container is empty after first task, wait for remaining tasks
-                while not container and _pending:
-                    _done, _pending = await asyncio.wait(
-                        _pending, return_when=asyncio.FIRST_COMPLETED
-                    )
+                    # Se AnimeFiree encontrou, retornar imediatamente
+                    if container:
+                        return container[0]
+
+                    # Se AnimeFiree falhou, tentar outras fontes
+                    if other_urls:
+                        other_tasks = [
+                            loop.run_in_executor(
+                                executor,
+                                safe_plugin_call,
+                                self.sources[source].search_player_src,
+                                url,
+                                source,
+                            )
+                            for url, source in other_urls
+                        ]
+                        _done, _pending = await asyncio.wait(
+                            other_tasks,
+                            return_when=asyncio.FIRST_COMPLETED
+                        )
+
+                        # Se container is empty after first task, wait for remaining tasks
+                        while not container and _pending:
+                            _done, _pending = await asyncio.wait(
+                                _pending, return_when=asyncio.FIRST_COMPLETED
+                            )
+
+                else:
+                    # Se AnimeFiree não está disponível, race todas as fontes normalmente
+                    tasks = [
+                        loop.run_in_executor(
+                            executor,
+                            safe_plugin_call,
+                            self.sources[source].search_player_src,
+                            url,
+                            source,
+                        )
+                        for url, source in selected_urls
+                    ]
+
+                    # Wait for all tasks to complete (any task that finds a URL will set event)
+                    # Continue until all tasks finish or one succeeds
+                    _done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+                    # If container is empty after first task, wait for remaining tasks
+                    while not container and _pending:
+                        _done, _pending = await asyncio.wait(
+                            _pending, return_when=asyncio.FIRST_COMPLETED
+                        )
 
                 # Get video URL if found, otherwise return None
                 video_url = container[0] if container else None

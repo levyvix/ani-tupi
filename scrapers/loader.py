@@ -103,5 +103,5 @@ def load_plugins(languages: dict, plugins=None) -> None:
 
     # Load each enabled plugin
     for plugin in plugins:
-        plugin_module = importlib.import_module("plugins." + plugin)
+        plugin_module = importlib.import_module("scrapers.plugins." + plugin)
         plugin_module.load(languages)

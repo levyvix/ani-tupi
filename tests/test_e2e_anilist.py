@@ -18,7 +18,7 @@ class TestE2EAniListWorkflow:
     def test_search_watch_update_workflow(self):
         """Should complete search → watch → update flow."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Just verify client can be created
@@ -29,7 +29,7 @@ class TestE2EAniListWorkflow:
     def test_get_trending_and_select_anime(self):
         """Should get trending anime and select one."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "get_trending")
@@ -39,7 +39,7 @@ class TestE2EAniListWorkflow:
     def test_watch_episode_and_update_progress(self):
         """Should update progress after watching episode."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "update_progress")
@@ -53,7 +53,7 @@ class TestE2EAniListAuthentication:
     def test_authenticate_with_oauth(self):
         """Should support OAuth authentication."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "authenticate") or hasattr(client, "auth")
@@ -63,7 +63,7 @@ class TestE2EAniListAuthentication:
     def test_save_and_load_token(self):
         """Should persist authentication token."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Should have token handling
@@ -74,7 +74,7 @@ class TestE2EAniListAuthentication:
     def test_reauthenticate_after_logout(self):
         """Should reauthenticate after logout."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "authenticate")
@@ -89,7 +89,7 @@ class TestE2EAniListOfflineMode:
     def test_handle_network_error(self, mock_post):
         """Should handle network errors gracefully."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             mock_post.side_effect = ConnectionError("Network unreachable")
             client = AniListClient()
@@ -101,7 +101,7 @@ class TestE2EAniListOfflineMode:
     def test_offline_fallback_to_local_history(self):
         """Should fall back to local history if AniList unavailable."""
         try:
-            from core.history_service import HistoryService
+            from services.history_service import HistoryService
 
             service = HistoryService("test_history.json")
             # Should still work locally
@@ -121,7 +121,7 @@ class TestE2EProgressSync:
     def test_sync_episode_progress(self):
         """Should sync episode progress to AniList."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "update_progress")
@@ -131,7 +131,7 @@ class TestE2EProgressSync:
     def test_sync_status_change(self):
         """Should sync status changes to AniList."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Should support status updates
@@ -142,7 +142,7 @@ class TestE2EProgressSync:
     def test_sync_rating_to_anilist(self):
         """Should sync user ratings."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Should support rating updates
@@ -157,7 +157,7 @@ class TestE2EListManagement:
     def test_get_all_user_lists(self):
         """Should retrieve all user lists."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "get_user_list")
@@ -167,7 +167,7 @@ class TestE2EListManagement:
     def test_move_anime_between_lists(self):
         """Should move anime between lists."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Should support list management
@@ -178,7 +178,7 @@ class TestE2EListManagement:
     def test_add_anime_to_planning(self):
         """Should add new anime to planning list."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "update_progress")
@@ -192,7 +192,7 @@ class TestE2EAniListIntegrationFlow:
     def test_trending_selection_watch_sync_flow(self):
         """Should complete full: trending → select → watch → sync."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Verify all required methods exist
@@ -204,7 +204,7 @@ class TestE2EAniListIntegrationFlow:
     def test_user_list_resume_watch_sync_flow(self):
         """Should complete full: user list → resume → watch → sync."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "get_user_list")
@@ -214,7 +214,7 @@ class TestE2EAniListIntegrationFlow:
     def test_search_add_to_list_watch_sync_flow(self):
         """Should complete full: search → add → watch → sync."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "search_anime")
@@ -228,7 +228,7 @@ class TestE2EAniListErrorRecovery:
     def test_recover_from_invalid_token(self):
         """Should handle invalid tokens gracefully."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Should handle auth errors
@@ -239,7 +239,7 @@ class TestE2EAniListErrorRecovery:
     def test_recover_from_api_error(self):
         """Should handle AniList API errors."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert client is not None

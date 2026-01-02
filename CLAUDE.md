@@ -548,37 +548,72 @@ video = VideoUrl(
 
 ## Architecture Deep Dive
 
-### Module Organization (as of 2026-01-01)
+### Module Organization (as of 2026-01-02)
 
-The codebase is organized into clear layers:
+The codebase is now organized into a clean, modular folder-based structure with clear separation of concerns:
 
 ```
 ani-tupi/
-├── core/                    # Business logic layer
+├── main.py                      # Single unified CLI entry point
+├── manga_tupi.py                # Manga mode entry point (imported by commands/manga.py)
+├── plugin_manager.py            # Plugin preference management
+│
+├── commands/                    # Command handlers (new routing layer)
 │   ├── __init__.py
-│   ├── anilist_service.py   # AniList GraphQL API client
-│   └── history_service.py   # Watch history management
-├── ui/                      # User interface layer
+│   ├── anime.py                 # Anime search & playback
+│   ├── anilist.py               # AniList menu & sync
+│   ├── manga.py                 # Manga reader
+│   └── sources.py               # Plugin management
+│
+├── services/                    # Business logic layer (organized)
 │   ├── __init__.py
-│   ├── components.py        # Reusable menu widgets (menu, loading)
-│   └── anilist_menus.py     # AniList browsing interface
-├── plugins/                 # Scraper plugins (no changes)
-│   ├── animefire.py
-│   └── animesonlinecc.py
-├── cli.py                   # NEW: CLI entry point
-├── main.py                  # Legacy controller (contains most business logic)
-├── manga_tupi.py            # Manga mode entry point
-├── repository.py            # Singleton data store
-├── models.py                # Pydantic data models
-├── config.py                # Centralized configuration
-└── loader.py                # Plugin discovery system
+│   ├── anime_service.py         # [moved from core/]
+│   ├── anilist_service.py       # [moved from core/]
+│   ├── history_service.py       # [moved from core/]
+│   ├── manga_service.py         # Manga business logic
+│   └── repository.py            # Central data store
+│
+├── utils/                       # Utilities (consolidated)
+│   ├── __init__.py
+│   ├── video_player.py          # MPV integration
+│   ├── scraper_cache.py         # SQLite caching
+│   ├── cache_manager.py         # Cache operations
+│   └── anilist_discovery.py     # AniList ID discovery
+│
+├── scrapers/                    # Plugin system (organized)
+│   ├── __init__.py
+│   ├── loader.py                # Plugin discovery & loading
+│   └── plugins/                 # Plugin implementations
+│       ├── animefire.py
+│       └── animesonlinecc.py
+│
+├── models/                      # Data models (organized)
+│   ├── __init__.py
+│   ├── models.py                # Pydantic data models
+│   └── config.py                # Centralized configuration
+│
+├── ui/                          # User interface layer
+│   ├── __init__.py
+│   ├── components.py            # Reusable menu widgets
+│   └── anilist_menus.py         # AniList browsing interface
+│
+└── tests/                       # Testing (unchanged structure)
 ```
 
 **Dependency Rules:**
-- `core/` can import: `models`, `config`, `repository`, `loader`
-- `ui/` can import: `core/`, `models`, `config`, `repository`
-- `plugins/` can import: `loader`, `repository`, `models`
-- `cli.py` imports: `main` (for now - will evolve to use `ui/` and `core/` directly)
+- `main.py` routes to `commands/` handlers
+- `commands/` imports from `services/`, `ui/`, `utils/`
+- `services/` imports from `models/`, `utils/`, `scrapers/`
+- `utils/` imports from `services/` (late imports to avoid cycles)
+- `scrapers/` imports from `models/`, `services/`
+- All imports to `ui/` are last (UI doesn't import services)
+
+**Key Improvements:**
+- **Single entry point:** `main.py` consolidates `cli.py` + `main.py` + `manga_tupi.py` logic
+- **Clear routing:** Each `commands/` file handles one user flow
+- **Organized utilities:** All utilities grouped in `utils/`
+- **Better discovery:** Plugin system under `scrapers/`
+- **No scattered files:** Root directory only has 3 files (main.py, manga_tupi.py, plugin_manager.py)
 
 ### TUI System (Rich + InquirerPy)
 

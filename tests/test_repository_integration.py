@@ -14,8 +14,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from models import VideoUrl
-from repository import Repository
+from models.models import VideoUrl
+from services.repository import Repository
 
 
 class TestSearchAnimeIntegration:
@@ -87,7 +87,7 @@ class TestSearchEpisodesIntegration:
 
     def test_search_episodes_creates_episodes_data(self, repo_fresh):
         """Should create properly structured EpisodeData."""
-        from models import EpisodeData
+        from models.models import EpisodeData
 
         repo_fresh.add_episode_list(
             "Dandadan",

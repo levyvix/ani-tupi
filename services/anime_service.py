@@ -13,13 +13,13 @@ Used by: main.py, ui modules
 import re
 from json import dump, load
 
-import loader
-from config import get_data_path, settings
-from core.anilist_service import anilist_client
-from core.history_service import reset_history, save_history
-from repository import rep
+from scrapers import loader
+from models.config import get_data_path, settings
+from services.anilist_service import anilist_client
+from services.history_service import reset_history, save_history
+from services.repository import rep
 from ui.components import loading, menu_navigate
-from video_player import play_video
+from utils.video_player import play_video
 
 # Use centralized path function from config
 HISTORY_PATH = get_data_path()
@@ -268,7 +268,7 @@ def anilist_anime_flow(
     # Use display_title if provided, otherwise fall back to anime_title
     if not display_title:
         display_title = anime_title
-    from scraper_cache import get_cache, set_cache
+    from utils.scraper_cache import get_cache, set_cache
 
     loader.load_plugins({"pt-br"})  # type: ignore
 
@@ -956,7 +956,7 @@ def search_anime_flow(args):
         else "eva"
     )
 
-    from scraper_cache import get_cache
+    from utils.scraper_cache import get_cache
 
     # Cache-first: Check if query is in cache before searching scrapers
     cache_data = get_cache(query)

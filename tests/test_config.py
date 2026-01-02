@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from config import settings, get_data_path, AppSettings
+from models.config import settings, get_data_path, AppSettings
 
 
 class TestConfigDefaults:

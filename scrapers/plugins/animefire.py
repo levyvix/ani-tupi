@@ -5,8 +5,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
-from loader import PluginInterface
-from repository import rep
+from scrapers.loader import PluginInterface
+from services.repository import rep
 
 from .utils import is_firefox_installed_as_snap
 

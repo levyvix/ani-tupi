@@ -11,7 +11,7 @@ from typing import Optional
 
 from diskcache import FanoutCache
 
-from config import settings
+from models.config import settings
 
 # Cache global (FanoutCache = 4 shards SQLite for concurrency)
 _cache = None

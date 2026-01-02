@@ -12,8 +12,8 @@ import asyncio
 
 import pytest
 
-from models import VideoUrl
-from repository import Repository
+from models.models import VideoUrl
+from services.repository import Repository
 
 
 class TestE2EVideoExtraction:

@@ -7,7 +7,7 @@ metadata enrichment.
 
 from fuzzywuzzy import fuzz
 
-from cache_manager import get_cache
+from utils.cache_manager import get_cache
 
 
 def auto_discover_anilist_id(scraper_title: str) -> int | None:
@@ -23,7 +23,7 @@ def auto_discover_anilist_id(scraper_title: str) -> int | None:
     Returns:
         anilist_id if strong match found, None otherwise
     """
-    from config import settings
+    from models.config import settings
 
     try:
         # Check cache first
@@ -35,7 +35,7 @@ def auto_discover_anilist_id(scraper_title: str) -> int | None:
             return cached  # None is valid (means "not found")
 
         # Query AniList API
-        from core.anilist_service import anilist_client
+        from services.anilist_service import anilist_client
 
         results = anilist_client.search_anime(scraper_title)
 
@@ -109,7 +109,7 @@ def get_anilist_metadata(anilist_id: int) -> dict | None:
         return cached
 
     try:
-        from core.anilist_service import anilist_client
+        from services.anilist_service import anilist_client
 
         # Fetch from AniList API
         metadata = anilist_client.get_anime_details(anilist_id)

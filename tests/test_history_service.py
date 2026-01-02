@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from core import history_service
+from services import history_service
 
 
 class TestHistorySave:

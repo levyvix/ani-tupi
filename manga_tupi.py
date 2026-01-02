@@ -10,8 +10,8 @@ import subprocess
 
 from InquirerPy import inquirer
 
-from config import settings
-from manga_service import (
+from models.config import settings
+from services.manga_service import (
     MangaDexClient,
     MangaDexError,
     MangaHistory,

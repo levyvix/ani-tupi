@@ -9,7 +9,7 @@ import webbrowser
 
 import requests
 
-from config import settings
+from models.config import settings
 
 
 class AniListClient:

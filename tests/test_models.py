@@ -11,7 +11,7 @@ Coverage:
 import pytest
 from pydantic import ValidationError
 
-from models import AnimeMetadata, EpisodeData, VideoUrl
+from models.models import AnimeMetadata, EpisodeData, VideoUrl
 
 
 class TestAnimeMetadata:

@@ -12,8 +12,8 @@ Coverage:
 import pytest
 from fuzzywuzzy import fuzz
 
-from models import AnimeMetadata
-from repository import Repository
+from models.models import AnimeMetadata
+from services.repository import Repository
 
 
 class TestTitleNormalization:

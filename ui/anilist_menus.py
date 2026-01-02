@@ -6,8 +6,8 @@ import json
 import os
 import webbrowser
 
-from core.anilist_service import anilist_client
-from config import get_data_path
+from services.anilist_service import anilist_client
+from models.config import get_data_path
 from ui.components import loading, menu_navigate
 
 # History file path (centralized from config)
@@ -342,7 +342,7 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
         # Import here to avoid circular import
         import argparse
 
-        from core.anime_service import anilist_anime_flow
+        from services.anime_service import anilist_anime_flow
 
         # Create args object for anilist_anime_flow
         args = argparse.Namespace(debug=False)
@@ -477,7 +477,7 @@ def _show_recent_history() -> None:
         # Import here to avoid circular import
         import argparse
 
-        from core.anime_service import anilist_anime_flow
+        from services.anime_service import anilist_anime_flow
 
         # Create args object
         args = argparse.Namespace(debug=False)

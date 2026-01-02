@@ -15,8 +15,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from loader import PluginInterface, get_resource_path, load_plugins
-from repository import Repository
+from scrapers.loader import PluginInterface, get_resource_path, load_plugins
+from services.repository import Repository
 
 
 class TestGetResourcePath:

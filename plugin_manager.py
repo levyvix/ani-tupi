@@ -11,8 +11,8 @@ Used by: cli.py, main.py
 from json import dump, load
 from pathlib import Path
 
-from config import get_data_path, settings
-from repository import rep
+from models.config import get_data_path, settings
+from services.repository import rep
 from ui.components import menu_navigate
 
 

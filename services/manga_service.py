@@ -13,8 +13,8 @@ from typing import Any
 
 import requests
 
-from config import MangaSettings, get_data_path
-from models import ChapterData, MangaHistoryEntry, MangaMetadata, MangaStatus
+from models.config import MangaSettings, get_data_path
+from models.models import ChapterData, MangaHistoryEntry, MangaMetadata, MangaStatus
 
 
 class MangaError(Exception):

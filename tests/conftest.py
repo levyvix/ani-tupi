@@ -14,9 +14,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from config import settings, get_data_path
-from models import AnimeMetadata, EpisodeData, VideoUrl
-from repository import Repository
+from models.config import settings, get_data_path
+from models.models import AnimeMetadata, EpisodeData, VideoUrl
+from services.repository import Repository
 
 
 # ========== Repository Fixtures ==========
@@ -271,7 +271,7 @@ def temp_cache_dir():
 @pytest.fixture
 def mock_settings():
     """Mock settings for testing."""
-    with patch("config.settings") as mock:
+    with patch("models.config.settings") as mock:
         mock.cache.duration_hours = 6
         mock.cache.cache_file = "/tmp/test_cache.json"
         mock.search.progressive_search_min_words = 2

@@ -6,12 +6,12 @@ New code should use cache_manager.py instead.
 Cache settings (location, duration) are configured in config.py
 """
 
-from cache_manager import (
+from utils.cache_manager import (
     get_cache as _get_diskcache,
     clear_cache_all,
     clear_cache_by_prefix,
 )
-from anilist_discovery import auto_discover_anilist_id
+from utils.anilist_discovery import auto_discover_anilist_id
 
 
 def get_cache(anime_title: str) -> dict | None:
@@ -59,8 +59,8 @@ def set_cache(anime_title: str, episode_count: int, episode_urls: list[str]) -> 
 
     """
     try:
-        from cache_manager import get_cache as dc
-        from config import settings
+        from utils.cache_manager import get_cache as dc
+        from models.config import settings
 
         # Try to discover AniList ID for better cache key
         anilist_id = auto_discover_anilist_id(anime_title)

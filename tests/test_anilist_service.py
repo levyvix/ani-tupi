@@ -21,7 +21,7 @@ class TestAniListClient:
     def test_client_initialization(self):
         """Should initialize AniList client."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert client is not None
@@ -31,7 +31,7 @@ class TestAniListClient:
     def test_client_has_api_url(self):
         """Client should have configured API URL."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "api_url")
@@ -45,7 +45,7 @@ class TestAniListAuthentication:
     def test_authentication_token_handling(self):
         """Should handle authentication tokens."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Test that token can be set
@@ -56,7 +56,7 @@ class TestAniListAuthentication:
     def test_oauth_flow(self):
         """Should support OAuth flow."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Should have authenticate method
@@ -72,7 +72,7 @@ class TestAniListTrending:
     def test_get_trending_anime(self, mock_post):
         """Should fetch trending anime."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             mock_response = Mock()
             mock_response.json.return_value = {
@@ -95,7 +95,7 @@ class TestAniListTrending:
     def test_trending_returns_media_list(self):
         """Trending should return list of media."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Test structure, not actual API call
@@ -110,7 +110,7 @@ class TestAniListUserLists:
     def test_get_user_watching_list(self):
         """Should get user's watching list."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "get_user_list") or hasattr(client, "user_lists")
@@ -124,7 +124,7 @@ class TestAniListUserLists:
     def test_get_various_list_types(self, list_type):
         """Should support various list types."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "get_user_list")
@@ -139,7 +139,7 @@ class TestAniListProgressUpdate:
     def test_update_progress(self, mock_post):
         """Should update anime progress."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             mock_response = Mock()
             mock_response.json.return_value = {"data": {"SaveMediaListEntry": {"id": 1}}}
@@ -154,7 +154,7 @@ class TestAniListProgressUpdate:
     def test_progress_update_sends_mutation(self):
         """Progress update should send GraphQL mutation."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Verify mutation-related methods exist
@@ -169,7 +169,7 @@ class TestAniListSearch:
     def test_search_anime_by_title(self):
         """Should search anime by title."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "search_anime") or hasattr(client, "search")
@@ -183,7 +183,7 @@ class TestAniListSearch:
     def test_search_various_anime(self, query):
         """Should search for various anime."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Just verify method exists
@@ -198,7 +198,7 @@ class TestAniListErrorHandling:
     def test_handle_invalid_token(self):
         """Should handle invalid authentication token."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Should have error handling
@@ -209,7 +209,7 @@ class TestAniListErrorHandling:
     def test_handle_network_error(self):
         """Should handle network errors gracefully."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Should have error handling
@@ -220,7 +220,7 @@ class TestAniListErrorHandling:
     def test_handle_api_rate_limit(self):
         """Should handle API rate limiting."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Should have rate limit handling
@@ -235,7 +235,7 @@ class TestAniListGraphQL:
     def test_graphql_query_formatting(self):
         """GraphQL queries should be properly formatted."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             # Should have query methods
@@ -246,7 +246,7 @@ class TestAniListGraphQL:
     def test_graphql_with_variables(self):
         """Should support GraphQL variables."""
         try:
-            from core.anilist_service import AniListClient
+            from services.anilist_service import AniListClient
 
             client = AniListClient()
             assert hasattr(client, "api_url")
