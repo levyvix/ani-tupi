@@ -19,6 +19,7 @@ class AniListClient:
         """Initialize the AniList client."""
         self.token = self._load_token()
         self.user_id = None  # Will be set after authentication
+        self.api_url = settings.anilist.api_url  # Expose API URL for testing
 
     def _load_token(self) -> str | None:
         """Load access token and user_id from file."""

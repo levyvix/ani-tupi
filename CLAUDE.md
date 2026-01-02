@@ -381,6 +381,45 @@ The project uses a custom ruff configuration in `pyproject.toml` that ignores le
 
 If you encounter new lint errors, consider whether they represent real issues or if the rule should be added to the ignore list in `pyproject.toml`.
 
+### Running Tests
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run with verbose output
+uv run pytest -v
+
+# Run with coverage report
+uv run pytest --cov=. --cov-report=term-missing
+
+# Run specific test file
+uv run pytest tests/test_models.py -v
+
+# Run specific test by name pattern
+uv run pytest -k "test_save" -v
+
+# Run in parallel (faster)
+uv run pytest -n auto
+```
+
+**Test Structure:**
+- **Unit Tests:** `tests/test_*.py` - Fast, isolated tests for individual modules
+- **Integration Tests:** Multiple files prefixed with `test_*_integration.py`
+- **E2E Tests:** `tests/test_e2e_*.py` - Complete workflow tests
+- **Documentation:** `tests/README.md` - Full testing guide
+
+**Test Suite Coverage (155+ tests):**
+- Models validation (`test_models.py` - 10+ tests)
+- Configuration (`test_config.py` - 10+ tests)
+- Plugin loading (`test_plugin_loader.py` - 10+ tests)
+- AniList service (`test_anilist_service.py` - 12+ tests)
+- Search workflows (`test_e2e_search.py` - 5+ tests)
+- Video extraction (`test_e2e_video_extraction.py` - 5+ tests)
+- AniList integration (`test_e2e_anilist.py` - 4+ tests)
+
+See `tests/README.md` for comprehensive testing documentation.
+
 ### Installing as CLI Tool
 
 ```bash

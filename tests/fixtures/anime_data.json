@@ -1,0 +1,28 @@
+{
+  "animes": [
+    {
+      "title": "Dandadan",
+      "url": "https://animefire.plus/animes/dandadan",
+      "source": "animefire",
+      "params": null
+    },
+    {
+      "title": "Attack on Titan",
+      "url": "https://animefire.plus/animes/shingeki-no-kyojin",
+      "source": "animefire",
+      "params": null
+    },
+    {
+      "title": "Solo Leveling",
+      "url": "https://animefire.plus/animes/solo-leveling",
+      "source": "animefire",
+      "params": null
+    },
+    {
+      "title": "Jujutsu Kaisen",
+      "url": "https://animefire.plus/animes/jujutsu-kaisen",
+      "source": "animefire",
+      "params": null
+    }
+  ]
+}

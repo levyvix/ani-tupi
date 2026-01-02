@@ -253,11 +253,14 @@ class Repository:
         executor = ThreadPoolExecutor(max_workers=min(len(self.sources), n_cpu))
 
         try:
+            # Get a snapshot of sources to avoid race conditions
+            sources_list = list(self.sources.items())
+
             # Submit all search tasks
-            future_to_source = {
-                executor.submit(self.sources[source].search_anime, query): source
-                for source in self.sources
-            }
+            future_to_source = {}
+            for source_name, plugin in sources_list:
+                future = executor.submit(plugin.search_anime, query)
+                future_to_source[future] = source_name
 
             # Wait for all tasks to complete
             done, _ = wait(future_to_source.keys(), return_when=ALL_COMPLETED)
@@ -414,13 +417,15 @@ class Repository:
                 if source == source_filter
             ]
 
-        threads = [
-            Thread(
-                target=self.sources[source].search_episodes,
-                args=(anime, url, params),
-            )
-            for url, source, params in urls_and_scrapers
-        ]
+        # Build threads safely, avoiding potential race conditions
+        threads = []
+        for url, source, params in urls_and_scrapers:
+            if source in self.sources:
+                th = Thread(
+                    target=self.sources[source].search_episodes,
+                    args=(anime, url, params),
+                )
+                threads.append(th)
 
         for th in threads:
             th.start()
@@ -500,6 +505,10 @@ class Repository:
         Returns:
             Tuple of (episode_url, source_name) or None if not found
         """
+        # Validate episode_num
+        if episode_num < 1:
+            return None
+
         for urls, source in self.anime_episodes_urls[anime]:
             if len(urls) >= episode_num:
                 return (urls[episode_num - 1], source)

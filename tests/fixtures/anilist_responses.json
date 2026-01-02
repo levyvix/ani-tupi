@@ -1,0 +1,113 @@
+{
+  "trending": {
+    "data": {
+      "Page": {
+        "media": [
+          {
+            "id": 1,
+            "title": {
+              "userPreferred": "Dandadan"
+            },
+            "averageScore": 85,
+            "popularity": 100000,
+            "episodes": 12
+          },
+          {
+            "id": 2,
+            "title": {
+              "userPreferred": "Solo Leveling"
+            },
+            "averageScore": 88,
+            "popularity": 95000,
+            "episodes": 12
+          },
+          {
+            "id": 3,
+            "title": {
+              "userPreferred": "Attack on Titan"
+            },
+            "averageScore": 90,
+            "popularity": 90000,
+            "episodes": 75
+          }
+        ]
+      }
+    }
+  },
+  "user_list": {
+    "data": {
+      "MediaListCollection": {
+        "lists": [
+          {
+            "name": "Watching",
+            "entries": [
+              {
+                "media": {
+                  "id": 1,
+                  "title": {
+                    "userPreferred": "Dandadan"
+                  },
+                  "episodes": 12
+                },
+                "progress": 3
+              },
+              {
+                "media": {
+                  "id": 2,
+                  "title": {
+                    "userPreferred": "Solo Leveling"
+                  },
+                  "episodes": 12
+                },
+                "progress": 5
+              }
+            ]
+          },
+          {
+            "name": "Planning",
+            "entries": [
+              {
+                "media": {
+                  "id": 3,
+                  "title": {
+                    "userPreferred": "Jujutsu Kaisen"
+                  },
+                  "episodes": 47
+                },
+                "progress": 0
+              }
+            ]
+          },
+          {
+            "name": "Completed",
+            "entries": [
+              {
+                "media": {
+                  "id": 4,
+                  "title": {
+                    "userPreferred": "Death Note"
+                  },
+                  "episodes": 37
+                },
+                "progress": 37
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "search_result": {
+    "data": {
+      "Media": {
+        "id": 1,
+        "title": {
+          "userPreferred": "Dandadan"
+        },
+        "averageScore": 85,
+        "popularity": 100000,
+        "episodes": 12
+      }
+    }
+  }
+}
