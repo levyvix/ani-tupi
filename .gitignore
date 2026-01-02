@@ -8,6 +8,8 @@ __pycache__/
 dist/
 build/
 *.egg
+log.txt
+
 
 # Virtual environments
 venv/
