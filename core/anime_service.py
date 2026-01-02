@@ -33,13 +33,37 @@ def load_anilist_mapping(anilist_id: int) -> str | None:
     try:
         with ANILIST_MAPPINGS_FILE.open() as f:
             mappings = load(f)
-            return mappings.get(str(anilist_id))
+            mapping = mappings.get(str(anilist_id))
+            # Handle both old format (string) and new format (dict)
+            if isinstance(mapping, dict):
+                return mapping.get("scraper_title")
+            return mapping
     except (FileNotFoundError, ValueError):
         return None
 
 
-def save_anilist_mapping(anilist_id: int, scraper_title: str) -> None:
-    """Save scraper title choice for an AniList ID."""
+def load_anilist_search_title(anilist_id: int) -> str | None:
+    """Load the original search/display title used for an AniList ID."""
+    try:
+        with ANILIST_MAPPINGS_FILE.open() as f:
+            mappings = load(f)
+            mapping = mappings.get(str(anilist_id))
+            # Only new format (dict) has search_title
+            if isinstance(mapping, dict):
+                return mapping.get("search_title")
+            return None
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def save_anilist_mapping(anilist_id: int, scraper_title: str, search_title: str | None = None) -> None:
+    """Save scraper title choice and search title for an AniList ID.
+
+    Args:
+        anilist_id: The AniList ID
+        scraper_title: The selected anime title from scraper
+        search_title: The original search/display title used to find it
+    """
     try:
         # Load existing mappings
         try:
@@ -48,8 +72,18 @@ def save_anilist_mapping(anilist_id: int, scraper_title: str) -> None:
         except (FileNotFoundError, ValueError):
             mappings = {}
 
-        # Update mapping
-        mappings[str(anilist_id)] = scraper_title
+        # Update mapping with new dict format
+        mapping_id = str(anilist_id)
+        # Preserve existing search_title if not provided
+        existing = mappings.get(mapping_id, {})
+        if isinstance(existing, str):
+            # Migrate old format to new format
+            existing = {"scraper_title": existing}
+
+        mappings[mapping_id] = {
+            "scraper_title": scraper_title,
+            "search_title": search_title or existing.get("search_title"),
+        }
 
         # Save
         HISTORY_PATH.mkdir(parents=True, exist_ok=True)
@@ -473,9 +507,9 @@ def anilist_anime_flow(
                 source = selected_anime_with_source.split(" [")[1].rstrip("]")
             break  # Exit while loop
 
-    # Save the choice for next time
+    # Save the choice for next time (with original search title for "Trocar fonte")
     if anilist_id:
-        save_anilist_mapping(anilist_id, selected_anime)
+        save_anilist_mapping(anilist_id, selected_anime, search_title=anime_title)
 
     # Get episodes (check cache first)
     cache_data = get_cache(selected_anime)
@@ -705,7 +739,7 @@ def anilist_anime_flow(
                 continue  # Stay in current episode menu
             episode_idx = episode_list.index(selected_episode)
         elif selected_opt == "🔄 Trocar fonte":
-            new_anime, new_episode_idx = switch_anime_source(selected_anime, args, anilist_id)
+            new_anime, new_episode_idx = switch_anime_source(selected_anime, args, anilist_id, display_title)
             if new_anime:
                 selected_anime = new_anime
                 episode_idx = new_episode_idx
@@ -714,40 +748,104 @@ def anilist_anime_flow(
 
 
 def switch_anime_source(
-    current_anime: str, args, anilist_id: int | None = None
+    current_anime: str, args, anilist_id: int | None = None, display_title: str | None = None
 ) -> tuple[str, int] | tuple[None, None]:
     """Allow user to switch to a different anime source/title.
 
     Shows all available variations (dubbed/subtitled/different scrapers) found
-    for the base anime name. Uses same search criteria as original search.
+    using the SAME search criteria as the original search.
     Maintains progress from local history and AniList (as fallback).
 
     Args:
         current_anime: Current anime title being watched
         args: CLI arguments
         anilist_id: Optional AniList ID for progress fallback
+        display_title: Optional original display title from AniList (for search)
 
     Returns: (new_anime_title, episode_idx) or (None, None) if cancelled
     """
-    # 1. Extract base anime name (remove language/season suffixes)
-    query = current_anime.split("(")[0].strip()
+    # SAVE: Preserve current anime's episode data (search_anime will destroy it)
+    saved_episode_data = None
+    if current_anime in rep.anime_episodes_urls:
+        # Store shallow copies of the data structures for restoration
+        saved_episode_data = {
+            "urls": list(rep.anime_episodes_urls[current_anime]),
+            "titles": list(rep.anime_episodes_titles[current_anime]),
+        }
 
-    # 2. Search for the anime (adds to existing results, doesn't clear)
-    with loading(f"Buscando variações de '{query}'..."):
-        rep.search_anime(query)
+    # 1. Use saved search title from AniList if available (same title as original search)
+    # Otherwise fall back to display_title or current_anime
+    search_title = None
+    if anilist_id:
+        search_title = load_anilist_search_title(anilist_id)
+    search_title = search_title or display_title or current_anime
 
-    # 3. Get all available titles that contain the base anime name
-    titles = rep.get_anime_titles(filter_by_query=query)
+    # Generate title variations using the search title (same as original search)
+    title_variations = normalize_anime_title(search_title)
+    current_variant_idx = 0
+    selected_anime = None
 
-    if not titles:
-        print("⚠️  Nenhuma variação encontrada")
-        return None, None
+    # 2. Interactive search loop - same as normal search flow
+    while selected_anime is None and current_variant_idx < len(title_variations):
+        variant = title_variations[current_variant_idx]
 
-    # 4. Show selection menu with all options
-    selected_anime = menu_navigate(titles, msg="Escolha a fonte.")
+        # Search with current variation
+        with loading(f"Buscando '{variant}'..."):
+            rep.search_anime(variant, verbose=False)
 
+        # Get results with sources
+        search_metadata = rep.get_search_metadata()
+        used_query = search_metadata.get("used_query", variant)
+        titles_with_sources = rep.get_anime_titles_with_sources(
+            filter_by_query=variant, original_query=used_query
+        )
+        titles = [t.split(" [")[0] for t in titles_with_sources]
+
+        # If found results, show interactive menu
+        if titles_with_sources:
+            # Build menu with "Continue searching" option if more variations available
+            menu_title = f"🔄 Trocar fonte para '{current_anime}'\n"
+            menu_title += f"🔍 Busca: '{used_query}'\n"
+            menu_title += f"Encontrados {len(titles_with_sources)} resultados. Escolha:"
+
+            CONTINUE_BUTTON = "🔍 Continuar buscando (menos palavras)"
+            menu_options = []
+
+            if current_variant_idx < len(title_variations) - 1:
+                menu_options.append(CONTINUE_BUTTON)
+            menu_options.extend(titles_with_sources)
+
+            selected_anime_with_source = menu_navigate(menu_options, msg=menu_title)
+
+            if not selected_anime_with_source:
+                # User cancelled
+                if saved_episode_data:
+                    rep.anime_episodes_urls[current_anime] = saved_episode_data["urls"]
+                    rep.anime_episodes_titles[current_anime] = saved_episode_data["titles"]
+                return None, None
+
+            # Check if user wants to continue searching
+            if selected_anime_with_source == CONTINUE_BUTTON:
+                current_variant_idx += 1
+                continue  # Try next variation
+
+            # User selected an anime
+            selected_anime = selected_anime_with_source.split(" [")[0]
+        else:
+            # No results with this variation, try next
+            current_variant_idx += 1
+
+    # 3. If no results found with any variation
     if not selected_anime:
-        return None, None  # User cancelled
+        # RESTORE: Return episode data so user can continue watching current source
+        if saved_episode_data:
+            rep.anime_episodes_urls[current_anime] = saved_episode_data["urls"]
+            rep.anime_episodes_titles[current_anime] = saved_episode_data["titles"]
+            print("⚠️  Nenhuma variação encontrada")
+            print("   💡 Mantendo fonte atual...")
+        else:
+            print("⚠️  Nenhuma variação encontrada")
+        return None, None
 
     # 5. Load episodes from new source
     with loading("Carregando episódios..."):

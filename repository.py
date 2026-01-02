@@ -520,6 +520,16 @@ class Repository:
             if len(urls) >= episode_num:
                 selected_urls.append((urls[episode_num - 1], source))
 
+        # Defensive check: No sources have this episode available
+        if not selected_urls:
+            active_sources = self.get_active_sources()
+            if active_sources:
+                print(f"   ❌ Episódio {episode_num} não disponível nas fontes ativas.")
+                print(f"   💡 Fontes ativas: {', '.join(active_sources)}")
+            else:
+                print(f"   ❌ Nenhuma fonte ativa para buscar episódio {episode_num}.")
+            return None
+
         # Get or discover anilist_id for cache key
         anilist_id = self.anime_to_anilist_id.get(anime)
         if anilist_id is None and settings.cache.anilist_auto_discover:
