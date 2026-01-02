@@ -56,15 +56,9 @@ Mesmo método usado por [viu-media](https://github.com/viu-media/viu) - simples 
 
 ### Instalando dependências
 
-#### Linux (Arch/Omarchy)
+#### Linux (Arch)
 ```bash
 sudo pacman -S python mpv firefox geckodriver git
-```
-
-**Via Omarchy GUI:**
-```bash
-Super + Alt + Space → Install > Package
-# Procure por: firefox, geckodriver, mpv
 ```
 
 #### Linux (Ubuntu/Debian)
@@ -346,10 +340,9 @@ chmod +x ./ani-tupi
 
 **Solução:**
 
-**Arch/Omarchy:**
+**Arch:**
 ```bash
 sudo pacman -S geckodriver
-# Ou: Super + Alt + Space → Install > Package → geckodriver
 ```
 
 **Ubuntu/Debian:**
