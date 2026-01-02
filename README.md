@@ -51,30 +51,44 @@ Mesmo método usado por [viu-media](https://github.com/viu-media/viu) - simples 
 - **Python 3.12+** (obrigatório)
 - **mpv** (player de vídeo)
 - **Firefox** (para scraping)
+- **geckodriver** (driver para Selenium + Firefox)
 - **git** (para clonar o repositório)
 
 ### Instalando dependências
 
+#### Linux (Arch/Omarchy)
+```bash
+sudo pacman -S python mpv firefox geckodriver git
+```
+
+**Via Omarchy GUI:**
+```bash
+Super + Alt + Space → Install > Package
+# Procure por: firefox, geckodriver, mpv
+```
+
 #### Linux (Ubuntu/Debian)
 ```bash
 sudo apt install python3 mpv firefox git
+# Instale geckodriver separadamente ou compile:
+# https://github.com/mozilla/geckodriver/releases
 ```
 
 #### Linux (Fedora)
 ```bash
-sudo dnf install python3 mpv firefox git
+sudo dnf install python3 mpv firefox git geckodriver
 ```
 
 #### macOS
 ```bash
-brew install python@3.12 mpv firefox git
+brew install python@3.12 mpv firefox git geckodriver
 ```
 
 #### Windows
 Recomendamos usar [Chocolatey](https://chocolatey.org/install):
 ```powershell
 # Como administrador
-choco install python mpv firefox git
+choco install python mpv firefox git geckodriver
 ```
 
 ## 🚀 Instalação
@@ -326,6 +340,35 @@ chmod +x ./ani-tupi
 
 ## 🐛 Problemas Conhecidos
 
+### Vídeo não abre (mostra "Buscando vídeo..." e pula para menu)
+
+**Causa:** Geckodriver não está instalado ou não está no PATH.
+
+**Solução:**
+
+**Arch/Omarchy:**
+```bash
+sudo pacman -S geckodriver
+# Ou: Super + Alt + Space → Install > Package → geckodriver
+```
+
+**Ubuntu/Debian:**
+```bash
+# Método 1: Via repositório (se disponível)
+sudo apt install firefox-geckodriver
+# Ou compile manualmente:
+wget https://github.com/mozilla/geckodriver/releases/download/v0.33.3/geckodriver-v0.33.3-linux64.tar.gz
+tar -xvf geckodriver-v0.33.3-linux64.tar.gz
+sudo mv geckodriver /usr/local/bin/
+sudo chmod +x /usr/local/bin/geckodriver
+```
+
+**Verificar instalação:**
+```bash
+geckodriver --version
+which geckodriver
+```
+
 ### "FileNotFoundError" ao salvar histórico
 Corrigido na versão 0.1.0+. Atualize para a versão mais recente.
 
@@ -337,6 +380,12 @@ mpv --version
 
 ### Firefox não encontrado
 Certifique-se de que o Firefox está no PATH do sistema.
+
+**Verificar:**
+```bash
+which firefox
+firefox --version
+```
 
 ## 🤝 Contribuindo
 

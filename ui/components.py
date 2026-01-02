@@ -58,7 +58,6 @@ def menu(
         - If "Sair" is selected → calls sys.exit()
         - Returns selected option
         - Q key exits to terminal immediately
-        - ESC or Ctrl+C also exits to terminal
         - Fuzzy search enabled by default
 
     """
@@ -78,53 +77,50 @@ def menu(
             choices.append(opt)
 
     # Display menu
-    try:
-        if enable_search:
-            # Use fuzzy search for large menus
-            answer = inquirer.fuzzy(
-                message=msg or "Menu",
-                choices=choices,
-                default=None,
-                qmark="",
-                amark="►",
-                pointer="►",
-                instruction="(Type to search, Q to quit, ESC to back)",
-                mandatory=False,
-                keybindings={
-                    "skip": [
-                        {"key": "q"},
-                        {"key": "Q"},
-                    ],
-                },
-                max_height="70%",
-                raise_keyboard_interrupt=False,
-            ).execute()
-        else:
-            # Use simple select for small menus
-            answer = inquirer.select(
-                message=msg or "Menu",
-                choices=choices,
-                default=None,
-                qmark="",
-                amark="►",
-                pointer="►",
-                instruction="(Use arrow keys, Q to quit, ESC to back)",
-                mandatory=False,
-                keybindings={
-                    "skip": [
-                        {"key": "q"},
-                        {"key": "Q"},
-                    ],
-                },
-                raise_keyboard_interrupt=False,
-            ).execute()
-    except (KeyboardInterrupt, EOFError):
-        # ESC or Ctrl+C pressed - exit for main menu
-        sys.exit(0)
+    answer = None
+    if enable_search:
+        # Use fuzzy search for large menus
+        answer = inquirer.fuzzy(
+            message=msg or "Menu",
+            choices=choices,
+            default=None,
+            qmark="",
+            amark="►",
+            pointer="►",
+            instruction="(Type to search, Q to quit)",
+            mandatory=False,
+            keybindings={
+                "skip": [
+                    {"key": "q"},
+                    {"key": "Q"},
+                ],
+            },
+            max_height="70%",
+            raise_keyboard_interrupt=False,
+        ).execute()
+    else:
+        # Use simple select for small menus
+        answer = inquirer.select(
+            message=msg or "Menu",
+            choices=choices,
+            default=None,
+            qmark="",
+            amark="►",
+            pointer="►",
+            instruction="(Use arrow keys, Q to quit)",
+            mandatory=False,
+            keybindings={
+                "skip": [
+                    {"key": "q"},
+                    {"key": "Q"},
+                ],
+            },
+            raise_keyboard_interrupt=False,
+        ).execute()
 
     # Handle result
     if answer == "Sair" or answer is None:
-        # None means Q was pressed or ESC without selection
+        # None means Q was pressed or skip was triggered
         sys.exit(0)
 
     return answer
@@ -153,7 +149,6 @@ def menu_navigate(
         - Adds "← Voltar" and "Sair" automatically
         - "← Voltar" returns None (go back)
         - "Sair" exits to terminal
-        - ESC returns None (go back to previous menu)
         - Q key exits to terminal immediately
         - Fuzzy search enabled by default
 
@@ -176,49 +171,46 @@ def menu_navigate(
             choices.append(opt)
 
     # Display menu
-    try:
-        if enable_search:
-            # Use fuzzy search for large menus
-            answer = inquirer.fuzzy(
-                message=msg or "Menu",
-                choices=choices,
-                default=None,
-                qmark="",
-                amark="►",
-                pointer="►",
-                instruction="(Type to search, Q to quit, ESC to back)",
-                mandatory=False,
-                keybindings={
-                    "skip": [
-                        {"key": "q"},
-                        {"key": "Q"},
-                    ],
-                },
-                max_height="70%",
-                raise_keyboard_interrupt=False,
-            ).execute()
-        else:
-            # Use simple select for small menus
-            answer = inquirer.select(
-                message=msg or "Menu",
-                choices=choices,
-                default=None,
-                qmark="",
-                amark="►",
-                pointer="►",
-                instruction="(Use arrow keys, Q to quit, ESC to back)",
-                mandatory=False,
-                keybindings={
-                    "skip": [
-                        {"key": "q"},
-                        {"key": "Q"},
-                    ],
-                },
-                raise_keyboard_interrupt=False,
-            ).execute()
-    except (KeyboardInterrupt, EOFError):
-        # ESC or Ctrl+C pressed - return None for navigation menus
-        return None
+    answer = None
+    if enable_search:
+        # Use fuzzy search for large menus
+        answer = inquirer.fuzzy(
+            message=msg or "Menu",
+            choices=choices,
+            default=None,
+            qmark="",
+            amark="►",
+            pointer="►",
+            instruction="(Type to search, Q to quit)",
+            mandatory=False,
+            keybindings={
+                "skip": [
+                    {"key": "q"},
+                    {"key": "Q"},
+                ],
+            },
+            max_height="70%",
+            raise_keyboard_interrupt=False,
+        ).execute()
+    else:
+        # Use simple select for small menus
+        answer = inquirer.select(
+            message=msg or "Menu",
+            choices=choices,
+            default=None,
+            qmark="",
+            amark="►",
+            pointer="►",
+            instruction="(Use arrow keys, Q to quit)",
+            mandatory=False,
+            keybindings={
+                "skip": [
+                    {"key": "q"},
+                    {"key": "Q"},
+                ],
+            },
+            raise_keyboard_interrupt=False,
+        ).execute()
 
     # Handle special options
     if answer == "← Voltar" or answer is None:
