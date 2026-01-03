@@ -8,6 +8,8 @@ metadata enrichment.
 from fuzzywuzzy import fuzz
 
 from utils.cache_manager import get_cache
+from models.models import AniListAnime
+from models.config import settings
 
 
 def auto_discover_anilist_id(scraper_title: str) -> int | None:
@@ -23,7 +25,6 @@ def auto_discover_anilist_id(scraper_title: str) -> int | None:
     Returns:
         anilist_id if strong match found, None otherwise
     """
-    from models.config import settings
 
     try:
         # Check cache first
@@ -91,7 +92,7 @@ def get_anilist_id_from_title(anime_title: str) -> int | None:
     return auto_discover_anilist_id(anime_title)
 
 
-def get_anilist_metadata(anilist_id: int) -> "AniListAnime | None":
+def get_anilist_metadata(anilist_id: int) -> AniListAnime | None:
     """Fetch and cache complete AniList metadata (title, cover, etc).
 
     Args:
@@ -100,7 +101,6 @@ def get_anilist_metadata(anilist_id: int) -> "AniListAnime | None":
     Returns:
         AniListAnime with metadata or None if fetch fails
     """
-    from models.models import AniListAnime
 
     cache = get_cache()
     cache_key = f"anilist_meta:{anilist_id}"
