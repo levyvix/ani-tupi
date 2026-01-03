@@ -105,7 +105,7 @@ def normalize_anime_title(title: str):
         r"\s+Final\s+Season",
         r"\s+2nd\s+Season",
         r"[:−-]\s*Season\s+\d+",
-        r"\s+Dublado.*$",  # Remove "Dublado" suffix
+        r"\s+Dublado.*$",
     ]
 
     cleaned = title
@@ -857,7 +857,7 @@ def switch_anime_source(
     try:
         history_file = HISTORY_PATH / "history.json"
         with history_file.open() as f:
-            history_data = load(f)
+            history_data = json.load(f)
             if selected_anime in history_data:
                 # history stores episode_idx (0-based), progress is 1-based
                 local_progress = history_data[selected_anime][1] + 1
