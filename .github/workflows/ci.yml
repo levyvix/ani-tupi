@@ -50,9 +50,13 @@ jobs:
         done
 
   quick-test:
-    name: Teste Rápido
-    runs-on: ubuntu-latest
+    name: Teste Rápido (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     needs: lint-and-validate
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+      fail-fast: false
 
     steps:
     - name: Checkout código
@@ -63,14 +67,24 @@ jobs:
       with:
         python-version: "3.12"
 
-    - name: Instalar dependências do sistema
+    - name: Instalar dependências do sistema (Ubuntu)
+      if: runner.os == 'Linux'
       run: sudo apt-get update && sudo apt-get install -y libmpv1 libmpv-dev
+
+    - name: Instalar dependências do sistema (macOS)
+      if: runner.os == 'macOS'
+      run: brew install mpv
 
     - name: Instalar UV
       run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    - name: Adicionar UV ao PATH
+    - name: Adicionar UV ao PATH (Unix)
+      if: runner.os != 'Windows'
       run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Adicionar UV ao PATH (Windows)
+      if: runner.os == 'Windows'
+      run: echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Instalar dependências
       run: uv sync
@@ -98,9 +112,13 @@ jobs:
         echo "✅ CLI anilist executável"
 
   test:
-    name: Testes
-    runs-on: ubuntu-latest
+    name: Testes (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     needs: lint-and-validate
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+      fail-fast: false
 
     steps:
     - name: Checkout código
@@ -111,14 +129,24 @@ jobs:
       with:
         python-version: "3.12"
 
-    - name: Instalar dependências do sistema
+    - name: Instalar dependências do sistema (Ubuntu)
+      if: runner.os == 'Linux'
       run: sudo apt-get update && sudo apt-get install -y libmpv1 libmpv-dev
+
+    - name: Instalar dependências do sistema (macOS)
+      if: runner.os == 'macOS'
+      run: brew install mpv
 
     - name: Instalar UV
       run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    - name: Adicionar UV ao PATH
+    - name: Adicionar UV ao PATH (Unix)
+      if: runner.os != 'Windows'
       run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Adicionar UV ao PATH (Windows)
+      if: runner.os == 'Windows'
+      run: echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Instalar dependências
       run: uv sync
@@ -130,4 +158,5 @@ jobs:
       run: uv run pytest --cov=. --cov-report=term-missing --cov-report=html || true
 
     - name: Resumo dos testes
-      run: echo "✅ Testes completados"
+      run: |
+        echo "✅ Testes completados em ${{ matrix.os }}"
