@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""Instala ani-tupi como CLI global usando UV
-Execute com: python install-cli.py.
+"""Instala ani-tupi como CLI global usando UV.
+
+Execute com:
+  uv run install-cli.py
+  ou
+  python install-cli.py
 """
 
 import os
@@ -17,7 +21,6 @@ if sys.platform == "win32":
 
 def run_command(cmd, check=True, shell=False):
     """Executa comando e mostra output."""
-    cmd if isinstance(cmd, str) else " ".join(cmd)
     result = subprocess.run(cmd, check=check, text=True, shell=shell)
     return result.returncode == 0
 
@@ -83,7 +86,7 @@ def install_uv() -> bool:
 def install_as_cli() -> bool:
     """Instala ani-tupi como ferramenta CLI global."""
     # Instala usando uv tool install --reinstall (força rebuild mesmo se já instalado)
-    if not run_command(["uv", "tool", "install", "--reinstall", "."]):
+    if not run_command(["uv", "tool", "install", "--reinstall", "."], check=False):
         return False
 
     # Adiciona ao GITHUB_PATH se estiver no GitHub Actions
@@ -101,29 +104,39 @@ def install_as_cli() -> bool:
 def show_path_info() -> None:
     """Mostra informações sobre o PATH."""
     system = platform.system()
+    print("\n✅ ani-tupi instalado com sucesso como CLI global!")
+    print("\nPróximos passos:")
 
     if system == "Windows":
-        Path.home() / ".cargo" / "bin"
+        bin_path = Path.home() / ".local" / "bin"
+        print(f"  • Adicione ao PATH: {bin_path}")
+        print("  • Execute no terminal: ani-tupi")
     else:
-        Path.home() / ".local" / "bin"
-
-        "~/.bashrc" if Path.home() / ".bashrc" else "~/.zshrc"
+        bin_path = Path.home() / ".local" / "bin"
+        print(f"  • CLI disponível em: {bin_path}/ani-tupi")
+        shell_rc = "~/.bashrc" if (Path.home() / ".bashrc").exists() else "~/.zshrc"
+        print(f"  • Adicione ao {shell_rc}: export PATH=\"{bin_path}:$PATH\"")
+        print("  • Execute: ani-tupi")
 
 
 def main() -> None:
     # Verifica/instala UV
     if not check_uv_installed():
+        print("UV não encontrado. Instalando...")
         if not install_uv():
+            print("❌ Falha ao instalar UV", file=sys.stderr)
             sys.exit(1)
 
         # Verifica se instalação funcionou
         if not check_uv_installed():
+            print("❌ UV ainda não está acessível após instalação", file=sys.stderr)
             sys.exit(1)
-    else:
-        pass
+        print("✅ UV instalado com sucesso")
 
     # Instala CLI
+    print("Instalando ani-tupi como CLI global...")
     if not install_as_cli():
+        print("❌ Falha ao instalar ani-tupi", file=sys.stderr)
         sys.exit(1)
 
     # Mostra informações

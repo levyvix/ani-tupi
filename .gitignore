@@ -43,3 +43,4 @@ log.txt
 dist/
 build/
 *.spec
+.beads/
