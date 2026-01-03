@@ -74,8 +74,9 @@ jobs:
     - name: Instalar dependências do sistema (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install libmpv
-        echo "DYLD_LIBRARY_PATH=$(brew --prefix libmpv)/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        brew install mpv
+        echo "DYLD_LIBRARY_PATH=$(brew --prefix mpv)/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        echo "LD_LIBRARY_PATH=$(brew --prefix mpv)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
     - name: Instalar UV
       run: curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -138,8 +139,9 @@ jobs:
     - name: Instalar dependências do sistema (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install libmpv
-        echo "DYLD_LIBRARY_PATH=$(brew --prefix libmpv)/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        brew install mpv
+        echo "DYLD_LIBRARY_PATH=$(brew --prefix mpv)/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        echo "LD_LIBRARY_PATH=$(brew --prefix mpv)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
     - name: Instalar UV
       run: curl -LsSf https://astral.sh/uv/install.sh | sh
