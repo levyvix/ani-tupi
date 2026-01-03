@@ -10,6 +10,7 @@ This module contains the core business logic for:
 Used by: main.py, ui modules
 """
 
+import json
 import re
 
 from scrapers import loader
@@ -525,7 +526,7 @@ def anilist_anime_flow(
     try:
         history_file = HISTORY_PATH / "history.json"
         with history_file.open() as f:
-            history_data = load(f)
+            history_data = json.load(f)
             if selected_anime in history_data:
                 # history stores episode_idx (0-based), progress is 1-based
                 local_progress = history_data[selected_anime][1] + 1
