@@ -96,12 +96,22 @@ jobs:
         uv run python -c "from scrapers import loader; print('loader OK')"
         echo "Skipping full imports on Windows (mpv not available)"
 
-    - name: Verificar estrutura de diretórios
+    - name: Verificar estrutura de diretórios (Unix)
+      if: runner.os != 'Windows'
       run: |
         echo "Estrutura do projeto:"
         ls -la
         echo -e "\nScrapers/Plugins:"
         ls -la scrapers/plugins/
+
+    - name: Verificar estrutura de diretórios (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        echo "Estrutura do projeto:"
+        Get-ChildItem -Force
+        echo ""
+        echo "Scrapers/Plugins:"
+        Get-ChildItem -Path scrapers/plugins -Force
 
     - name: Testar help do CLI (Linux/macOS)
       if: runner.os != 'Windows'
