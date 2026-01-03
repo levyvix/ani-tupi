@@ -1,6 +1,3 @@
-import mpv
-
-
 def play_video(url: str, debug=False, ytdl_format: str | None = None) -> int:
     """Play video using python-mpv and return exit code.
 
@@ -19,6 +16,8 @@ def play_video(url: str, debug=False, ytdl_format: str | None = None) -> int:
     if debug:
         print("DEBUG MODE: Skipping video playback")
         return 0
+
+    import mpv
 
     try:
         # Create MPV instance with current settings
