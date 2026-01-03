@@ -114,10 +114,10 @@ def anime(args) -> None:
                         # Auto-promote from PLANNING to CURRENT, or COMPLETED to REPEATING
                         entry = anilist_client.get_media_list_entry(anilist_id)
                         if entry:
-                            if entry.get("status") == "PLANNING":
+                            if entry.status == "PLANNING":
                                 print("\n📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
                                 anilist_client.add_to_list(anilist_id, "CURRENT")
-                            elif entry.get("status") == "COMPLETED":
+                            elif entry.status == "COMPLETED":
                                 print("\n🔄 Mudando para 'Recomassistindo'...")
                                 anilist_client.change_status(anilist_id, "REPEATING")
 

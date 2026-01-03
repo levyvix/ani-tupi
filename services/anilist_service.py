@@ -10,6 +10,15 @@ import webbrowser
 import requests
 
 from models.config import settings
+from models.models import (
+    AniListViewerInfo,
+    AniListAnime,
+    AniListMediaListEntry,
+    AniListActivity,
+    AniListRelationEdge,
+    AniListRelationNode,
+    AniListTitle,
+)
 
 
 class AniListClient:
@@ -75,7 +84,7 @@ class AniListClient:
             # Get and display user info
             user_info = self.get_viewer_info()
             if user_info:
-                self.user_id = user_info["id"]  # Save user ID for queries
+                self.user_id = user_info.id  # Save user ID for queries
                 self._save_token(token, self.user_id)  # Save both token and user_id
             return True
         return False
@@ -151,7 +160,7 @@ class AniListClient:
 
         return result.get("data")
 
-    def get_viewer_info(self) -> dict | None:
+    def get_viewer_info(self) -> AniListViewerInfo | None:
         """Get authenticated user info with statistics."""
         if not self.is_authenticated():
             return None
@@ -178,7 +187,10 @@ class AniListClient:
 
         try:
             result = self._query(query)
-            return result.get("Viewer") if result else None
+            viewer_data = result.get("Viewer") if result else None
+            if viewer_data:
+                return AniListViewerInfo.model_validate(viewer_data)
+            return None
         except Exception:
             return None
 
@@ -188,7 +200,7 @@ class AniListClient:
         per_page: int = 20,
         year: int | None = None,
         season: str | None = None,
-    ) -> list[dict]:
+    ) -> list[AniListAnime]:
         """Get trending anime with optional filters.
 
         Args:
@@ -229,11 +241,12 @@ class AniListClient:
 
         try:
             result = self._query(query, variables)
-            return result["Page"]["media"] if result else []
+            media_list = result["Page"]["media"] if result else []
+            return [AniListAnime.model_validate(item) for item in media_list]
         except Exception:
             return []
 
-    def get_user_list(self, status: str, page: int = 1, per_page: int = 50) -> list[dict]:
+    def get_user_list(self, status: str, page: int = 1, per_page: int = 50) -> list[AniListMediaListEntry]:
         """Get authenticated user's anime list by status.
 
         Args:
@@ -251,7 +264,7 @@ class AniListClient:
         if not self.user_id:
             user_info = self.get_viewer_info()
             if user_info:
-                self.user_id = user_info["id"]
+                self.user_id = user_info.id
             else:
                 return []
 
@@ -297,7 +310,7 @@ class AniListClient:
                 # Sort by createdAt descending (most recent first)
                 entries.sort(key=lambda x: x.get("createdAt", 0), reverse=True)
 
-                return entries
+                return [AniListMediaListEntry.model_validate(entry) for entry in entries]
             return []
         except Exception:
             return []
@@ -373,7 +386,7 @@ class AniListClient:
                 return False
             return False
 
-    def search_anime(self, query_text: str) -> list[dict]:
+    def search_anime(self, query_text: str) -> list[AniListAnime]:
         """Search anime by title.
 
         Returns list of anime matching query
@@ -403,11 +416,12 @@ class AniListClient:
 
         try:
             result = self._query(query, variables)
-            return result["Page"]["media"] if result else []
+            media_list = result["Page"]["media"] if result else []
+            return [AniListAnime.model_validate(item) for item in media_list]
         except Exception:
             return []
 
-    def get_anime_by_id(self, anime_id: int) -> dict | None:
+    def get_anime_by_id(self, anime_id: int) -> AniListAnime | None:
         """Get anime info by AniList ID.
 
         Args:
@@ -440,11 +454,14 @@ class AniListClient:
 
         try:
             result = self._query(query, variables)
-            return result.get("Media") if result else None
+            media_data = result.get("Media") if result else None
+            if media_data:
+                return AniListAnime.model_validate(media_data)
+            return None
         except Exception:
             return None
 
-    def get_recent_activities(self, limit: int = 5) -> list[dict]:
+    def get_recent_activities(self, limit: int = 5) -> list[AniListActivity]:
         """Get user's recent anime list activities.
 
         Args:
@@ -461,7 +478,7 @@ class AniListClient:
         if not self.user_id:
             user_info = self.get_viewer_info()
             if user_info:
-                self.user_id = user_info["id"]
+                self.user_id = user_info.id
             else:
                 return []
 
@@ -492,7 +509,8 @@ class AniListClient:
 
         try:
             result = self._query(query, variables)
-            return result["Page"]["activities"] if result else []
+            activities = result["Page"]["activities"] if result else []
+            return [AniListActivity.model_validate(activity) for activity in activities]
         except Exception:
             return []
 
@@ -513,7 +531,7 @@ class AniListClient:
         if not self.user_id:
             user_info = self.get_viewer_info()
             if user_info:
-                self.user_id = user_info["id"]
+                self.user_id = user_info.id
             else:
                 return False
 
@@ -570,7 +588,7 @@ class AniListClient:
         except Exception:
             return False
 
-    def get_anime_relations(self, anime_id: int) -> list[dict]:
+    def get_anime_relations(self, anime_id: int) -> list[AniListRelationEdge]:
         """Get anime relations (sequels, prequels, related, etc).
 
         Args:
@@ -606,12 +624,13 @@ class AniListClient:
         try:
             result = self._query(query, variables)
             if result and "Media" in result and "relations" in result["Media"]:
-                return result["Media"]["relations"]["edges"]
+                edges = result["Media"]["relations"]["edges"]
+                return [AniListRelationEdge.model_validate(edge) for edge in edges]
             return []
         except Exception:
             return []
 
-    def get_sequels(self, anime_id: int) -> list[dict]:
+    def get_sequels(self, anime_id: int) -> list[AniListRelationNode]:
         """Get direct sequels of an anime.
 
         Args:
@@ -624,14 +643,14 @@ class AniListClient:
 
         # Filter for SEQUEL type relations and ANIME type nodes
         sequels = [
-            edge["node"]
+            edge.node
             for edge in relations
-            if edge.get("relationType") == "SEQUEL" and edge["node"].get("type") == "ANIME"
+            if edge.relationType == "SEQUEL" and edge.node.type == "ANIME"
         ]
 
         return sequels
 
-    def get_media_list_entry(self, anime_id: int) -> dict | None:
+    def get_media_list_entry(self, anime_id: int) -> AniListMediaListEntry | None:
         """Get user's media list entry for an anime.
 
         Args:
@@ -647,7 +666,7 @@ class AniListClient:
         if not self.user_id:
             user_info = self.get_viewer_info()
             if user_info:
-                self.user_id = user_info["id"]
+                self.user_id = user_info.id
             else:
                 return None
 
@@ -677,18 +696,24 @@ class AniListClient:
         try:
             result = self._query(query, variables)
             if result and "MediaList" in result and result["MediaList"]:
-                return result["MediaList"]
+                return AniListMediaListEntry.model_validate(result["MediaList"])
             return None
         except Exception:
             return None
 
-    def format_title(self, title_obj: dict) -> str:
+    def format_title(self, title_obj: AniListTitle | dict) -> str:
         """Format title object to single string
         Shows romaji + english when both available.
         """
-        romaji = title_obj.get("romaji")
-        english = title_obj.get("english")
-        native = title_obj.get("native")
+        # Handle both Pydantic model and dict for backward compatibility
+        if isinstance(title_obj, dict):
+            romaji = title_obj.get("romaji")
+            english = title_obj.get("english")
+            native = title_obj.get("native")
+        else:
+            romaji = title_obj.romaji
+            english = title_obj.english
+            native = title_obj.native
 
         # If both romaji and english exist and are different
         if romaji and english and romaji != english:

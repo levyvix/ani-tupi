@@ -49,8 +49,8 @@ def auto_discover_anilist_id(scraper_title: str) -> int | None:
         best_score = 0
 
         for anime in results:
-            title_romaji = anime.get("title", {}).get("romaji", "") or ""
-            title_english = anime.get("title", {}).get("english", "") or ""
+            title_romaji = anime.title.romaji or ""
+            title_english = anime.title.english or ""
 
             # Skip if no titles available
             if not title_romaji and not title_english:
@@ -72,7 +72,7 @@ def auto_discover_anilist_id(scraper_title: str) -> int | None:
         # Only accept if score >= threshold (default 90)
         threshold = settings.cache.anilist_fuzzy_threshold
         if best_score >= threshold and best_match:
-            anilist_id = best_match.get("id")
+            anilist_id = best_match.id
             # Cache for 30 days
             cache.set(cache_key, anilist_id, expire=2592000)
             return anilist_id
@@ -91,32 +91,37 @@ def get_anilist_id_from_title(anime_title: str) -> int | None:
     return auto_discover_anilist_id(anime_title)
 
 
-def get_anilist_metadata(anilist_id: int) -> dict | None:
+def get_anilist_metadata(anilist_id: int) -> "AniListAnime | None":
     """Fetch and cache complete AniList metadata (title, cover, etc).
 
     Args:
         anilist_id: AniList ID
 
     Returns:
-        Dict with AniList data or None if fetch fails
+        AniListAnime with metadata or None if fetch fails
     """
+    from models.models import AniListAnime
+
     cache = get_cache()
     cache_key = f"anilist_meta:{anilist_id}"
 
     # Check cache first
     cached = cache.get(cache_key)
     if cached is not None:
+        # Handle both dict (cached) and AniListAnime (new format)
+        if isinstance(cached, dict):
+            return AniListAnime.model_validate(cached)
         return cached
 
     try:
         from services.anilist_service import anilist_client
 
         # Fetch from AniList API
-        metadata = anilist_client.get_anime_details(anilist_id)
+        metadata = anilist_client.get_anime_by_id(anilist_id)
 
         if metadata:
-            # Cache for 30 days
-            cache.set(cache_key, metadata, expire=2592000)
+            # Cache as dict for compatibility
+            cache.set(cache_key, metadata.model_dump(), expire=2592000)
             return metadata
 
         return None

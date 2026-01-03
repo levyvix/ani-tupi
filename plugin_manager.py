@@ -15,20 +15,23 @@ from services.repository import rep
 from ui.components import menu_navigate
 
 
-def load_plugin_preferences() -> dict:
+def load_plugin_preferences() -> "PluginPreferences":
     """Load plugin preferences from JSON file.
 
     Returns:
-        Dict with format: {"disabled_plugins": ["animesonlinecc", ...]}
+        PluginPreferences with disabled_plugins list
     """
+    from models.models import PluginPreferences
+
     prefs_file = settings.plugins.preferences_file
     try:
         if prefs_file.exists():
             with prefs_file.open() as f:
-                return load(f)
-        return {"disabled_plugins": []}
+                data = load(f)
+                return PluginPreferences.model_validate(data)
+        return PluginPreferences()
     except Exception:
-        return {"disabled_plugins": []}
+        return PluginPreferences()
 
 
 def save_plugin_preferences(disabled_plugins: list[str]) -> None:
@@ -83,7 +86,7 @@ def plugin_management_menu() -> None:
     Allows user to toggle plugins on/off.
     """
     prefs = load_plugin_preferences()
-    disabled_plugins = set(prefs.get("disabled_plugins", []))
+    disabled_plugins = set(prefs.disabled_plugins)
 
     # Get all available plugins
     all_plugins = get_all_available_plugins()
@@ -135,7 +138,7 @@ def get_enabled_plugins() -> list[str]:
         List of enabled plugin names
     """
     prefs = load_plugin_preferences()
-    disabled_plugins = set(prefs.get("disabled_plugins", []))
+    disabled_plugins = set(prefs.disabled_plugins)
 
     # Get all available plugins
     all_plugins = get_all_available_plugins()

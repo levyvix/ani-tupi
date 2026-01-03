@@ -31,7 +31,7 @@ def anilist_main_menu() -> tuple[str, int] | None:
     if is_logged_in:
         # Get user info
         user_info = anilist_client.get_viewer_info()
-        username = user_info["name"] if user_info else "User"
+        username = user_info.name if user_info else "User"
 
         menu_options.extend(
             [
@@ -102,14 +102,14 @@ def _show_account_menu() -> None:
             input("Pressione Enter para continuar...")
             return
 
-        username = user_info["name"]
-        user_id = user_info["id"]
+        username = user_info.name
+        user_id = user_info.id
 
         # Get user stats - calculate manually from lists since API statistics might be 0
-        stats = user_info.get("statistics", {}).get("anime", {})
-        api_count = stats.get("count", 0)
-        api_episodes = stats.get("episodesWatched", 0)
-        api_minutes = stats.get("minutesWatched", 0)
+        stats = user_info.statistics
+        api_count = stats.anime.count if stats and stats.anime else 0
+        api_episodes = stats.anime.episodesWatched if stats and stats.anime else 0
+        api_minutes = stats.anime.minutesWatched if stats and stats.anime else 0
 
         # If API stats are 0, calculate from user lists
         if api_count == 0:
@@ -119,7 +119,7 @@ def _show_account_menu() -> None:
                 all_entries.extend(entries)
 
             total_count = len(all_entries)
-            episodes_watched = sum(entry.get("progress", 0) for entry in all_entries)
+            episodes_watched = sum(entry.progress or 0 for entry in all_entries)
             minutes_watched = episodes_watched * 24
         else:
             total_count = api_count
@@ -153,13 +153,15 @@ def _show_account_menu() -> None:
         }
 
         for activity in activities:
-            status = activity.get("status", "").lower()
-            progress = activity.get("progress")
-            media = activity.get("media", {})
-            title = media.get("title", {}).get("romaji") or media.get("title", {}).get(
-                "english", "Unknown"
-            )
-            episodes = media.get("episodes")
+            status = (activity.status or "").lower()
+            progress = activity.progress
+            media = activity.media
+            if media:
+                title = media.title.romaji or media.title.english or "Unknown"
+                episodes = media.episodes
+            else:
+                title = "Unknown"
+                episodes = None
             emoji = status_emoji.get(status, "•")
 
             if "watched episode" in status and progress:
@@ -292,23 +294,23 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
 
         for item in anime_list:
             # Handle different response formats
-            if "media" in item:  # User list format
-                media = item["media"]
-                progress = item.get("progress", 0)
-            else:  # Trending format
+            if hasattr(item, "media"):  # User list format (AniListMediaListEntry)
+                media = item.media
+                progress = item.progress or 0
+            else:  # Trending format (AniListAnime)
                 media = item
                 progress = 0
 
             # Format title for display (bilingual)
-            display_title = anilist_client.format_title(media["title"])
+            display_title = anilist_client.format_title(media.title)
 
             # Get romaji first, then english
             search_title = (
-                media["title"].get("romaji") or media["title"].get("english") or display_title
+                media.title.romaji or media.title.english or display_title
             )
 
-            anime_id = media["id"]
-            episodes = media.get("episodes") or "?"
+            anime_id = media.id
+            episodes = media.episodes or "?"
 
             # Build display string
             if progress > 0:
@@ -317,7 +319,7 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
                 display = f"{display_title} ({episodes} eps)"
 
             # Add score if available
-            score = media.get("averageScore")
+            score = media.averageScore
             if score:
                 display += f" ⭐{score}%"
 
@@ -416,7 +418,7 @@ def _show_recent_history() -> None:
                     # Get official AniList name
                     anime_info = anilist_client.get_anime_by_id(anilist_id)
                     if anime_info:
-                        display_name = anilist_client.format_title(anime_info["title"])
+                        display_name = anilist_client.format_title(anime_info.title)
 
                     # Mark this anilist_id as seen
                     seen_anilist_ids[anilist_id] = True
@@ -442,7 +444,7 @@ def _show_recent_history() -> None:
 
             if search_results:
                 best_match = search_results[0]
-                saved_anilist_id = best_match["id"]
+                saved_anilist_id = best_match.id
 
         # Get anime info for display and total episodes
         total_episodes = None
@@ -450,19 +452,19 @@ def _show_recent_history() -> None:
         if saved_anilist_id:
             anime_info = anilist_client.get_anime_by_id(saved_anilist_id)
             if anime_info:
-                display_title = anilist_client.format_title(anime_info["title"])
+                display_title = anilist_client.format_title(anime_info.title)
                 search_title = (
-                    anime_info["title"].get("romaji")
-                    or anime_info["title"].get("english")
+                    anime_info.title.romaji
+                    or anime_info.title.english
                     or display_title
                 )
                 # Get total episodes from AniList
-                total_episodes = anime_info.get("episodes")
+                total_episodes = anime_info.episodes
 
                 # Get progress from AniList (source of truth)
                 entry = anilist_client.get_media_list_entry(saved_anilist_id)
-                if entry and entry.get("progress"):
-                    anilist_progress = entry["progress"]
+                if entry and entry.progress:
+                    anilist_progress = entry.progress
             else:
                 display_title = anime_name
                 search_title = anime_name
@@ -525,11 +527,11 @@ def _search_and_add_anime(is_logged_in: bool) -> tuple[str, int] | None:
     anime_map = {}
 
     for anime in results:
-        display_title = anilist_client.format_title(anime["title"])
-        anime_id = anime["id"]
-        episodes = anime.get("episodes") or "?"
-        year = anime.get("seasonYear") or "?"
-        score = anime.get("averageScore")
+        display_title = anilist_client.format_title(anime.title)
+        anime_id = anime.id
+        episodes = anime.episodes or "?"
+        year = anime.seasonYear or "?"
+        score = anime.averageScore
 
         display = f"{display_title} ({year}, {episodes} eps)"
         if score:
@@ -537,7 +539,7 @@ def _search_and_add_anime(is_logged_in: bool) -> tuple[str, int] | None:
 
         options.append(display)
         search_title = (
-            anime["title"].get("romaji") or anime["title"].get("english") or display_title
+            anime.title.romaji or anime.title.english or display_title
         )
         anime_map[display] = (display_title, search_title, anime_id)
 

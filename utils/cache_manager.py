@@ -201,10 +201,12 @@ def clear_cache_by_prefix(prefix: str) -> None:
         cache.delete(key)
 
 
-def get_cache_stats() -> dict:
+def get_cache_stats() -> "CacheStats":
     """Get cache statistics."""
+    from models.models import CacheStats
+
     cache = get_cache()
-    return {
-        "size": len(cache),
-        "total_items": sum(1 for _ in cache.iterkeys()),
-    }
+    return CacheStats(
+        size=len(cache),
+        total_items=sum(1 for _ in cache.iterkeys()),
+    )

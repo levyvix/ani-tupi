@@ -1,7 +1,7 @@
 """History management service.
 
 This module provides functions for managing watch history:
-- Loading history with migration support
+- Loading history with timestamps and AniList IDs
 - Saving history with timestamps and AniList IDs
 - Resetting history for specific anime
 
@@ -29,46 +29,13 @@ _history_store = JSONStore(HISTORY_PATH / "history.json")
 def load_history():
     """Load watch history and let user choose episode (-1/0/+1 from last watched).
 
-    Old formats:
-    - v1: {"anime_name": [episodes_urls, episode_idx], ...}
-    - v2: {"anime_name": [timestamp, episode_idx], ...}
-    - v3: {"anime_name": [timestamp, episode_idx, anilist_id], ...}
-    - v4: {"anime_name": [timestamp, episode_idx, anilist_id, source], ...}
-    New format:
+    Format:
     - v5: {"anime_name": [timestamp, episode_idx, anilist_id, source, total_episodes], ...}
 
     Returns: (anime_name, episode_idx, anilist_id, anilist_title)
     """
     try:
         data = _history_store.load({})
-
-        # Migrate old formats to new format if needed
-        needs_migration = False
-        for anime_name, info in data.items():
-            # Check if first element is a list (v1 format)
-            if isinstance(info[0], list):
-                needs_migration = True
-                # Migrate: [episodes_urls, episode_idx] → [timestamp, episode_idx, None, None, None]
-                data[anime_name] = [int(time.time()), info[1], None, None, None]
-            # Check if missing anilist_id (v2 format)
-            elif len(info) == 2:
-                needs_migration = True
-                # Migrate: [timestamp, episode_idx] → [timestamp, episode_idx, None, None, None]
-                data[anime_name] = [info[0], info[1], None, None, None]
-            # Check if missing source (v3 format)
-            elif len(info) == 3:
-                needs_migration = True
-                # Migrate: [timestamp, episode_idx, anilist_id] → [timestamp, episode_idx, anilist_id, None, None]
-                data[anime_name] = [info[0], info[1], info[2], None, None]
-            # Check if missing total_episodes (v4 format)
-            elif len(info) == 4:
-                needs_migration = True
-                # Migrate: [timestamp, episode_idx, anilist_id, source] → [timestamp, episode_idx, anilist_id, source, None]
-                data[anime_name] = [info[0], info[1], info[2], info[3], None]
-
-        # Save migrated data
-        if needs_migration:
-            _history_store.save(data)
 
         # Build menu with episode info (sorted by most recent)
         titles = {}
@@ -106,12 +73,12 @@ def load_history():
             anime_info = anilist_client.get_anime_by_id(anilist_id)
             if anime_info:
                 # Use romaji title as primary
-                anilist_title = anime_info.get("title", {}).get("romaji")
+                anilist_title = anime_info.title.romaji
 
             # Get progress from AniList (source of truth)
             entry = anilist_client.get_media_list_entry(anilist_id)
-            if entry and entry.get("progress"):
-                anilist_episode_idx = entry["progress"] - 1  # Convert to 0-based index
+            if entry and entry.progress:
+                anilist_episode_idx = entry.progress - 1  # Convert to 0-based index
 
         # Use maximum progress from both sources, never go backwards
         if anilist_episode_idx > local_episode_idx:
@@ -294,8 +261,9 @@ def save_history_from_event(
     episode_idx: int,
     action: str = "watched",
     source: str | None = None,
-) -> None:
-    """Save watch history from IPC keybinding event.
+    anilist_id: int | None = None,
+) -> dict[str, str | bool]:
+    """Save watch history from IPC keybinding event and sync with AniList.
 
     This function is called when the user triggers episode navigation via
     keybindings (Shift+N, Shift+M, etc.) during MPV playback.
@@ -306,6 +274,14 @@ def save_history_from_event(
         action: Action type - "watched" (marked as watched), "started" (began watching),
                 "skipped" (skipped episode)
         source: Scraper source name (e.g., "animefire")
+        anilist_id: AniList ID for syncing (optional, will try to get from repository if not provided)
+
+    Returns:
+        Dict with sync information:
+        - "anilist_added": True if added to AniList list, False otherwise
+        - "anilist_status_change": Status change message (e.g., "PLANNING → CURRENT") or None
+        - "anilist_progress_synced": True if progress was synced, False otherwise
+        - "anilist_message": Human-readable message about AniList operations
     """
     # Get total episodes from repository if available
     total_episodes = None
@@ -313,14 +289,27 @@ def save_history_from_event(
     if episode_list:
         total_episodes = len(episode_list)
 
-    # Get AniList ID from repository if available
-    anilist_id = None
-    anime_titles = rep.get_anime_titles()
-    if anime_title in anime_titles:
-        # Try to get AniList ID from anime metadata
-        # For now, we'll rely on save_history to populate this
-        # This is a simplified version - full implementation would query AniList
-        pass
+    # Get AniList ID from parameter or repository
+    if anilist_id is None:
+        anilist_id = rep.anime_to_anilist_id.get(anime_title)
+        # If still None, try to get from history
+        if anilist_id is None:
+            try:
+                history_data = _history_store.load({})
+                if anime_title in history_data:
+                    history_entry = history_data[anime_title]
+                    if len(history_entry) > 2:
+                        anilist_id = history_entry[2]
+            except Exception:
+                pass
+
+    # Initialize return values
+    sync_info = {
+        "anilist_added": False,
+        "anilist_status_change": None,
+        "anilist_progress_synced": False,
+        "anilist_message": None,
+    }
 
     try:
         # Save with action metadata in a separate tracking object
@@ -334,6 +323,54 @@ def save_history_from_event(
         )
     except PersistenceError as e:
         logger.error(f"Failed to save history event for '{anime_title}': {e}")
+
+    # Sync with AniList if authenticated and anilist_id is available
+    if anilist_id and action == "watched":
+        from services.anilist_service import anilist_client
+        
+        if anilist_client.is_authenticated():
+            try:
+                # Check if anime is in any list
+                if not anilist_client.is_in_any_list(anilist_id):
+                    logger.info(f"Adding '{anime_title}' to AniList CURRENT list")
+                    anilist_client.add_to_list(anilist_id, "CURRENT")
+                    sync_info["anilist_added"] = True
+                    sync_info["anilist_message"] = "✅ Adicionado ao AniList"
+                else:
+                    # Auto-promote from PLANNING to CURRENT, or COMPLETED to REPEATING
+                    entry = anilist_client.get_media_list_entry(anilist_id)
+                    if entry:
+                        old_status = entry.status
+                        if entry.status == "PLANNING":
+                            logger.info(f"Moving '{anime_title}' from PLANNING to CURRENT")
+                            anilist_client.add_to_list(anilist_id, "CURRENT")
+                            sync_info["anilist_status_change"] = "PLANNING → CURRENT"
+                            sync_info["anilist_message"] = "✅ Movido para CURRENT no AniList"
+                        elif entry.status == "COMPLETED":
+                            logger.info(f"Changing '{anime_title}' to REPEATING")
+                            anilist_client.change_status(anilist_id, "REPEATING")
+                            sync_info["anilist_status_change"] = "COMPLETED → REPEATING"
+                            sync_info["anilist_message"] = "✅ Status alterado para REPEATING no AniList"
+
+                # Update progress (episode_idx is 0-based, convert to 1-based)
+                episode_number = episode_idx + 1
+                success = anilist_client.update_progress(anilist_id, episode_number)
+                if success:
+                    logger.info(f"Synced progress to AniList: Ep {episode_number}")
+                    sync_info["anilist_progress_synced"] = True
+                    if not sync_info["anilist_message"]:
+                        sync_info["anilist_message"] = "✅ Progresso atualizado no AniList"
+                else:
+                    # Verify token is still valid if sync failed
+                    viewer = anilist_client.get_viewer_info()
+                    if not viewer:
+                        logger.warning("AniList token expired - sync failed")
+                    else:
+                        logger.warning(f"Failed to sync progress to AniList for Ep {episode_number}")
+            except Exception as e:
+                logger.error(f"Error syncing with AniList: {e}")
+
+    return sync_info
 
 
 def reset_history(anime: str) -> None:

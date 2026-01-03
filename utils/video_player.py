@@ -145,22 +145,22 @@ def _generate_input_conf() -> tuple[str, str]:
 # Auto-generated for episode navigation
 
 # Next Episode (mark watched, move to next)
-shift+n script-message mark-next
+Shift+N script-message mark-next
 
 # Previous Episode (go to previous, resume from saved position)
-shift+p script-message previous
+Shift+P script-message previous
 
 # Mark & Menu (mark watched, show menu: next/continue/quit)
-shift+m script-message mark-menu
+Shift+M script-message mark-menu
 
 # Reload Current Episode (retry same episode)
-shift+r script-message reload-episode
+Shift+R script-message reload-episode
 
 # Toggle Auto-play (skip episode selection for next episode)
-shift+a script-message toggle-autoplay
+Shift+A script-message toggle-autoplay
 
 # Toggle Subtitle/Dub (switch if available)
-shift+t script-message toggle-sub-dub
+Shift+T script-message toggle-sub-dub
 """
 
     # Create temp file with cleanup on exit
@@ -267,7 +267,7 @@ def _launch_mpv_with_ipc(
         f"--input-ipc-server={socket_path}",
         f"--input-conf={input_conf}",
         "--fullscreen=yes",
-        "--osc=no",  # Disable on-screen controller for custom control
+        "--osc=yes",  # Enable on-screen controller for mouse interaction and video bar
         "--cache=yes",
         "--demuxer-max-bytes=400M",
         "--demuxer-max-back-bytes=100M",
@@ -313,6 +313,26 @@ def _play_video_legacy(url: str, debug: bool = False) -> VideoPlaybackResult:
     except Exception as e:
         print(f"⚠️  Playback error: {e}")
         return VideoPlaybackResult(exit_code=2, action="quit", data=None)
+
+
+def _send_mpv_command(sock: socket.socket, command: str, args: list) -> None:
+    """Send JSON-RPC command to MPV via IPC socket.
+
+    Args:
+        sock: Connected IPC socket
+        command: MPV command name (e.g., "loadfile", "show-text")
+        args: Command arguments
+    """
+    import json
+
+    request = {
+        "command": [command] + args
+    }
+    try:
+        message = json.dumps(request) + "\n"
+        sock.sendall(message.encode('utf-8'))
+    except Exception as e:
+        print(f"Failed to send MPV command: {e}")
 
 
 def _ipc_event_loop(
@@ -362,6 +382,8 @@ def _ipc_event_loop(
 
     try:
         buffer = ""
+        last_action = "quit"  # Track last action taken (for return value)
+        last_action_episode = None  # Track episode number for last action
         while mpv_process.poll() is None:  # While process is running
             try:
                 chunk = sock.recv(1024).decode('utf-8', errors='ignore')
@@ -381,9 +403,130 @@ def _ipc_event_loop(
                             args = msg.get('args', [])
                             if args:
                                 action = args[0]
+                                
+                                # Handle navigation actions that load new episodes
+                                if action == "mark-next":
+                                    from services.history_service import save_history_from_event
+                                    from services.repository import rep
+                                    
+                                    anime_title = episode_context.get("anime_title")
+                                    episode_number = episode_context.get("episode_number", 1)
+                                    source = episode_context.get("source")
+                                    anilist_id = episode_context.get("anilist_id")
+                                    
+                                    # Save current episode as watched (0-indexed)
+                                    episode_idx = episode_number - 1
+                                    sync_info = save_history_from_event(
+                                        anime_title=anime_title,
+                                        episode_idx=episode_idx,
+                                        action="watched",
+                                        source=source,
+                                        anilist_id=anilist_id,
+                                    )
+                                    
+                                    # Show terminal feedback about AniList sync
+                                    if sync_info.get("anilist_message"):
+                                        print(f"   {sync_info['anilist_message']}")
+                                    
+                                    # Show confirmation that episode was marked as watched
+                                    from services.anilist_service import anilist_client
+                                    sync_status = ""
+                                    if anilist_id and anilist_client.is_authenticated():
+                                        sync_status = " ✓ AniList"
+                                    # MPV show-text format: show-text "message" [duration_ms]
+                                    # Duration is optional, default is usually 3000ms
+                                    _send_mpv_command(sock, "show-text", [f"✓ Ep {episode_number} marcado como assistido{sync_status}", 3000])
+                                    
+                                    # Get episode list to check if next episode exists
+                                    episode_list = rep.get_episode_list(anime_title)
+                                    total_episodes = len(episode_list) if episode_list else 0
+                                    
+                                    # Get next episode URL
+                                    next_episode_number = episode_number + 1
+                                    if episode_list and next_episode_number <= len(episode_list):
+                                        next_episode_idx = next_episode_number - 1
+                                        next_url = rep.get_episode_url(anime_title, next_episode_idx)
+                                        
+                                        if next_url:
+                                            # Show terminal feedback about playing next episode
+                                            print(f"▶️  Reproduzindo Episódio {next_episode_number}")
+                                            
+                                            # Send MPV command to load next episode
+                                            _send_mpv_command(sock, "loadfile", [next_url, "replace"])
+                                            
+                                            # Show OSD message
+                                            _send_mpv_command(sock, "show-text", [f"Carregando Episódio {next_episode_number}..."])
+                                            
+                                            # Update episode context for next iteration
+                                            episode_context["episode_number"] = next_episode_number
+                                            episode_context["url"] = next_url
+                                            episode_context["total_episodes"] = total_episodes
+                                            # Preserve anilist_id for next episode
+                                            
+                                            # Track that "next" action was taken
+                                            last_action = "next"
+                                            last_action_episode = next_episode_number  # Track which episode to play next
+                                            
+                                            # Continue loop to listen for more keybindings
+                                            continue
+                                        else:
+                                            # Next episode URL not found
+                                            _send_mpv_command(sock, "show-text", ["No next episode available"])
+                                    else:
+                                        # No more episodes
+                                        _send_mpv_command(sock, "show-text", ["No more episodes"])
+                                
+                                elif action == "previous":
+                                    from services.repository import rep
+                                    
+                                    anime_title = episode_context.get("anime_title")
+                                    episode_number = episode_context.get("episode_number", 1)
+                                    
+                                    # Get previous episode URL
+                                    prev_episode_number = max(1, episode_number - 1)
+                                    if prev_episode_number < episode_number:
+                                        prev_episode_idx = prev_episode_number - 1
+                                        prev_url = rep.get_episode_url(anime_title, prev_episode_idx)
+                                        
+                                        if prev_url:
+                                            # Send MPV command to load previous episode
+                                            _send_mpv_command(sock, "loadfile", [prev_url, "replace"])
+                                            
+                                            # Show OSD message
+                                            _send_mpv_command(sock, "show-text", [f"Loading Episode {prev_episode_number}..."])
+                                            
+                                            # Update episode context
+                                            episode_context["episode_number"] = prev_episode_number
+                                            episode_context["url"] = prev_url
+                                            
+                                            # Track that "previous" action was taken
+                                            last_action = "previous"
+                                            last_action_episode = prev_episode_number  # Track which episode to play
+                                            
+                                            # Continue loop
+                                            continue
+                                        else:
+                                            _send_mpv_command(sock, "show-text", ["Previous episode not available"])
+                                    else:
+                                        _send_mpv_command(sock, "show-text", ["No previous episode"])
+                                
+                                elif action == "reload-episode":
+                                    # Reload current episode
+                                    current_url = episode_context.get("url")
+                                    if current_url:
+                                        _send_mpv_command(sock, "loadfile", [current_url, "replace"])
+                                        _send_mpv_command(sock, "show-text", ["Reloading episode..."])
+                                        # Track reload action
+                                        last_action = "reload"
+                                        # Continue loop
+                                        continue
+                                
+                                # Handle other actions (mark-menu, toggle-autoplay, toggle-sub-dub)
                                 result = _handle_keybinding_action(action, episode_context)
                                 if result:
+                                    # For actions that require returning to caller
                                     return result
+                                
                     except json.JSONDecodeError:
                         # Skip malformed JSON
                         continue
@@ -395,8 +538,29 @@ def _ipc_event_loop(
                 print(f"IPC error: {e}")
                 break
 
-        # MPV process exited normally
-        return VideoPlaybackResult(exit_code=mpv_process.returncode or 0, action="quit", data=None)
+        # MPV process exited normally - return last action taken (or "quit" if none)
+        # If last_action was "next", include episode data
+        if last_action == "next" and last_action_episode:
+            return VideoPlaybackResult(
+                exit_code=mpv_process.returncode or 0,
+                action="next",
+                data={"episode": last_action_episode}
+            )
+        elif last_action == "previous" and last_action_episode:
+            return VideoPlaybackResult(
+                exit_code=mpv_process.returncode or 0,
+                action="previous",
+                data={"episode": last_action_episode}
+            )
+        elif last_action == "reload":
+            current_episode = episode_context.get("episode_number", 1)
+            return VideoPlaybackResult(
+                exit_code=mpv_process.returncode or 0,
+                action="reload",
+                data={"episode": current_episode}
+            )
+        else:
+            return VideoPlaybackResult(exit_code=mpv_process.returncode or 0, action="quit", data=None)
 
     finally:
         try:
@@ -418,6 +582,7 @@ def play_episode(
     source: str,
     use_ipc: bool = True,
     debug: bool = False,
+    anilist_id: int | None = None,
 ) -> VideoPlaybackResult:
     """Play a single episode with optional IPC support for episode navigation.
 
@@ -429,6 +594,7 @@ def play_episode(
         source: Name of scraper source (e.g., "animefire")
         use_ipc: Enable IPC socket for keybinding events (default True)
         debug: Skip playback and return simulated result
+        anilist_id: AniList ID for syncing progress (optional)
 
     Returns:
         VideoPlaybackResult with exit code, action, and optional data
@@ -451,6 +617,7 @@ def play_episode(
         "total_episodes": total_episodes,
         "source": source,
         "url": url,
+        "anilist_id": anilist_id,
     }
 
     if not use_ipc:

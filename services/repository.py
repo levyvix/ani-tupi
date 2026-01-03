@@ -7,7 +7,7 @@ from threading import Thread
 
 from models.config import settings
 from scrapers.loader import PluginInterface
-from models.models import EpisodeData
+from models.models import EpisodeData, SearchMetadata
 
 
 class Repository:
@@ -223,20 +223,16 @@ class Repository:
         # Execute search
         self._search_with_incremental_results(limited_query, verbose)
 
-    def get_search_metadata(self) -> dict:
+    def get_search_metadata(self) -> SearchMetadata:
         """Get metadata about the last search performed.
 
         Returns:
-            Dict with keys:
-            - original_query: The full query user typed
-            - used_query: The actual query used (after reduction)
-            - used_words: Number of words used in final search
-            - total_words: Total number of words in original query
-            - min_words: Minimum word limit (from config)
-
-            Returns empty dict if no search has been performed yet.
+            SearchMetadata with search information.
+            Returns empty SearchMetadata if no search has been performed yet.
         """
-        return self._last_search_metadata
+        if not self._last_search_metadata:
+            return SearchMetadata()
+        return SearchMetadata.model_validate(self._last_search_metadata)
 
     @staticmethod
     def _normalize_for_filter(text: str) -> str:

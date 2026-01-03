@@ -208,3 +208,223 @@ class MangaHistoryEntry(BaseModel):
     last_chapter_id: str | None = Field(None, description="MangaDex chapter ID")
     timestamp: datetime = Field(default_factory=datetime.now, description="Read timestamp")
     manga_id: str | None = Field(None, description="MangaDex manga ID")
+
+
+# AniList API Models
+class AniListTitle(BaseModel):
+    """AniList title object with multiple language variants."""
+
+    romaji: str | None = Field(None, description="Romaji title")
+    english: str | None = Field(None, description="English title")
+    native: str | None = Field(None, description="Native title")
+
+
+class AniListCoverImage(BaseModel):
+    """AniList cover image object."""
+
+    medium: str | None = Field(None, description="Medium size cover URL")
+    large: str | None = Field(None, description="Large size cover URL")
+
+
+class AniListAnimeStatistics(BaseModel):
+    """AniList anime statistics."""
+
+    count: int = Field(ge=0, description="Total anime count")
+    episodesWatched: int = Field(ge=0, description="Total episodes watched")
+    minutesWatched: int = Field(ge=0, description="Total minutes watched")
+
+
+class AniListStatistics(BaseModel):
+    """AniList user statistics."""
+
+    anime: AniListAnimeStatistics | None = Field(None, description="Anime statistics")
+
+
+class AniListViewerInfo(BaseModel):
+    """AniList viewer/user information.
+
+    Attributes:
+        id: User ID
+        name: Username
+        avatar: Avatar image URLs
+        statistics: User statistics
+    """
+
+    id: int = Field(..., description="User ID")
+    name: str = Field(..., min_length=1, description="Username")
+    avatar: AniListCoverImage | None = Field(None, description="Avatar images")
+    statistics: AniListStatistics | None = Field(None, description="User statistics")
+
+
+class AniListAnime(BaseModel):
+    """AniList anime media object.
+
+    Attributes:
+        id: AniList anime ID
+        title: Title object with multiple languages
+        episodes: Total episodes (None if unknown)
+        coverImage: Cover image URLs
+        averageScore: Average score (0-100)
+        seasonYear: Year of release
+        season: Season (WINTER, SPRING, SUMMER, FALL)
+        type: Media type (ANIME, MANGA)
+    """
+
+    id: int = Field(..., description="AniList anime ID")
+    title: AniListTitle = Field(..., description="Title object")
+    episodes: int | None = Field(None, description="Total episodes")
+    coverImage: AniListCoverImage | None = Field(None, description="Cover images")
+    averageScore: int | None = Field(None, ge=0, le=100, description="Average score")
+    seasonYear: int | None = Field(None, ge=1900, le=2100, description="Release year")
+    season: str | None = Field(None, description="Season (WINTER, SPRING, SUMMER, FALL)")
+    type: str | None = Field(None, description="Media type")
+
+
+class AniListMediaListEntry(BaseModel):
+    """AniList media list entry.
+
+    Attributes:
+        id: List entry ID
+        status: List status (CURRENT, PLANNING, COMPLETED, etc.)
+        progress: Episode progress
+        score: User score
+        startedAt: Start date
+        completedAt: Completion date
+        media: Anime media object
+    """
+
+    id: int = Field(..., description="List entry ID")
+    status: str | None = Field(None, description="List status")
+    progress: int | None = Field(None, ge=0, description="Episode progress")
+    score: int | None = Field(None, ge=0, le=100, description="User score")
+    startedAt: dict[str, int] | None = Field(None, description="Start date (year, month, day)")
+    completedAt: dict[str, int] | None = Field(None, description="Completion date (year, month, day)")
+    media: AniListAnime | None = Field(None, description="Anime media object")
+    createdAt: int | None = Field(None, description="Creation timestamp")
+
+
+class AniListActivity(BaseModel):
+    """AniList activity (list update).
+
+    Attributes:
+        id: Activity ID
+        status: List status
+        progress: Episode progress
+        createdAt: Creation timestamp
+        media: Anime media object
+    """
+
+    id: int = Field(..., description="Activity ID")
+    status: str | None = Field(None, description="List status")
+    progress: int | None = Field(None, ge=0, description="Episode progress")
+    createdAt: int = Field(..., description="Creation timestamp")
+    media: AniListAnime | None = Field(None, description="Anime media object")
+
+
+class AniListRelationNode(BaseModel):
+    """AniList relation node (sequel, prequel, etc.).
+
+    Attributes:
+        id: AniList ID
+        type: Media type (ANIME, MANGA)
+        title: Title object
+        episodes: Total episodes
+    """
+
+    id: int = Field(..., description="AniList ID")
+    type: str = Field(..., description="Media type")
+    title: AniListTitle = Field(..., description="Title object")
+    episodes: int | None = Field(None, description="Total episodes")
+
+
+class AniListRelationEdge(BaseModel):
+    """AniList relation edge.
+
+    Attributes:
+        relationType: Type of relation (SEQUEL, PREQUEL, etc.)
+        node: Related anime node
+    """
+
+    relationType: str = Field(..., description="Relation type")
+    node: AniListRelationNode = Field(..., description="Related anime")
+
+
+# Episode and Search Models
+class EpisodeContext(BaseModel):
+    """Episode context for next episode navigation.
+
+    Attributes:
+        url: Episode URL
+        title: Episode title
+        episode: Episode number (1-indexed)
+        total: Total episodes
+    """
+
+    url: str = Field(..., min_length=1, description="Episode URL")
+    title: str = Field(..., min_length=1, description="Episode title")
+    episode: int = Field(..., ge=1, description="Episode number (1-indexed)")
+    total: int = Field(..., ge=1, description="Total episodes")
+
+
+class SearchMetadata(BaseModel):
+    """Search metadata from repository.
+
+    Attributes:
+        original_query: The full query user typed
+        used_query: The actual query used (after reduction)
+        used_words: Number of words used in final search
+        total_words: Total number of words in original query
+        min_words: Minimum word limit (from config)
+        variant_tested: Title variation that was tested
+        variant_index: Index of the variation tested
+        total_variants: Total number of variations available
+        source: Source of the search (cache or scraper)
+    """
+
+    original_query: str | None = Field(None, description="Original user query")
+    used_query: str | None = Field(None, description="Query actually used")
+    used_words: int | None = Field(None, ge=0, description="Words used in search")
+    total_words: int | None = Field(None, ge=0, description="Total words in query")
+    min_words: int | None = Field(None, ge=0, description="Minimum word limit")
+    variant_tested: str | None = Field(None, description="Title variation tested")
+    variant_index: int | None = Field(None, ge=0, description="Variation index")
+    total_variants: int | None = Field(None, ge=0, description="Total variations")
+    source: str | None = Field(None, description="Search source (cache/scraper)")
+
+
+# Cache Models
+class ScraperCacheData(BaseModel):
+    """Scraper cache data structure.
+
+    Attributes:
+        episode_urls: List of episode URLs
+        episode_count: Number of episodes
+        timestamp: Cache timestamp (legacy, not used in new system)
+    """
+
+    episode_urls: list[str] = Field(..., description="Episode URLs")
+    episode_count: int = Field(..., ge=0, description="Number of episodes")
+    timestamp: int = Field(default=0, description="Cache timestamp (legacy)")
+
+
+class CacheStats(BaseModel):
+    """Cache statistics.
+
+    Attributes:
+        size: Cache size
+        total_items: Total number of items in cache
+    """
+
+    size: int = Field(..., ge=0, description="Cache size")
+    total_items: int = Field(..., ge=0, description="Total items")
+
+
+# Plugin Models
+class PluginPreferences(BaseModel):
+    """Plugin preferences configuration.
+
+    Attributes:
+        disabled_plugins: List of disabled plugin names
+    """
+
+    disabled_plugins: list[str] = Field(default_factory=list, description="Disabled plugins")

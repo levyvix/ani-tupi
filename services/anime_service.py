@@ -19,7 +19,7 @@ from services.anilist_service import anilist_client
 from services.history_service import reset_history, save_history
 from services.repository import rep
 from ui.components import loading, menu_navigate
-from utils.video_player import play_video
+from utils.video_player import play_episode
 from utils.persistence import JSONStore
 from utils.exceptions import PersistenceError
 from utils.logging import get_logger
@@ -184,7 +184,7 @@ def offer_sequel_and_continue(anilist_id: int, args) -> bool:
     # Format sequel options
     if len(sequels) == 1:
         sequel = sequels[0]
-        sequel_title = anilist_client.format_title(sequel["title"])
+        sequel_title = anilist_client.format_title(sequel.title)
 
         # Single sequel: offer simple confirmation
         choice = menu_navigate(
@@ -196,16 +196,16 @@ def offer_sequel_and_continue(anilist_id: int, args) -> bool:
             # Get sequel info and start playback
             anilist_anime_flow(
                 sequel_title,
-                sequel["id"],
+                sequel.id,
                 args,
                 anilist_progress=0,
                 display_title=sequel_title,
-                total_episodes=sequel.get("episodes"),
+                total_episodes=sequel.episodes,
             )
             return True
     else:
         # Multiple sequels: let user choose
-        sequel_options = [anilist_client.format_title(s["title"]) for s in sequels]
+        sequel_options = [anilist_client.format_title(s.title) for s in sequels]
 
         choice = menu_navigate(
             sequel_options + ["❌ Não, parar aqui"],
@@ -215,17 +215,17 @@ def offer_sequel_and_continue(anilist_id: int, args) -> bool:
         if choice and choice != "❌ Não, parar aqui":
             # Find selected sequel
             selected_sequel = next(
-                (s for s in sequels if anilist_client.format_title(s["title"]) == choice), None
+                (s for s in sequels if anilist_client.format_title(s.title) == choice), None
             )
             if selected_sequel:
-                sequel_title = anilist_client.format_title(selected_sequel["title"])
+                sequel_title = anilist_client.format_title(selected_sequel.title)
                 anilist_anime_flow(
                     sequel_title,
-                    selected_sequel["id"],
+                    selected_sequel.id,
                     args,
                     anilist_progress=0,
                     display_title=sequel_title,
-                    total_episodes=selected_sequel.get("episodes"),
+                    total_episodes=selected_sequel.episodes,
                 )
                 return True
 
@@ -285,7 +285,7 @@ def anilist_anime_flow(
         if cache_data:
             # Found in cache! Use it directly
             print(
-                f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', [])))} eps disponíveis)"
+                f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)"
             )
             rep.load_from_cache(variant, cache_data)
             used_query = variant
@@ -308,7 +308,7 @@ def anilist_anime_flow(
         # Get metadata from this search attempt
         search_metadata = rep.get_search_metadata()
         # Pass original_query for ranking results by relevance
-        used_query = search_metadata.get("used_query", variant)
+        used_query = search_metadata.used_query or variant
         titles_with_sources = rep.get_anime_titles_with_sources(
             filter_by_query=variant, original_query=used_query
         )
@@ -321,8 +321,8 @@ def anilist_anime_flow(
                 "variant_index": current_variant_idx,
                 "total_variants": len(title_variations),
                 "used_query": used_query,
-                "used_words": search_metadata.get("used_words"),
-                "total_words": search_metadata.get("total_words"),
+                "used_words": search_metadata.used_words,
+                "total_words": search_metadata.total_words,
             }
             break  # Break while loop
         else:
@@ -346,7 +346,7 @@ def anilist_anime_flow(
             cache_data = get_cache(manual_query)
             if cache_data:
                 print(
-                    f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', [])))} eps disponíveis)"
+                    f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)"
                 )
                 rep.load_from_cache(manual_query, cache_data)
                 titles_with_sources = [manual_query]
@@ -360,10 +360,12 @@ def anilist_anime_flow(
 
                 # Show what query was actually used after search completes
                 metadata = rep.get_search_metadata()
-                used_query = metadata.get("used_query", manual_query)
+                used_query = metadata.used_query or manual_query
                 if used_query != manual_query:
+                    used_words = metadata.used_words or "?"
+                    total_words = metadata.total_words or "?"
                     print(
-                        f"ℹ️  Reduzido para: '{used_query}' ({metadata.get('used_words', '?')}/{metadata.get('total_words', '?')} palavras)"
+                        f"ℹ️  Reduzido para: '{used_query}' ({used_words}/{total_words} palavras)"
                     )
 
                 # Pass original_query for ranking results by relevance
@@ -408,17 +410,16 @@ def anilist_anime_flow(
         else:
             menu_title += f"🔍 Busca usada: '{used_query}'\n"
             # Show if query was reduced (either internally or by trying fewer variations)
-            if int(metadata.get("variant_index", 0)) > 0:
+            variant_idx = metadata.get("variant_index", 0) or 0
+            if int(variant_idx) > 0:
                 # Skipped earlier variations
-                menu_title += f"   ⚠️  Saltou {metadata.get('variant_index')} variação(ões) (nenhum resultado)\n"
-            if (
-                metadata.get("used_words", 0)
-                and metadata.get("total_words", 0)
-                and metadata.get("used_words") < metadata.get("total_words")
-            ):
+                menu_title += f"   ⚠️  Saltou {variant_idx} variação(ões) (nenhum resultado)\n"
+            used_words = metadata.get("used_words")
+            total_words = metadata.get("total_words")
+            if used_words and total_words and used_words < total_words:
                 # Reduced within the search
                 menu_title += (
-                    f"   ({metadata.get('used_words')}/{metadata.get('total_words')} palavras)\n"
+                    f"   ({used_words}/{total_words} palavras)\n"
                 )
         menu_title += f"\nEncontrados {len(titles_with_sources)} resultados. Escolha:"
 
@@ -466,7 +467,7 @@ def anilist_anime_flow(
 
                 search_metadata = rep.get_search_metadata()
                 # Pass original_query for ranking results by relevance
-                used_query = search_metadata.get("used_query", variant)
+                used_query = search_metadata.used_query or variant
                 titles_with_sources = rep.get_anime_titles_with_sources(
                     filter_by_query=variant, original_query=used_query
                 )
@@ -478,8 +479,8 @@ def anilist_anime_flow(
                         "variant_index": current_variant_idx,
                         "total_variants": len(title_variations),
                         "used_query": used_query,
-                        "used_words": search_metadata.get("used_words"),
-                        "total_words": search_metadata.get("total_words"),
+                        "used_words": search_metadata.used_words,
+                        "total_words": search_metadata.total_words,
                     }
                     # Loop continues to show new results
                     continue
@@ -504,8 +505,8 @@ def anilist_anime_flow(
 
     if cache_data:
         # Use cached data for episode list
-        episode_list = cache_data.get("episode_urls", [])
-        scraper_episode_count = cache_data.get("episode_count", len(episode_list))
+        episode_list = cache_data.episode_urls
+        scraper_episode_count = cache_data.episode_count
         print(f"ℹ️  Usando cache ({scraper_episode_count} eps disponíveis)")
 
         # Still need to populate repository for video URL search
@@ -641,69 +642,110 @@ def anilist_anime_flow(
             print("   💡 O episódio está indisponível em todas as fontes.")
             continue
 
-        # Play video
-        exit_code = play_video(player_url, args.debug)
+        # Play episode with IPC support
+        result = play_episode(
+            url=player_url,
+            anime_title=selected_anime,
+            episode_number=episode,
+            total_episodes=num_episodes,
+            source=source or "unknown",
+            use_ipc=True,
+            debug=args.debug,
+            anilist_id=anilist_id,
+        )
 
-        # Log MPV exit code if it's not a normal exit
-        if exit_code not in [0, 3]:  # 0=normal, 3=user quit with 'q'
-            print(f"⚠️  MPV exit code: {exit_code}")
-            if exit_code == 2:
+        # Handle IPC navigation actions
+        if result.action == "next":
+            # User pressed Shift+N - already saved history and synced AniList in IPC handler
+            # Move to next episode automatically
+            if result.data and "episode" in result.data:
+                next_episode = result.data["episode"]
+                if next_episode <= num_episodes:
+                    episode_idx = next_episode - 1
+                    # Check for sequels when last episode is watched
+                    if next_episode == num_episodes:
+                        if offer_sequel_and_continue(anilist_id, args):
+                            return  # Sequel started, exit this flow
+                    # Feedback already shown in _ipc_event_loop, just continue
+                    continue  # Loop to play next episode
+            # Fall through to menu if no next episode data
+        elif result.action == "previous":
+            # User pressed Shift+P - go to previous episode
+            if result.data and "episode" in result.data:
+                prev_episode = result.data["episode"]
+                if prev_episode >= 1:
+                    episode_idx = prev_episode - 1
+                    continue  # Loop to play previous episode
+            # Fall through to menu if no previous episode data
+        elif result.action == "reload":
+            # User pressed Shift+R - reload current episode
+            continue  # Loop to replay same episode
+        elif result.action == "mark-menu":
+            # User pressed Shift+M - mark watched and show menu
+            # History already saved in IPC handler, just show menu
+            pass
+        elif result.exit_code not in [0, 3]:  # Error cases
+            print(f"⚠️  MPV exit code: {result.exit_code}")
+            if result.exit_code == 2:
                 print(" (Possível erro ao reproduzir ou janela fechada)")
                 continue
 
-        # Clear terminal before asking confirmation
-        import os
+        # For normal quit or other actions, show confirmation menu
+        # (History/AniList sync already handled by IPC if action was "next")
+        if result.action != "next":
+            # Clear terminal before asking confirmation
+            import os
 
-        os.system("clear")
+            os.system("clear")
 
-        # Ask if watched until the end before saving/updating anything
-        confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
-        confirm = menu_navigate(
-            confirm_options,
-            msg=f"Você assistiu o episódio {episode} de '{selected_anime}' até o final?",
-        )
+            # Ask if watched until the end before saving/updating anything
+            confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
+            confirm = menu_navigate(
+                confirm_options,
+                msg=f"Você assistiu o episódio {episode} de '{selected_anime}' até o final?",
+            )
 
-        # Only save history and update AniList if user confirmed
-        if confirm == "✅ Sim, assisti até o final":
-            save_history(selected_anime, episode_idx, anilist_id, source)
+            # Only save history and update AniList if user confirmed
+            if confirm == "✅ Sim, assisti até o final":
+                save_history(selected_anime, episode_idx, anilist_id, source)
 
-            # Update AniList if authenticated
-            if anilist_client.is_authenticated() and anilist_id:
-                # Check if anime is in any list
-                if not anilist_client.is_in_any_list(anilist_id):
-                    print("\n📝 Adicionando à sua lista do AniList...")
-                    anilist_client.add_to_list(anilist_id, "CURRENT")
-                else:
-                    # Auto-promote from PLANNING to CURRENT, or COMPLETED to REPEATING
-                    entry = anilist_client.get_media_list_entry(anilist_id)
-                    if entry:
-                        if entry.get("status") == "PLANNING":
-                            print("\n📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
-                            anilist_client.add_to_list(anilist_id, "CURRENT")
-                        elif entry.get("status") == "COMPLETED":
-                            print("\n🔄 Mudando para 'Recomassistindo'...")
-                            anilist_client.change_status(anilist_id, "REPEATING")
-
-                print(f"\n🔄 Sincronizando progresso com AniList (Ep {episode})...")
-                success = anilist_client.update_progress(anilist_id, episode)
-                if success:
-                    print("✅ Progresso salvo no AniList!")
-                else:
-                    # Verify token is still valid if sync failed
-                    viewer = anilist_client.get_viewer_info()
-                    if not viewer:
-                        print("⚠️  Token do AniList expirou")
-                        print("   Execute: ani-tupi anilist auth")
+                # Update AniList if authenticated
+                if anilist_client.is_authenticated() and anilist_id:
+                    # Check if anime is in any list
+                    if not anilist_client.is_in_any_list(anilist_id):
+                        print("\n📝 Adicionando à sua lista do AniList...")
+                        anilist_client.add_to_list(anilist_id, "CURRENT")
                     else:
-                        print("⚠️  Não foi possível salvar no AniList (continuando...)")
+                        # Auto-promote from PLANNING to CURRENT, or COMPLETED to REPEATING
+                        entry = anilist_client.get_media_list_entry(anilist_id)
+                        if entry:
+                            if entry.status == "PLANNING":
+                                print("\n📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
+                                anilist_client.add_to_list(anilist_id, "CURRENT")
+                            elif entry.status == "COMPLETED":
+                                print("\n🔄 Mudando para 'Recomassistindo'...")
+                                anilist_client.change_status(anilist_id, "REPEATING")
 
-                # Check for sequels when last episode is watched
-                if episode == num_episodes:
-                    if offer_sequel_and_continue(anilist_id, args):
-                        return  # Sequel started, exit this flow
-        else:
-            # User didn't finish - don't save anything, just continue to menu
-            pass
+                    print(f"\n🔄 Sincronizando progresso com AniList (Ep {episode})...")
+                    success = anilist_client.update_progress(anilist_id, episode)
+                    if success:
+                        print("✅ Progresso salvo no AniList!")
+                    else:
+                        # Verify token is still valid if sync failed
+                        viewer = anilist_client.get_viewer_info()
+                        if not viewer:
+                            print("⚠️  Token do AniList expirou")
+                            print("   Execute: ani-tupi anilist auth")
+                        else:
+                            print("⚠️  Não foi possível salvar no AniList (continuando...)")
+
+                    # Check for sequels when last episode is watched
+                    if episode == num_episodes:
+                        if offer_sequel_and_continue(anilist_id, args):
+                            return  # Sequel started, exit this flow
+            else:
+                # User didn't finish - don't save anything, just continue to menu
+                pass
 
         opts = []
         if episode_idx < num_episodes - 1:
@@ -790,7 +832,7 @@ def switch_anime_source(
 
         # Get results with sources
         search_metadata = rep.get_search_metadata()
-        used_query = search_metadata.get("used_query", variant)
+        used_query = search_metadata.used_query or variant
         titles_with_sources = rep.get_anime_titles_with_sources(
             filter_by_query=variant, original_query=used_query
         )
@@ -870,8 +912,8 @@ def switch_anime_source(
         if anilist_client.is_authenticated():
             # Get media list entry for this anime
             entry = anilist_client.get_media_list_entry(anilist_id)
-            if entry and entry.get("progress"):
-                anilist_progress = entry["progress"]
+            if entry and entry.progress:
+                anilist_progress = entry.progress
 
     # Use maximum progress available, preferring AniList when it's ahead
     max_progress = max(local_progress, anilist_progress)
@@ -939,7 +981,7 @@ def switch_anime_source(
 def get_next_episode_context(
     anime_title: str,
     current_episode: int,
-) -> dict | None:
+) -> "EpisodeContext | None":
     """Get episode context for next episode (used by IPC handlers).
 
     Args:
@@ -947,8 +989,14 @@ def get_next_episode_context(
         current_episode: Current episode number (1-indexed)
 
     Returns:
-        Dict with url, title, episode info, or None if no next episode
+        EpisodeContext with url, title, episode info, or None if no next episode
     """
+    from typing import TYPE_CHECKING
+
+    if TYPE_CHECKING:
+        from models.models import EpisodeContext
+    from models.models import EpisodeContext
+
     episode_list = rep.get_episode_list(anime_title)
     if not episode_list:
         return None
@@ -964,12 +1012,12 @@ def get_next_episode_context(
         # Get URL from repository if available
         next_url = rep.get_episode_url(anime_title, next_idx)
 
-        return {
-            "url": next_url,
-            "title": next_episode_title,
-            "episode": next_idx + 1,  # Convert back to 1-indexed
-            "total": len(episode_list),
-        }
+        return EpisodeContext(
+            url=next_url,
+            title=next_episode_title,
+            episode=next_idx + 1,  # Convert back to 1-indexed
+            total=len(episode_list),
+        )
     except (IndexError, KeyError):
         return None
 
@@ -995,7 +1043,7 @@ def search_anime_flow(args):
     selected_anime = None
     if cache_data:
         print(
-            f"ℹ️  Usando cache ({cache_data.get('episode_count', len(cache_data.get('episode_urls', [])))} eps disponíveis)"
+            f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)"
         )
         # Populate repository from cache
         rep.load_from_cache(query, cache_data)
