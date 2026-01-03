@@ -85,7 +85,7 @@ class TestSearchEpisodesIntegration:
         repo_fresh.add_episode_list(
             "Dandadan",
             ["Ep 1", "Ep 2"],
-            ["url1", "url2"],
+            ["https://example.com/ep1", "https://example.com/ep2"],
             "test_source",
         )
 
@@ -108,8 +108,8 @@ class TestFuzzyMatchingIntegration:
     def test_fuzzy_match_threshold_95(self, repo_fresh):
         """Should use 95% fuzzy matching threshold."""
         # Very similar titles should match
-        repo_fresh.add_anime("Solo Leveling", "url1", "source1")
-        repo_fresh.add_anime("Solo leveling", "url2", "source1")
+        repo_fresh.add_anime("Solo Leveling", "https://source1.com/sololeveling", "source1")
+        repo_fresh.add_anime("Solo leveling", "https://source2.com/sololeveling", "source1")
 
         anime_list = repo_fresh.get_anime_titles()
         # Should deduplicate similar titles
@@ -117,8 +117,8 @@ class TestFuzzyMatchingIntegration:
 
     def test_fuzzy_match_keeps_different_titles(self, repo_fresh):
         """Should not match very different titles."""
-        repo_fresh.add_anime("Dandadan", "url1", "source1")
-        repo_fresh.add_anime("Attack on Titan", "url2", "source1")
+        repo_fresh.add_anime("Dandadan", "https://source1.com/dandadan", "source1")
+        repo_fresh.add_anime("Attack on Titan", "https://source2.com/aot", "source1")
 
         anime_list = repo_fresh.get_anime_titles()
         # Should have both (different enough)
@@ -133,7 +133,7 @@ class TestCacheBehavior:
         repo_fresh.add_episode_list(
             "Dandadan",
             ["Ep 1", "Ep 2"],
-            ["url1", "url2"],
+            ["https://example.com/ep1", "https://example.com/ep2"],
             "source",
         )
 
@@ -234,7 +234,7 @@ class TestPluginDataPopulation:
         repo_fresh.add_episode_list(
             "Test Anime",
             ["Ep 1", "Ep 2"],
-            ["url1", "url2"],
+            ["https://example.com/ep1", "https://example.com/ep2"],
             "test_plugin",
         )
         episodes = repo_fresh.get_episode_list("Test Anime")
@@ -242,8 +242,8 @@ class TestPluginDataPopulation:
 
     def test_multiple_plugins_populate_same_anime(self, repo_fresh):
         """Multiple plugins should be able to populate same anime."""
-        repo_fresh.add_anime("Dandadan", "url1", "plugin1")
-        repo_fresh.add_anime("Dandadan", "url2", "plugin2")
+        repo_fresh.add_anime("Dandadan", "https://plugin1.com/dandadan", "plugin1")
+        repo_fresh.add_anime("Dandadan", "https://plugin2.com/dandadan", "plugin2")
 
         sources = repo_fresh.anime_to_urls.get("Dandadan", [])
         assert len(sources) >= 1

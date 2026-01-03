@@ -107,7 +107,7 @@ class TestEpisodeData:
         episodes = EpisodeData(
             anime_title="Dandadan",
             episode_titles=["Ep 1", "Ep 2"],
-            episode_urls=["url1", "url2"],
+            episode_urls=["https://example.com/ep1", "https://example.com/ep2"],
             source="animefire",
         )
         assert episodes.anime_title == "Dandadan"
@@ -120,7 +120,7 @@ class TestEpisodeData:
             EpisodeData(
                 anime_title="Dandadan",
                 episode_titles=["Ep 1", "Ep 2"],
-                episode_urls=["url1"],  # Only 1 URL for 2 titles
+                episode_urls=["https://example.com/ep1"],  # Only 1 URL for 2 titles
                 source="animefire",
             )
 
@@ -140,7 +140,7 @@ class TestEpisodeData:
         with pytest.raises(ValidationError):
             EpisodeData(
                 episode_titles=["Ep 1"],
-                episode_urls=["url1"],
+                episode_urls=["https://example.com/ep1"],
                 source="animefire",
             )
 
@@ -150,7 +150,7 @@ class TestEpisodeData:
             EpisodeData(
                 anime_title="Dandadan",
                 episode_titles=["Ep 1"],
-                episode_urls=["url1"],
+                episode_urls=["https://example.com/ep1"],
             )
 
     def test_episode_single_episode(self):
@@ -173,7 +173,7 @@ class TestEpisodeData:
         episodes = EpisodeData(
             anime_title="Test Anime",
             episode_titles=[f"Ep {i}" for i in range(1, count + 1)],
-            episode_urls=[f"url{i}" for i in range(count)],
+            episode_urls=[f"https://example.com/ep{i}" for i in range(count)],
             source="animefire",
         )
         assert len(episodes.episode_titles) == count
@@ -267,7 +267,7 @@ class TestModelSerialization:
         episodes = EpisodeData(
             anime_title="Dandadan",
             episode_titles=["Ep 1"],
-            episode_urls=["url1"],
+            episode_urls=["https://example.com/ep1"],
             source="animefire",
         )
         episodes_dict = episodes.model_dump()
@@ -296,7 +296,7 @@ class TestModelSerialization:
         data = {
             "anime_title": "Dandadan",
             "episode_titles": ["Ep 1"],
-            "episode_urls": ["url1"],
+            "episode_urls": ["https://example.com/ep1"],
             "source": "animefire",
         }
         episodes = EpisodeData(**data)

@@ -93,3 +93,35 @@ jobs:
         echo "✅ CLI executável"
         uv run python main.py anilist --help || true
         echo "✅ CLI anilist executável"
+
+  test:
+    name: Testes
+    runs-on: ubuntu-latest
+    needs: lint-and-validate
+
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+
+    - name: Configurar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Instalar UV
+      run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    - name: Adicionar UV ao PATH
+      run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Instalar dependências
+      run: uv sync
+
+    - name: Executar testes
+      run: uv run pytest -v --tb=short
+
+    - name: Gerar relatório de cobertura
+      run: uv run pytest --cov=. --cov-report=term-missing --cov-report=html || true
+
+    - name: Resumo dos testes
+      run: echo "✅ Testes completados"

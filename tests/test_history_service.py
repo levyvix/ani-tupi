@@ -20,15 +20,21 @@ class TestHistorySave:
 
     def test_save_history_single_entry(self, temp_history_file, monkeypatch):
         """Should save single history entry."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
         history_service.save_history("Dandadan", 0)
         assert (temp_dir / "history.json").exists()
 
     def test_save_history_creates_valid_json(self, temp_history_file, monkeypatch):
         """Should create valid JSON file."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
         history_service.save_history("Dandadan", 0)
 
         with open(temp_dir / "history.json") as f:
@@ -41,8 +47,11 @@ class TestHistoryLoad:
 
     def test_load_history_after_save(self, temp_history_file, monkeypatch):
         """Should load previously saved history."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
         history_service.save_history("Dandadan", 5)
 
         # Skip load_history as it requires menu_navigate and shows exit behavior
@@ -51,8 +60,11 @@ class TestHistoryLoad:
 
     def test_load_nonexistent_file(self, temp_history_file, monkeypatch):
         """Should handle nonexistent file gracefully."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
         (temp_dir / "history.json").unlink(missing_ok=True)
 
         # Skip load_history as it requires menu_navigate and shows exit behavior
@@ -65,8 +77,11 @@ class TestHistoryReset:
 
     def test_reset_clears_history(self, temp_history_file, monkeypatch):
         """Should clear history on reset."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
         history_service.save_history("Dandadan", 5)
         history_service.reset_history("Dandadan")
 
@@ -79,8 +94,11 @@ class TestHistoryIntegration:
 
     def test_save_load_cycle(self, temp_history_file, monkeypatch):
         """Should survive save/load cycle."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
 
         # Save
         history_service.save_history("Dandadan", 5)
@@ -90,8 +108,11 @@ class TestHistoryIntegration:
 
     def test_save_multiple_episodes(self, temp_history_file, monkeypatch):
         """Should track progress through episodes."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
 
         # Progress through episodes
         for ep in range(5):
@@ -106,8 +127,11 @@ class TestHistoryFileFormat:
 
     def test_history_file_is_json(self, temp_history_file, monkeypatch):
         """History file should be valid JSON."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
         history_service.save_history("Test", 1)
 
         with open(temp_dir / "history.json") as f:
@@ -116,8 +140,11 @@ class TestHistoryFileFormat:
 
     def test_history_unicode_anime_names(self, temp_history_file, monkeypatch):
         """Should handle unicode anime names."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
         # Japanese anime name
         history_service.save_history("進撃の巨人", 10)
 
@@ -129,22 +156,31 @@ class TestHistoryEdgeCases:
 
     def test_history_zero_episode(self, temp_history_file, monkeypatch):
         """Should handle episode 0."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
         history_service.save_history("Test", 0)
         assert (temp_dir / "history.json").exists()
 
     def test_history_large_episode_number(self, temp_history_file, monkeypatch):
         """Should handle large episode numbers."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
         history_service.save_history("Ongoing", 999)
         assert (temp_dir / "history.json").exists()
 
     def test_history_special_characters_in_name(self, temp_history_file, monkeypatch):
         """Should handle anime names with special characters."""
+        from utils.persistence import JSONStore
+
         temp_dir = Path(temp_history_file).parent
         monkeypatch.setattr(history_service, "HISTORY_PATH", temp_dir)
+        monkeypatch.setattr(history_service, "_history_store", JSONStore(temp_dir / "history.json"))
         special_name = "Re:ZERO -Starting Life in Another World-"
         history_service.save_history(special_name, 5)
         assert (temp_dir / "history.json").exists()

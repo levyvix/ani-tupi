@@ -81,7 +81,7 @@ def sample_episodes_short():
     return EpisodeData(
         anime_title="Short Anime",
         episode_titles=["Ep. 1", "Ep. 2", "Ep. 3"],
-        episode_urls=["url1", "url2", "url3"],
+        episode_urls=["https://example.com/ep1", "https://example.com/ep2", "https://example.com/ep3"],
         source="test_source",
     )
 
@@ -244,14 +244,10 @@ def mock_anilist_response_user_list():
 
 @pytest.fixture
 def temp_history_file():
-    """Temporary history file for testing."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        temp_path = f.name
-
-    yield temp_path
-
-    # Cleanup
-    Path(temp_path).unlink(missing_ok=True)
+    """Temporary directory for history file testing."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir) / "history.json"
+        yield str(temp_path)
 
 
 @pytest.fixture

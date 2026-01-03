@@ -219,7 +219,7 @@ class TestSearchResultsState:
         repo_fresh.add_episode_list(
             "Dandadan",
             ["Ep 1", "Ep 2"],
-            ["url1", "url2"],
+            ["https://example.com/ep1", "https://example.com/ep2"],
             "source1",
         )
 

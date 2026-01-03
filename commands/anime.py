@@ -33,6 +33,8 @@ def anime(args) -> None:
     if args.query or args.continue_watching:
         if args.continue_watching:
             selected_anime, episode_idx, anilist_id, anilist_title = load_history()
+            if any([selected_anime, episode_idx, anilist_id, anilist_title]) is None:
+                raise Exception("Problema ao conseguir informacoes do anime.")
             # Episodes already loaded by load_history()
         else:
             selected_anime, episode_idx, source = anime_service.search_anime_flow(args)
@@ -82,6 +84,7 @@ def anime(args) -> None:
 
         # Clear terminal before asking confirmation
         import os
+
         os.system("clear")
 
         # Ask if watched until the end

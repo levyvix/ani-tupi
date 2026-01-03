@@ -55,9 +55,9 @@ class TestE2ESearchWorkflow:
     def test_title_normalization_in_search(self, repo_fresh):
         """Should normalize titles during search."""
         # Add anime with different title cases
-        repo_fresh.add_anime("DANDADAN", "url1", "source1")
-        repo_fresh.add_anime("Dandadan", "url2", "source1")
-        repo_fresh.add_anime("dandadan", "url3", "source1")
+        repo_fresh.add_anime("DANDADAN", "https://source1.com/dandadan1", "source1")
+        repo_fresh.add_anime("Dandadan", "https://source1.com/dandadan2", "source1")
+        repo_fresh.add_anime("dandadan", "https://source1.com/dandadan3", "source1")
 
         anime_list = repo_fresh.get_anime_titles()
         # Should normalize these - at minimum have some in list
@@ -73,7 +73,7 @@ class TestE2EEpisodeSelection:
         repo_fresh.add_episode_list(
             "Test Anime",
             ["Ep 1", "Ep 2", "Ep 3"],
-            ["url1", "url2", "url3"],
+            ["https://example.com/ep1", "https://example.com/ep2", "https://example.com/ep3"],
             "source",
         )
 
@@ -89,7 +89,7 @@ class TestE2EEpisodeSelection:
         repo_fresh.add_episode_list(
             "Test Anime",
             ["Ep 1", "Ep 2", "Ep 3"],
-            ["url1", "url2", "url3"],
+            ["https://example.com/ep1", "https://example.com/ep2", "https://example.com/ep3"],
             "source",
         )
 
@@ -104,7 +104,7 @@ class TestE2EEpisodeSelection:
         repo_fresh.add_episode_list(
             "Test Anime",
             ["Ep 1", "Ep 2"],
-            ["url1", "url2"],
+            ["https://example.com/ep1", "https://example.com/ep2"],
             "source",
         )
 
@@ -117,8 +117,8 @@ class TestE2ETitleNormalizationFlow:
 
     def test_normalize_on_search_result(self, repo_fresh):
         """Should normalize titles in search results."""
-        repo_fresh.add_anime("Attack on Titan (Part 1)", "url1", "source1")
-        repo_fresh.add_anime("Attack on Titan Part 2", "url2", "source2")
+        repo_fresh.add_anime("Attack on Titan (Part 1)", "https://source1.com/aot1", "source1")
+        repo_fresh.add_anime("Attack on Titan Part 2", "https://source2.com/aot2", "source2")
 
         anime_list = repo_fresh.get_anime_titles()
         # Should have titles in list
@@ -126,7 +126,7 @@ class TestE2ETitleNormalizationFlow:
 
     def test_normalize_enables_selection(self, repo_fresh):
         """Normalization should enable correct anime selection."""
-        repo_fresh.add_anime("DANDADAN", "url", "source")
+        repo_fresh.add_anime("DANDADAN", "https://source.com/dandadan", "source")
         # Repository doesn't have set_selected_anime, just verify anime is added
         anime_list = repo_fresh.get_anime_titles()
         # Should be able to find it
@@ -134,8 +134,8 @@ class TestE2ETitleNormalizationFlow:
 
     def test_normalize_japanese_titles(self, repo_fresh):
         """Should handle Japanese anime titles."""
-        repo_fresh.add_anime("進撃の巨人", "url1", "source1")
-        repo_fresh.add_anime("Attack on Titan", "url2", "source2")
+        repo_fresh.add_anime("進撃の巨人", "https://source1.com/aot", "source1")
+        repo_fresh.add_anime("Attack on Titan", "https://source2.com/aot", "source2")
 
         anime_list = repo_fresh.get_anime_titles()
         # Should handle both
@@ -150,7 +150,7 @@ class TestE2ECacheBehavior:
         repo_fresh.add_episode_list(
             "Test Anime",
             ["Ep 1", "Ep 2"],
-            ["url1", "url2"],
+            ["https://example.com/ep1", "https://example.com/ep2"],
             "source",
         )
 
@@ -164,8 +164,8 @@ class TestE2ECacheBehavior:
 
     def test_anime_source_tracking(self, repo_fresh):
         """Should track anime sources through workflow."""
-        repo_fresh.add_anime("Dandadan", "url1", "source1")
-        repo_fresh.add_anime("Dandadan", "url2", "source2")
+        repo_fresh.add_anime("Dandadan", "https://source1.com/dandadan", "source1")
+        repo_fresh.add_anime("Dandadan", "https://source2.com/dandadan", "source2")
 
         sources = repo_fresh.anime_to_urls.get("Dandadan", [])
         # Should have multiple sources tracked
@@ -196,7 +196,7 @@ class TestE2EErrorRecovery:
         repo_fresh.add_episode_list(
             "Test",
             ["Ep 1"],
-            ["url1"],
+            ["https://example.com/ep1"],
             "source",
         )
 
@@ -210,14 +210,14 @@ class TestE2EWorkflowSequencing:
 
     def test_must_select_anime_before_episodes(self, repo_fresh):
         """Should work with proper sequencing."""
-        repo_fresh.add_anime("Test", "url", "source")
+        repo_fresh.add_anime("Test", "https://source.com/test", "source")
         # Verify anime was added
         anime_list = repo_fresh.get_anime_titles()
         assert "Test" in anime_list
 
     def test_clear_resets_state(self, repo_fresh):
         """Clear should reset workflow state."""
-        repo_fresh.add_anime("Test", "url", "source")
+        repo_fresh.add_anime("Test", "https://source.com/test", "source")
         repo_fresh.clear_search_results()
 
         anime_list = repo_fresh.get_anime_titles()
