@@ -78,8 +78,14 @@ jobs:
         echo "DYLD_LIBRARY_PATH=$(brew --prefix mpv)/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
         echo "LD_LIBRARY_PATH=$(brew --prefix mpv)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
-    - name: Instalar UV
+    - name: Instalar UV (Unix)
+      if: runner.os != 'Windows'
       run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    - name: Instalar UV (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        powershell -Command "irm https://astral.sh/uv/install.ps1 | iex"
 
     - name: Adicionar UV ao PATH (Unix)
       if: runner.os != 'Windows'
@@ -88,9 +94,7 @@ jobs:
     - name: Adicionar UV ao PATH (Windows)
       if: runner.os == 'Windows'
       run: |
-        $uv_path = "$env:USERPROFILE\.cargo\bin"
-        Add-Content -Path $env:GITHUB_PATH -Value $uv_path
-        $env:PATH = "$uv_path;$env:PATH"
+        echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Instalar dependências
       run: uv sync
@@ -146,8 +150,14 @@ jobs:
         echo "DYLD_LIBRARY_PATH=$(brew --prefix mpv)/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
         echo "LD_LIBRARY_PATH=$(brew --prefix mpv)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
-    - name: Instalar UV
+    - name: Instalar UV (Unix)
+      if: runner.os != 'Windows'
       run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    - name: Instalar UV (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        powershell -Command "irm https://astral.sh/uv/install.ps1 | iex"
 
     - name: Adicionar UV ao PATH (Unix)
       if: runner.os != 'Windows'
@@ -156,9 +166,7 @@ jobs:
     - name: Adicionar UV ao PATH (Windows)
       if: runner.os == 'Windows'
       run: |
-        $uv_path = "$env:USERPROFILE\.cargo\bin"
-        Add-Content -Path $env:GITHUB_PATH -Value $uv_path
-        $env:PATH = "$uv_path;$env:PATH"
+        echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Instalar dependências
       run: uv sync
