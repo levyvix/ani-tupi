@@ -9,6 +9,7 @@ dist/
 build/
 *.egg
 log.txt
+.beads/
 
 
 # Virtual environments

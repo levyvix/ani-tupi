@@ -11,6 +11,7 @@ Used by: main.py, ui modules
 """
 
 import re
+import json
 
 from scrapers import loader
 from models.config import get_data_path, settings
@@ -525,7 +526,7 @@ def anilist_anime_flow(
     try:
         history_file = HISTORY_PATH / "history.json"
         with history_file.open() as f:
-            history_data = load(f)
+            history_data = json.load(f)
             if selected_anime in history_data:
                 # history stores episode_idx (0-based), progress is 1-based
                 local_progress = history_data[selected_anime][1] + 1
@@ -933,6 +934,44 @@ def switch_anime_source(
         episode_idx = episode_list.index(selected_episode)
 
     return selected_anime, episode_idx
+
+
+def get_next_episode_context(
+    anime_title: str,
+    current_episode: int,
+) -> dict | None:
+    """Get episode context for next episode (used by IPC handlers).
+
+    Args:
+        anime_title: Name of anime
+        current_episode: Current episode number (1-indexed)
+
+    Returns:
+        Dict with url, title, episode info, or None if no next episode
+    """
+    episode_list = rep.get_episode_list(anime_title)
+    if not episode_list:
+        return None
+
+    # Convert to 0-based index
+    next_idx = current_episode  # Already incremented from IPC
+    if next_idx >= len(episode_list):
+        # No next episode available
+        return None
+
+    try:
+        next_episode_title = episode_list[next_idx]
+        # Get URL from repository if available
+        next_url = rep.get_episode_url(anime_title, next_idx)
+
+        return {
+            "url": next_url,
+            "title": next_episode_title,
+            "episode": next_idx + 1,  # Convert back to 1-indexed
+            "total": len(episode_list),
+        }
+    except (IndexError, KeyError):
+        return None
 
 
 def search_anime_flow(args):

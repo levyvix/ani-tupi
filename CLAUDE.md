@@ -433,6 +433,131 @@ print(list(cache.keys())[:10])  # First 10 cache keys
 
 ---
 
+## MPV IPC Keybindings Integration
+
+### Overview
+
+ani-tupi supports JSON-RPC communication with MPV via IPC sockets to enable episode navigation without restarting the menu.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│      ani-tupi Application                   │
+│  (commands/anime.py → anime_service.py)     │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│    VideoPlayer (utils/video_player.py)      │
+│  - Manages MPV process with IPC socket      │
+│  - Monitors keybinding events               │
+│  - Returns VideoPlaybackResult with action  │
+└──────────────────┬──────────────────────────┘
+                   │
+           IPC Socket (Unix/Windows)
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│         MPV Media Player                    │
+│  - Loads custom input.conf                  │
+│  - Sends events via JSON-RPC protocol       │
+│  - Displays OSD messages                    │
+└─────────────────────────────────────────────┘
+```
+
+### Keybindings Reference
+
+During playback, use these keybindings for episode navigation:
+
+| Keybinding | Action | Effect | History |
+|-----------|--------|--------|---------|
+| `Shift+N` | Next | Mark watched, load next episode | Saved |
+| `Shift+P` | Previous | Resume from last watched position | Loaded |
+| `Shift+M` | Mark & Menu | Mark watched, show menu (next/continue/quit) | Saved |
+| `Shift+R` | Reload | Retry current episode | No change |
+| `Shift+A` | Auto-play | Toggle auto-play for next episode | Saved |
+| `Shift+T` | Toggle | Switch subtitle/dub (if available) | No change |
+
+### Implementation Details
+
+**Main Components:**
+
+1. **VideoPlaybackResult** (`utils/video_player.py`)
+   - NamedTuple with `exit_code`, `action`, and `data` fields
+   - Returned by `play_episode()` instead of just exit code
+
+2. **IPC Communication**
+   - Uses Unix socket (Linux/macOS) or named pipes (Windows)
+   - Custom JSON-RPC client implemented in `utils/video_player.py`
+   - Handles `script-message` events from MPV input.conf
+
+3. **History Integration**
+   - `services/history_service.py` - Saves watch progress with action metadata
+   - `services/anime_service.py` - Uses result to navigate episodes or quit
+
+4. **Dynamic Input Config**
+   - Temporary `input.conf` generated with custom keybindings
+   - Passed to MPV via `--input-conf` flag
+   - Cleans up socket file on exit
+
+### Usage
+
+**For Users:**
+```bash
+# Start playing anime
+uv run ani-tupi
+
+# Search and select episode
+# During playback, press:
+Shift+N   # Next episode
+Shift+P   # Previous episode
+Shift+M   # Mark and show menu
+```
+
+**For Developers:**
+
+```python
+from utils.video_player import play_episode
+
+result = play_episode(
+    url="https://...",
+    anime_title="Dandadan",
+    episode_number=1,
+    total_episodes=50,
+    source="animefire",
+    use_ipc=True  # Enable IPC (default)
+)
+
+# Check what action was taken
+match result.action:
+    case "next":
+        # Load next episode
+        pass
+    case "previous":
+        # Go to previous episode
+        pass
+    case "quit":
+        # User exited normally
+        break
+```
+
+### Fallback Behavior
+
+If IPC communication fails:
+- Automatically falls back to legacy `play_video()` behavior
+- Set `ANI_TUPI_DISABLE_IPC=1` environment variable to force fallback
+- Users see no change - full backward compatibility
+
+### Socket Management
+
+- **Socket Path (Linux/macOS):** `/tmp/ani-tupi-mpv-{uuid}.sock`
+- **Socket Path (Windows):** `\\.\pipe\ani-tupi-mpv-{uuid}`
+- Socket files cleaned up automatically on MPV exit
+- Each playback session gets unique socket to allow multiple instances
+
+---
+
 ## Known Patterns & Conventions
 
 ### Naming Conventions

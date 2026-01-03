@@ -526,6 +526,55 @@ class Repository:
 
         return None
 
+    def get_episode_url(self, anime: str, episode_idx: int) -> str | None:
+        """Get episode URL for a specific episode (0-indexed).
+
+        Args:
+            anime: Anime title
+            episode_idx: Episode index (0-indexed)
+
+        Returns:
+            Episode URL or None if not found
+        """
+        # Convert from 0-indexed to 1-indexed
+        episode_num = episode_idx + 1
+        result = self.get_episode_url_and_source(anime, episode_num)
+        if result:
+            return result[0]
+        return None
+
+    def get_next_available_episode(self, anime: str, from_episode: int) -> tuple[int, str] | None:
+        """Get next available episode from a given episode number.
+
+        Searches all sources for the next available episode after the given one.
+
+        Args:
+            anime: Anime title
+            from_episode: Episode number to search from (1-indexed)
+
+        Returns:
+            Tuple of (episode_number, url) or None if no more episodes
+        """
+        if from_episode < 1:
+            from_episode = 1
+
+        # Search all sources to find the highest available episode
+        max_episode = 0
+        best_url = None
+
+        for urls, source in self.anime_episodes_urls.get(anime, []):
+            # Check if this source has more episodes after from_episode
+            if len(urls) > from_episode:
+                # Has next episode
+                max_episode = max(max_episode, len(urls))
+                if not best_url:
+                    best_url = urls[from_episode]  # Get next episode (0-indexed)
+
+        if best_url:
+            return (from_episode + 1, best_url)  # Return 1-indexed episode number
+
+        return None
+
     def search_player(self, anime: str, episode_num: int) -> None:
         """Search for video URLs with caching.
 

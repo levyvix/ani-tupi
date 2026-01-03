@@ -240,7 +240,7 @@ def loading(msg: str = "Carregando..."):
     console_instance = Console()
 
     with Live(
-        Spinner("dots", text=msg),
+        Spinner("arc", text=msg),
         console=console_instance,
         refresh_per_second=12.5,
         transient=True,  # Spinner disappears after completion

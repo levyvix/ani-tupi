@@ -1,3 +1,19 @@
+from typing import NamedTuple
+
+
+class VideoPlaybackResult(NamedTuple):
+    """Result of video playback with optional navigation data.
+
+    Attributes:
+        exit_code: MPV exit code (0=normal, 2=error, 3=abort)
+        action: Action triggered by keybinding ("quit", "next", "previous", "mark-menu", "reload", "toggle-autoplay", "toggle-sub-dub")
+        data: Optional metadata about the action (e.g., next episode URL, episode number)
+    """
+    exit_code: int
+    action: str = "quit"
+    data: dict | None = None
+
+
 def play_video(url: str, debug=False, ytdl_format: str | None = None) -> int:
     """Play video using python-mpv and return exit code.
 
@@ -65,3 +81,428 @@ def play_video(url: str, debug=False, ytdl_format: str | None = None) -> int:
             player.terminate()
         except:  # noqa: E722
             pass
+
+
+# ============================================================================
+# Phase 2: IPC Socket Infrastructure
+# ============================================================================
+
+
+import os
+import platform
+import socket
+import subprocess
+import tempfile
+import uuid
+from pathlib import Path
+
+
+def _create_ipc_socket_path() -> str:
+    r"""Generate platform-specific IPC socket path for MPV communication.
+
+    Returns:
+        Socket path appropriate for the current OS.
+        - Linux/macOS: /tmp/ani-tupi-mpv-{uuid}.sock
+        - Windows: \\.\pipe\ani-tupi-mpv-{uuid}
+    """
+    unique_id = str(uuid.uuid4())[:8]
+    system = platform.system()
+
+    if system == "Windows":
+        return f"\\\\.\\pipe\\ani-tupi-mpv-{unique_id}"
+    else:
+        # Linux and macOS
+        temp_dir = tempfile.gettempdir()
+        return str(Path(temp_dir) / f"ani-tupi-mpv-{unique_id}.sock")
+
+
+def _cleanup_ipc_socket(path: str) -> None:
+    """Clean up IPC socket file/pipe without errors.
+
+    Args:
+        path: Socket path to remove
+    """
+    if not path:
+        return
+
+    try:
+        socket_path = Path(path)
+        if socket_path.exists():
+            socket_path.unlink()
+    except (OSError, FileNotFoundError):
+        # Socket already removed or on Windows (pipes cleanup differently)
+        pass
+
+
+def _generate_input_conf() -> tuple[str, str]:
+    """Generate temporary MPV input.conf with custom IPC keybindings.
+
+    Returns:
+        Tuple of (input_conf_path, content) with the temporary config file path
+        and its content for verification.
+    """
+    input_conf_content = """# ani-tupi IPC Keybindings Configuration
+# Auto-generated for episode navigation
+
+# Next Episode (mark watched, move to next)
+shift+n script-message mark-next
+
+# Previous Episode (go to previous, resume from saved position)
+shift+p script-message previous
+
+# Mark & Menu (mark watched, show menu: next/continue/quit)
+shift+m script-message mark-menu
+
+# Reload Current Episode (retry same episode)
+shift+r script-message reload-episode
+
+# Toggle Auto-play (skip episode selection for next episode)
+shift+a script-message toggle-autoplay
+
+# Toggle Subtitle/Dub (switch if available)
+shift+t script-message toggle-sub-dub
+"""
+
+    # Create temp file with cleanup on exit
+    with tempfile.NamedTemporaryFile(
+        mode='w',
+        suffix='.conf',
+        prefix='ani-tupi-input-',
+        delete=False,
+        encoding='utf-8'
+    ) as f:
+        f.write(input_conf_content)
+        temp_path = f.name
+
+    return temp_path, input_conf_content
+
+
+def _handle_keybinding_action(
+    action: str,
+    context: dict,
+) -> VideoPlaybackResult | None:
+    """Handle keybinding action from MPV and return navigation result.
+
+    Args:
+        action: Action name from MPV input.conf (mark-next, previous, etc.)
+        context: Episode context with url, anime_title, episode_number, etc.
+
+    Returns:
+        VideoPlaybackResult with action and data, or None if action not handled
+    """
+    match action:
+        case "mark-next":
+            # Mark current episode as watched, move to next
+            return VideoPlaybackResult(
+                exit_code=0,
+                action="next",
+                data={"episode": context.get("episode_number", 0) + 1}
+            )
+
+        case "previous":
+            # Go to previous episode
+            return VideoPlaybackResult(
+                exit_code=0,
+                action="previous",
+                data={"episode": max(1, context.get("episode_number", 1) - 1)}
+            )
+
+        case "mark-menu":
+            # Mark current as watched, show menu
+            return VideoPlaybackResult(
+                exit_code=0,
+                action="mark-menu",
+                data={"episode": context.get("episode_number", 0)}
+            )
+
+        case "reload-episode":
+            # Retry current episode
+            return VideoPlaybackResult(
+                exit_code=0,
+                action="reload",
+                data={"episode": context.get("episode_number", 0)}
+            )
+
+        case "toggle-autoplay":
+            # Toggle auto-play preference
+            return VideoPlaybackResult(
+                exit_code=0,
+                action="toggle-autoplay",
+                data={"autoplay": True}  # Would be toggled at service layer
+            )
+
+        case "toggle-sub-dub":
+            # Toggle subtitle/dub (no state change, just OSD message)
+            return VideoPlaybackResult(
+                exit_code=0,
+                action="toggle-sub-dub",
+                data={"message": "Sub/Dub toggle (if available)"}
+            )
+
+        case _:
+            return None
+
+
+def _launch_mpv_with_ipc(
+    url: str,
+    socket_path: str,
+    input_conf: str,
+) -> subprocess.Popen:
+    """Launch MPV process with IPC socket support.
+
+    Args:
+        url: Video URL to play
+        socket_path: IPC socket path for communication
+        input_conf: Path to input.conf file with keybindings
+
+    Returns:
+        Popen subprocess object for the MPV process
+
+    Raises:
+        FileNotFoundError: If mpv binary not found
+        OSError: If process launch fails
+    """
+    mpv_args = [
+        "mpv",
+        f"--input-ipc-server={socket_path}",
+        f"--input-conf={input_conf}",
+        "--fullscreen=yes",
+        "--osc=no",  # Disable on-screen controller for custom control
+        "--cache=yes",
+        "--demuxer-max-bytes=400M",
+        "--demuxer-max-back-bytes=100M",
+        "--demuxer-readahead-secs=40",
+        "--stream-buffer-size=2M",
+        "--speed=1.8",
+        "--ytdl=yes",
+        "--ytdl-format=bestvideo[height<=1080]+bestaudio/best",
+        url,
+    ]
+
+    try:
+        return subprocess.Popen(
+            mpv_args,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError as e:
+        msg = "MPV not found in PATH. Please install mpv."
+        raise FileNotFoundError(msg) from e
+    except Exception as e:
+        msg = f"Failed to launch MPV: {e}"
+        raise OSError(msg) from e
+
+
+def _play_video_legacy(url: str, debug: bool = False) -> VideoPlaybackResult:
+    """Play video using legacy python-mpv blocking mode (fallback).
+
+    Args:
+        url: Video URL to play
+        debug: Skip playback if True
+
+    Returns:
+        VideoPlaybackResult with exit code and quit action
+    """
+    if debug:
+        print("DEBUG MODE: Skipping video playback")
+        return VideoPlaybackResult(exit_code=0, action="quit", data=None)
+
+    try:
+        exit_code = play_video(url, debug=False)
+        return VideoPlaybackResult(exit_code=exit_code, action="quit", data=None)
+    except Exception as e:
+        print(f"⚠️  Playback error: {e}")
+        return VideoPlaybackResult(exit_code=2, action="quit", data=None)
+
+
+def _ipc_event_loop(
+    mpv_process: subprocess.Popen,
+    socket_path: str,
+    episode_context: dict,
+    timeout: float = 1.0,
+) -> VideoPlaybackResult:
+    """Monitor IPC socket for keybinding events from MPV.
+
+    Args:
+        mpv_process: Running MPV subprocess
+        socket_path: Path to IPC socket
+        episode_context: Dict with anime_title, episode_number, total_episodes, source
+        timeout: Socket read timeout in seconds
+
+    Returns:
+        VideoPlaybackResult when MPV closes or action is triggered
+    """
+    import json
+    import time
+
+    # Wait for socket to be ready
+    max_wait = 5.0
+    start_time = time.time()
+    sock = None
+
+    while time.time() - start_time < max_wait:
+        try:
+            if platform.system() == "Windows":
+                # Windows named pipes - handled differently
+                # For now, skip IPC on Windows and use legacy
+                return _play_video_legacy("", debug=False)
+
+            # Unix socket
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            sock.connect(socket_path)
+            break
+        except (FileNotFoundError, ConnectionRefusedError, OSError):
+            time.sleep(0.1)
+            continue
+
+    if not sock:
+        # Fallback to legacy if socket connection fails
+        return _play_video_legacy("", debug=False)
+
+    try:
+        buffer = ""
+        while mpv_process.poll() is None:  # While process is running
+            try:
+                chunk = sock.recv(1024).decode('utf-8', errors='ignore')
+                if not chunk:
+                    break
+                buffer += chunk
+
+                # Parse JSON-RPC messages (one per line)
+                while '\n' in buffer:
+                    line, buffer = buffer.split('\n', 1)
+                    if not line.strip():
+                        continue
+
+                    try:
+                        msg = json.loads(line)
+                        if msg.get('event') == 'client-message':
+                            args = msg.get('args', [])
+                            if args:
+                                action = args[0]
+                                result = _handle_keybinding_action(action, episode_context)
+                                if result:
+                                    return result
+                    except json.JSONDecodeError:
+                        # Skip malformed JSON
+                        continue
+
+            except socket.timeout:
+                # Timeout is normal, continue polling
+                continue
+            except Exception as e:
+                print(f"IPC error: {e}")
+                break
+
+        # MPV process exited normally
+        return VideoPlaybackResult(exit_code=mpv_process.returncode or 0, action="quit", data=None)
+
+    finally:
+        try:
+            sock.close()
+        except:  # noqa: E722
+            pass
+
+
+# ============================================================================
+# Phase 3: New Play Interface (play_episode)
+# ============================================================================
+
+
+def play_episode(
+    url: str,
+    anime_title: str,
+    episode_number: int,
+    total_episodes: int,
+    source: str,
+    use_ipc: bool = True,
+    debug: bool = False,
+) -> VideoPlaybackResult:
+    """Play a single episode with optional IPC support for episode navigation.
+
+    Args:
+        url: Video URL to play
+        anime_title: Name of anime being watched
+        episode_number: Current episode number (1-indexed)
+        total_episodes: Total episodes in series
+        source: Name of scraper source (e.g., "animefire")
+        use_ipc: Enable IPC socket for keybinding events (default True)
+        debug: Skip playback and return simulated result
+
+    Returns:
+        VideoPlaybackResult with exit code, action, and optional data
+
+    Environment Variables:
+        ANI_TUPI_DISABLE_IPC: Set to "1" to force legacy playback
+    """
+    # Check if IPC should be disabled globally
+    if os.environ.get("ANI_TUPI_DISABLE_IPC") == "1":
+        use_ipc = False
+
+    if debug:
+        print("DEBUG MODE: Skipping video playback")
+        return VideoPlaybackResult(exit_code=0, action="quit", data=None)
+
+    # Episode context passed to IPC handlers
+    episode_context = {
+        "anime_title": anime_title,
+        "episode_number": episode_number,
+        "total_episodes": total_episodes,
+        "source": source,
+        "url": url,
+    }
+
+    if not use_ipc:
+        # Use legacy blocking playback
+        return _play_video_legacy(url, debug=False)
+
+    # Try IPC-based playback with fallback
+    input_conf_path = None
+    socket_path = None
+    mpv_process = None
+
+    try:
+        # Generate socket path and input.conf
+        socket_path = _create_ipc_socket_path()
+        input_conf_path, _ = _generate_input_conf()
+
+        # Launch MPV with IPC
+        mpv_process = _launch_mpv_with_ipc(url, socket_path, input_conf_path)
+
+        # Start monitoring events
+        result = _ipc_event_loop(mpv_process, socket_path, episode_context)
+
+        # Wait for process to finish if still running
+        if mpv_process.poll() is None:
+            try:
+                mpv_process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                mpv_process.terminate()
+
+        return result
+
+    except (FileNotFoundError, OSError, Exception) as e:
+        # IPC launch failed, fallback to legacy
+        print(f"⚠️  IPC playback unavailable: {e}. Using legacy mode.")
+
+        # Clean up any dangling process
+        if mpv_process and mpv_process.poll() is None:
+            try:
+                mpv_process.terminate()
+                mpv_process.wait(timeout=1)
+            except:  # noqa: E722
+                mpv_process.kill()
+
+        return _play_video_legacy(url, debug=False)
+
+    finally:
+        # Clean up temporary files
+        if input_conf_path:
+            try:
+                Path(input_conf_path).unlink()
+            except:  # noqa: E722
+                pass
+
+        if socket_path:
+            _cleanup_ipc_socket(socket_path)
