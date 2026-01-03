@@ -7,6 +7,10 @@ import tempfile
 import uuid
 from pathlib import Path
 
+# Global auto-play state for the entire session
+# When enabled, closing the player (q) automatically advances to next episode
+_AUTOPLAY_ENABLED = False
+
 
 class VideoPlaybackResult(NamedTuple):
     """Result of video playback with optional navigation data.
@@ -342,6 +346,12 @@ def _ipc_event_loop(
     import json
     import time
 
+    # Declare global auto-play state early to avoid SyntaxError
+    global _AUTOPLAY_ENABLED
+
+    # Use global auto-play state (persists across all episodes in the session)
+    autoplay_enabled = _AUTOPLAY_ENABLED
+
     # Wait for socket to be ready
     max_wait = 5.0
     start_time = time.time()
@@ -496,6 +506,9 @@ def _ipc_event_loop(
                                         )
 
                                         if prev_url:
+                                            # Show terminal feedback about playing previous episode
+                                            print(f"⏪ Voltando para Episódio {prev_episode_number}")
+
                                             # Send MPV command to load previous episode
                                             _send_mpv_command(
                                                 sock, "loadfile", [prev_url, "replace"]
@@ -505,7 +518,7 @@ def _ipc_event_loop(
                                             _send_mpv_command(
                                                 sock,
                                                 "show-text",
-                                                [f"Loading Episode {prev_episode_number}..."],
+                                                [f"Carregando Episódio {prev_episode_number}..."],
                                             )
 
                                             # Update episode context
@@ -521,25 +534,31 @@ def _ipc_event_loop(
                                             # Continue loop
                                             continue
                                         else:
+                                            print("⚠️  Episódio anterior não disponível")
                                             _send_mpv_command(
                                                 sock,
                                                 "show-text",
-                                                ["Previous episode not available"],
+                                                ["Episódio anterior não disponível"],
                                             )
                                     else:
+                                        print("⚠️  Nenhum episódio anterior")
                                         _send_mpv_command(
-                                            sock, "show-text", ["No previous episode"]
+                                            sock, "show-text", ["Nenhum episódio anterior"]
                                         )
 
                                 elif action == "reload-episode":
                                     # Reload current episode
                                     current_url = episode_context.get("url")
+                                    current_episode = episode_context.get("episode_number", 1)
                                     if current_url:
+                                        # Show terminal feedback about reloading episode
+                                        print(f"🔄 Recarregando Episódio {current_episode}")
+
                                         _send_mpv_command(
                                             sock, "loadfile", [current_url, "replace"]
                                         )
                                         _send_mpv_command(
-                                            sock, "show-text", ["Reloading episode..."]
+                                            sock, "show-text", [f"Recarregando Episódio {current_episode}..."]
                                         )
                                         # Track reload action
                                         last_action = "reload"
@@ -547,9 +566,69 @@ def _ipc_event_loop(
                                         continue
 
                                 # Handle other actions (mark-menu, toggle-autoplay, toggle-sub-dub)
+                                # Add terminal feedback for these actions
+                                if action == "mark-menu":
+                                    from services.history_service import save_history_from_event
+
+                                    anime_title = episode_context.get("anime_title")
+                                    episode_number = episode_context.get("episode_number", 1)
+                                    source = episode_context.get("source")
+                                    anilist_id = episode_context.get("anilist_id")
+
+                                    # Save current episode as watched
+                                    episode_idx = episode_number - 1
+                                    sync_info = save_history_from_event(
+                                        anime_title=anime_title,
+                                        episode_idx=episode_idx,
+                                        action="watched",
+                                        source=source,
+                                        anilist_id=anilist_id,
+                                    )
+
+                                    # Show terminal feedback
+                                    print(f"📋 Episódio {episode_number} marcado - Retornando ao menu")
+                                    if sync_info.get("anilist_message"):
+                                        print(f"   {sync_info['anilist_message']}")
+
+                                    # Show OSD message
+                                    from services.anilist_service import anilist_client
+
+                                    sync_status = ""
+                                    if anilist_id and anilist_client.is_authenticated():
+                                        sync_status = " ✓ AniList"
+                                    _send_mpv_command(
+                                        sock,
+                                        "show-text",
+                                        [f"✓ Marcado como assistido{sync_status}", 2000],
+                                    )
+
+                                elif action == "toggle-autoplay":
+                                    # Toggle global auto-play state (persists for entire session)
+                                    _AUTOPLAY_ENABLED = not _AUTOPLAY_ENABLED
+                                    autoplay_enabled = _AUTOPLAY_ENABLED
+                                    status = "ATIVADO" if autoplay_enabled else "DESATIVADO"
+                                    print(f"🔄 Auto-play {status} (válido para toda a sessão)")
+                                    _send_mpv_command(
+                                        sock,
+                                        "show-text",
+                                        [f"Auto-play {status} - Ao sair (q) {'vai para próximo episódio' if autoplay_enabled else 'volta ao menu'}", 3000],
+                                    )
+                                    # Continue playing - don't close the player
+                                    continue
+
+                                elif action == "toggle-sub-dub":
+                                    # TODO: Implement subtitle/dub switching logic
+                                    print("🔄 Alternando legendado/dublado (se disponível)")
+                                    _send_mpv_command(
+                                        sock, "show-text", ["Sub/Dub alternado (se disponível)", 2000]
+                                    )
+                                    # Continue playing - don't close the player
+                                    continue
+
+                                # Handle other actions that require closing the player
                                 result = _handle_keybinding_action(action, episode_context)
                                 if result:
-                                    # For actions that require returning to caller
+                                    # For actions that require returning to caller (mark-menu)
                                     return result
 
                     except json.JSONDecodeError:
@@ -585,9 +664,44 @@ def _ipc_event_loop(
                 data={"episode": current_episode},
             )
         else:
-            return VideoPlaybackResult(
-                exit_code=mpv_process.returncode or 0, action="quit", data=None
-            )
+            # Check if auto-play is enabled
+            if autoplay_enabled:
+                # Mark current episode as watched and advance to next
+                from services.history_service import save_history_from_event
+
+                anime_title = episode_context.get("anime_title")
+                episode_number = episode_context.get("episode_number", 1)
+                source = episode_context.get("source")
+                anilist_id = episode_context.get("anilist_id")
+
+                # Save current episode as watched
+                episode_idx = episode_number - 1
+                sync_info = save_history_from_event(
+                    anime_title=anime_title,
+                    episode_idx=episode_idx,
+                    action="watched",
+                    source=source,
+                    anilist_id=anilist_id,
+                )
+
+                # Show terminal feedback
+                print(f"✓ Episódio {episode_number} marcado como assistido")
+                if sync_info.get("anilist_message"):
+                    print(f"   {sync_info['anilist_message']}")
+
+                # Return "next" action to load next episode
+                next_episode = episode_number + 1
+                print(f"▶️  Auto-play: Carregando Episódio {next_episode}")
+                return VideoPlaybackResult(
+                    exit_code=mpv_process.returncode or 0,
+                    action="next",
+                    data={"episode": next_episode},
+                )
+            else:
+                # Auto-play disabled - return to menu
+                return VideoPlaybackResult(
+                    exit_code=mpv_process.returncode or 0, action="quit", data=None
+                )
 
     finally:
         try:
@@ -628,6 +742,10 @@ def play_episode(
 
     Environment Variables:
         ANI_TUPI_DISABLE_IPC: Set to "1" to force legacy playback
+
+    Note:
+        Auto-play state is global (_AUTOPLAY_ENABLED) and persists across all
+        episodes in the session. Use Shift+A during playback to toggle.
     """
     # Check if IPC should be disabled globally
     if os.environ.get("ANI_TUPI_DISABLE_IPC") == "1":

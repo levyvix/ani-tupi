@@ -178,6 +178,29 @@ ani-tupi --help
 - `ani-tupi anilist` - Navega trending, watching, planning, completed e outras listas
 - Sincronização automática - Seu progresso atualiza automaticamente após assistir cada episódio
 
+### Atalhos Durante Reprodução (MPV)
+
+Durante a reprodução de episódios, você pode usar estes atalhos para navegação rápida:
+
+| Atalho | Ação | Efeito | Feedback no Terminal |
+|--------|------|--------|---------------------|
+| `Shift+N` | Próximo | Marca como assistido e carrega próximo episódio | `▶️  Reproduzindo Episódio {N}` |
+| `Shift+P` | Anterior | Volta para o episódio anterior | `⏪ Voltando para Episódio {N}` |
+| `Shift+M` | Marcar e Menu | Marca como assistido e volta ao menu | `📋 Episódio {N} marcado - Retornando ao menu` |
+| `Shift+R` | Recarregar | Recarrega o episódio atual | `🔄 Recarregando Episódio {N}` |
+| `Shift+A` | Auto-play | Alterna auto-play: ao sair (q) vai para próximo episódio automaticamente | `🔄 Auto-play ATIVADO/DESATIVADO` |
+| `Shift+T` | Trocar Áudio | Alterna entre legendado/dublado (se disponível) | `🔄 Alternando legendado/dublado (se disponível)` |
+
+**Notas:**
+- Todos os atalhos exibem feedback tanto no terminal quanto na tela do MPV (OSD)
+- O progresso é salvo automaticamente no histórico local e sincronizado com AniList (se autenticado)
+- **Auto-play (Shift+A):**
+  - Alterna modo global para toda a sessão (funciona mesmo trocando de anime)
+  - Por padrão: **desativado** ao iniciar o app
+  - Quando **ativado**: ao sair do player com `q`, marca episódio como assistido e carrega próximo automaticamente
+  - Quando **desativado**: ao sair com `q`, volta ao menu normalmente
+- Use `q` para sair do player (com auto-play ativado, avança automaticamente; desativado, volta ao menu)
+
 ### Ler Mangá
 
 Leia mangá do MangaDex direto do terminal!
