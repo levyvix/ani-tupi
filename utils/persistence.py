@@ -47,7 +47,7 @@ class JSONStore:
                 return load(f)
         except FileNotFoundError:
             return default
-        except ValueError as e:
+        except ValueError:
             # JSON decode error
             return default
         except PermissionError as e:
