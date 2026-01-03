@@ -470,14 +470,18 @@ ani-tupi supports JSON-RPC communication with MPV via IPC sockets to enable epis
 
 During playback, use these keybindings for episode navigation:
 
-| Keybinding | Action | Effect | History |
-|-----------|--------|--------|---------|
-| `Shift+N` | Next | Mark watched, load next episode | Saved |
-| `Shift+P` | Previous | Resume from last watched position | Loaded |
-| `Shift+M` | Mark & Menu | Mark watched, show menu (next/continue/quit) | Saved |
-| `Shift+R` | Reload | Retry current episode | No change |
-| `Shift+A` | Auto-play | Toggle auto-play for next episode | Saved |
-| `Shift+T` | Toggle | Switch subtitle/dub (if available) | No change |
+| Keybinding | Action | Effect | Terminal Feedback | History |
+|-----------|--------|--------|------------------|---------|
+| `Shift+N` | Next | Mark watched, load next episode | `▶️  Reproduzindo Episódio {N}` | Saved |
+| `Shift+P` | Previous | Resume from last watched position | `⏪ Voltando para Episódio {N}` | Loaded |
+| `Shift+M` | Mark & Menu | Mark watched, show menu (next/continue/quit) | `📋 Episódio {N} marcado - Retornando ao menu` | Saved |
+| `Shift+R` | Reload | Retry current episode | `🔄 Recarregando Episódio {N}` | No change |
+| `Shift+A` | Auto-play | Alterna auto-play global (toda a sessão): ao sair (q) vai para próximo episódio automaticamente | `🔄 Auto-play ATIVADO/DESATIVADO (válido para toda a sessão)` | Global session state |
+| `Shift+T` | Toggle | Switch subtitle/dub (if available) | `🔄 Alternando legendado/dublado (se disponível)` | No change |
+
+**Notes:**
+- All keybindings display both terminal feedback (in the console) and OSD messages (on the MPV video player window)
+- **Auto-play is session-global:** When enabled with `Shift+A`, it persists across all episodes and even different anime until the app is closed. Default is OFF when starting the app.
 
 ### Implementation Details
 

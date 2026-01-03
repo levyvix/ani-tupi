@@ -5,7 +5,6 @@ Use get_logger() to get a logger instance for any module.
 """
 
 import sys
-from pathlib import Path
 
 from loguru import logger as _base_logger
 

@@ -236,7 +236,13 @@ def load_history():
         return None
 
 
-def save_history(anime: str, episode: int, anilist_id: int | None = None, source: str | None = None, total_episodes: int | None = None) -> None:
+def save_history(
+    anime: str,
+    episode: int,
+    anilist_id: int | None = None,
+    source: str | None = None,
+    total_episodes: int | None = None,
+) -> None:
     """Save watch history with timestamp, optional AniList ID, source, and total episodes.
 
     Format: {"anime_name": [timestamp, episode_idx, anilist_id, source, total_episodes], ...}
@@ -315,19 +321,16 @@ def save_history_from_event(
         # Save with action metadata in a separate tracking object
         # Keep the original history format intact for backward compatibility
         _history_store.set(
-            anime_title,
-            [int(time.time()), episode_idx, anilist_id, source, total_episodes]
+            anime_title, [int(time.time()), episode_idx, anilist_id, source, total_episodes]
         )
-        logger.info(
-            f"Saved history for '{anime_title}' Ep {episode_idx + 1} (action: {action})"
-        )
+        logger.info(f"Saved history for '{anime_title}' Ep {episode_idx + 1} (action: {action})")
     except PersistenceError as e:
         logger.error(f"Failed to save history event for '{anime_title}': {e}")
 
     # Sync with AniList if authenticated and anilist_id is available
     if anilist_id and action == "watched":
         from services.anilist_service import anilist_client
-        
+
         if anilist_client.is_authenticated():
             try:
                 # Check if anime is in any list
@@ -340,7 +343,6 @@ def save_history_from_event(
                     # Auto-promote from PLANNING to CURRENT, or COMPLETED to REPEATING
                     entry = anilist_client.get_media_list_entry(anilist_id)
                     if entry:
-                        old_status = entry.status
                         if entry.status == "PLANNING":
                             logger.info(f"Moving '{anime_title}' from PLANNING to CURRENT")
                             anilist_client.add_to_list(anilist_id, "CURRENT")
@@ -350,7 +352,9 @@ def save_history_from_event(
                             logger.info(f"Changing '{anime_title}' to REPEATING")
                             anilist_client.change_status(anilist_id, "REPEATING")
                             sync_info["anilist_status_change"] = "COMPLETED → REPEATING"
-                            sync_info["anilist_message"] = "✅ Status alterado para REPEATING no AniList"
+                            sync_info["anilist_message"] = (
+                                "✅ Status alterado para REPEATING no AniList"
+                            )
 
                 # Update progress (episode_idx is 0-based, convert to 1-based)
                 episode_number = episode_idx + 1
@@ -366,7 +370,9 @@ def save_history_from_event(
                     if not viewer:
                         logger.warning("AniList token expired - sync failed")
                     else:
-                        logger.warning(f"Failed to sync progress to AniList for Ep {episode_number}")
+                        logger.warning(
+                            f"Failed to sync progress to AniList for Ep {episode_number}"
+                        )
             except Exception as e:
                 logger.error(f"Error syncing with AniList: {e}")
 
