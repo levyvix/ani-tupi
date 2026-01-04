@@ -38,14 +38,13 @@ def anilist_menu(args) -> None:
         anilist_progress = 0
 
         if anime_info:
-            display_title = anilist_client.format_title(anime_info["title"])
-            total_episodes = anime_info.get("episodes")
+            display_title = anilist_client.format_title(anime_info.title)
+            total_episodes = anime_info.episodes
 
             # Get user progress if logged in
             entry = anilist_client.get_media_list_entry(anilist_id)
-            if entry and entry.get("progress"):
-                anilist_progress = entry["progress"]
-
+            if entry and entry.progress:
+                anilist_progress = entry.progress
         # Start normal flow with selected anime (with all parameters)
         anime_service.anilist_anime_flow(
             anime_title,

@@ -484,12 +484,25 @@ def _ipc_event_loop(
                                             continue
                                         else:
                                             # Next episode URL not found
+                                            print(
+                                                f"⚠️  URL do episódio {next_episode_number} não encontrado"
+                                            )
                                             _send_mpv_command(
-                                                sock, "show-text", ["No next episode available"]
+                                                sock, "show-text", ["Episódio não disponível"]
                                             )
                                     else:
-                                        # No more episodes
-                                        _send_mpv_command(sock, "show-text", ["No more episodes"])
+                                        # No more episodes - this was the last one
+                                        print(
+                                            f"✓ Episódio {episode_number} foi o último disponível ({total_episodes} eps)"
+                                        )
+                                        _send_mpv_command(
+                                            sock,
+                                            "show-text",
+                                            [
+                                                f"Fim da temporada - {total_episodes} episódios",
+                                                3000,
+                                            ],
+                                        )
 
                                 elif action == "previous":
                                     from services.repository import rep
@@ -507,7 +520,9 @@ def _ipc_event_loop(
 
                                         if prev_url:
                                             # Show terminal feedback about playing previous episode
-                                            print(f"⏪ Voltando para Episódio {prev_episode_number}")
+                                            print(
+                                                f"⏪ Voltando para Episódio {prev_episode_number}"
+                                            )
 
                                             # Send MPV command to load previous episode
                                             _send_mpv_command(
@@ -558,7 +573,9 @@ def _ipc_event_loop(
                                             sock, "loadfile", [current_url, "replace"]
                                         )
                                         _send_mpv_command(
-                                            sock, "show-text", [f"Recarregando Episódio {current_episode}..."]
+                                            sock,
+                                            "show-text",
+                                            [f"Recarregando Episódio {current_episode}..."],
                                         )
                                         # Track reload action
                                         last_action = "reload"
@@ -586,7 +603,9 @@ def _ipc_event_loop(
                                     )
 
                                     # Show terminal feedback
-                                    print(f"📋 Episódio {episode_number} marcado - Retornando ao menu")
+                                    print(
+                                        f"📋 Episódio {episode_number} marcado - Retornando ao menu"
+                                    )
                                     if sync_info.get("anilist_message"):
                                         print(f"   {sync_info['anilist_message']}")
 
@@ -611,7 +630,10 @@ def _ipc_event_loop(
                                     _send_mpv_command(
                                         sock,
                                         "show-text",
-                                        [f"Auto-play {status} - Ao sair (q) {'vai para próximo episódio' if autoplay_enabled else 'volta ao menu'}", 3000],
+                                        [
+                                            f"Auto-play {status} - Ao sair (q) {'vai para próximo episódio' if autoplay_enabled else 'volta ao menu'}",
+                                            3000,
+                                        ],
                                     )
                                     # Continue playing - don't close the player
                                     continue
@@ -620,7 +642,9 @@ def _ipc_event_loop(
                                     # TODO: Implement subtitle/dub switching logic
                                     print("🔄 Alternando legendado/dublado (se disponível)")
                                     _send_mpv_command(
-                                        sock, "show-text", ["Sub/Dub alternado (se disponível)", 2000]
+                                        sock,
+                                        "show-text",
+                                        ["Sub/Dub alternado (se disponível)", 2000],
                                     )
                                     # Continue playing - don't close the player
                                     continue
@@ -668,11 +692,13 @@ def _ipc_event_loop(
             if autoplay_enabled:
                 # Mark current episode as watched and advance to next
                 from services.history_service import save_history_from_event
+                from services.repository import rep
 
                 anime_title = episode_context.get("anime_title")
                 episode_number = episode_context.get("episode_number", 1)
                 source = episode_context.get("source")
                 anilist_id = episode_context.get("anilist_id")
+                total_episodes = episode_context.get("total_episodes", 0)
 
                 # Save current episode as watched
                 episode_idx = episode_number - 1
@@ -689,14 +715,28 @@ def _ipc_event_loop(
                 if sync_info.get("anilist_message"):
                     print(f"   {sync_info['anilist_message']}")
 
-                # Return "next" action to load next episode
+                # Check if next episode exists before trying to load it
                 next_episode = episode_number + 1
-                print(f"▶️  Auto-play: Carregando Episódio {next_episode}")
-                return VideoPlaybackResult(
-                    exit_code=mpv_process.returncode or 0,
-                    action="next",
-                    data={"episode": next_episode},
-                )
+                episode_list = rep.get_episode_list(anime_title)
+                available_episodes = len(episode_list) if episode_list else 0
+
+                if next_episode <= available_episodes:
+                    # Next episode exists - load it
+                    print(f"▶️  Auto-play: Carregando Episódio {next_episode}")
+                    return VideoPlaybackResult(
+                        exit_code=mpv_process.returncode or 0,
+                        action="next",
+                        data={"episode": next_episode},
+                    )
+                else:
+                    # No more episodes available
+                    print(
+                        f"✓ Episódio {episode_number} foi o último disponível ({available_episodes} eps)"
+                    )
+                    print("   Voltando ao menu...")
+                    return VideoPlaybackResult(
+                        exit_code=mpv_process.returncode or 0, action="quit", data=None
+                    )
             else:
                 # Auto-play disabled - return to menu
                 return VideoPlaybackResult(

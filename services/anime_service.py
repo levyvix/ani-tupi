@@ -92,7 +92,7 @@ def normalize_anime_title(title: str):
     # 1. Handle AniList bilingual format "Romaji / English"
     # Take only the romaji part (before the " / ")
     if " / " in title:
-        title = title.split(" / ")[1]
+        title = title.split(" / ")[0]
 
     # 2. Remove season/part/episode suffixes
     season_patterns = [
@@ -284,9 +284,7 @@ def anilist_anime_flow(
         cache_data = get_cache(variant)
         if cache_data:
             # Found in cache! Use it directly
-            print(
-                f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)"
-            )
+            print(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
             rep.load_from_cache(variant, cache_data)
             used_query = variant
             titles_with_sources = [variant]  # Only one "result" - the cached anime
@@ -345,9 +343,7 @@ def anilist_anime_flow(
             # Cache-first: Check if manual query is in cache
             cache_data = get_cache(manual_query)
             if cache_data:
-                print(
-                    f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)"
-                )
+                print(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
                 rep.load_from_cache(manual_query, cache_data)
                 titles_with_sources = [manual_query]
                 used_query = manual_query
@@ -364,9 +360,7 @@ def anilist_anime_flow(
                 if used_query != manual_query:
                     used_words = metadata.used_words or "?"
                     total_words = metadata.total_words or "?"
-                    print(
-                        f"ℹ️  Reduzido para: '{used_query}' ({used_words}/{total_words} palavras)"
-                    )
+                    print(f"ℹ️  Reduzido para: '{used_query}' ({used_words}/{total_words} palavras)")
 
                 # Pass original_query for ranking results by relevance
                 titles_with_sources = rep.get_anime_titles_with_sources(
@@ -418,9 +412,7 @@ def anilist_anime_flow(
             total_words = metadata.get("total_words")
             if used_words and total_words and used_words < total_words:
                 # Reduced within the search
-                menu_title += (
-                    f"   ({used_words}/{total_words} palavras)\n"
-                )
+                menu_title += f"   ({used_words}/{total_words} palavras)\n"
         menu_title += f"\nEncontrados {len(titles_with_sources)} resultados. Escolha:"
 
         # Pagination: show top N results + "See more" button if needed
@@ -1042,9 +1034,7 @@ def search_anime_flow(args):
     cache_data = get_cache(query)
     selected_anime = None
     if cache_data:
-        print(
-            f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)"
-        )
+        print(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
         # Populate repository from cache
         rep.load_from_cache(query, cache_data)
         selected_anime = query

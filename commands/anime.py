@@ -40,11 +40,47 @@ def anime(args) -> None:
             selected_anime, episode_idx, source = anime_service.search_anime_flow(args)
             if not selected_anime:
                 return
+
+            # Try to auto-discover AniList ID if authenticated
+            from services.anilist_service import anilist_client
+            if anilist_client.is_authenticated():
+                from utils.anilist_discovery import get_anilist_id_from_title
+
+                print(f"\n🔍 Procurando '{selected_anime}' no AniList...")
+                anilist_id = get_anilist_id_from_title(selected_anime)
+
+                if anilist_id:
+                    # Get anime metadata for display
+                    from utils.anilist_discovery import get_anilist_metadata
+                    metadata = get_anilist_metadata(anilist_id)
+                    if metadata:
+                        anilist_title = anilist_client.format_title(metadata.title)
+                        print(f"✅ Encontrado: {anilist_title}")
+                else:
+                    print("⚠️  Não foi possível encontrar no AniList (continuando sem sincronização)")
     else:
         # This path is used when called from main menu
         selected_anime, episode_idx, source = anime_service.search_anime_flow(args)
         if not selected_anime:
             return
+
+        # Try to auto-discover AniList ID if authenticated
+        from services.anilist_service import anilist_client
+        if anilist_client.is_authenticated():
+            from utils.anilist_discovery import get_anilist_id_from_title
+
+            print(f"\n🔍 Procurando '{selected_anime}' no AniList...")
+            anilist_id = get_anilist_id_from_title(selected_anime)
+
+            if anilist_id:
+                # Get anime metadata for display
+                from utils.anilist_discovery import get_anilist_metadata
+                metadata = get_anilist_metadata(anilist_id)
+                if metadata:
+                    anilist_title = anilist_client.format_title(metadata.title)
+                    print(f"✅ Encontrado: {anilist_title}")
+            else:
+                print("⚠️  Não foi possível encontrar no AniList (continuando sem sincronização)")
 
     # Get episode list for playback
     episode_list = rep.get_episode_list(selected_anime)
