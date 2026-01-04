@@ -58,6 +58,7 @@ def load_history():
             exit()  # User cancelled continue watching
 
         anime = selected[: -titles[selected]]
+        original_anime_name = anime  # Save original name from history for later reference
         local_episode_idx = data[anime][1]
         anilist_id = data[anime][2] if len(data[anime]) > 2 else None
         saved_source = data[anime][3] if len(data[anime]) > 3 else None
@@ -103,61 +104,163 @@ def load_history():
         # Check if multiple anime results (different sources/versions)
         anime_titles = rep.get_anime_titles()
         selected_anime_title = None
+        episode_list = []
 
         if len(anime_titles) > 1:
-            # Multiple results - let user choose
-            anime_with_sources = rep.get_anime_titles_with_sources()
-            selected = menu_navigate(
-                anime_with_sources,
-                msg=f"Múltiplas fontes encontradas para '{anime}'. Escolha uma:",
-            )
-            if not selected:
-                exit()  # User cancelled
+            # Multiple results - validate which sources have episodes
+            print(f"ℹ️  Validando fontes disponíveis para '{anime}'...")
 
-            # Extract anime title (remove source info)
-            # Format is "Title [source1, source2]"
-            selected_anime_title = selected.rsplit(" [", 1)[0]
+            valid_sources = {}  # {anime_title: episode_count}
+            anime_with_sources = rep.get_anime_titles_with_sources()
+
+            for anime_with_source in anime_with_sources:
+                # Extract anime title and sources
+                if " [" in anime_with_source:
+                    title = anime_with_source.rsplit(" [", 1)[0]
+                else:
+                    title = anime_with_source
+
+                # Try to load episodes for this title
+                with loading(f"Verificando '{title}'..."):
+                    rep.search_episodes(title)
+                episodes = rep.get_episode_list(title)
+
+                if episodes:
+                    valid_sources[anime_with_source] = len(episodes)
+
+            if not valid_sources:
+                # No sources have episodes - will be handled below
+                selected_anime_title = search_title
+                episode_list = []
+            elif len(valid_sources) == 1:
+                # Only one valid source - use it automatically
+                selected_anime_with_source = list(valid_sources.keys())[0]
+                selected_anime_title = selected_anime_with_source.rsplit(" [", 1)[0]
+                episode_list = rep.get_episode_list(selected_anime_title)
+                ep_count = valid_sources[selected_anime_with_source]
+                print(f"✅ Fonte encontrada: {selected_anime_title} ({ep_count} episódios)")
+            else:
+                # Multiple valid sources - let user choose
+                valid_source_list = [
+                    f"{src} ({valid_sources[src]} eps)"
+                    for src in valid_sources.keys()
+                ]
+                selected = menu_navigate(
+                    valid_source_list,
+                    msg=f"Múltiplas fontes com episódios. Escolha uma:",
+                )
+                if not selected:
+                    exit()  # User cancelled
+
+                # Extract original anime_with_source (without episode count)
+                selected_idx = valid_source_list.index(selected)
+                selected_anime_with_source = list(valid_sources.keys())[selected_idx]
+                selected_anime_title = selected_anime_with_source.rsplit(" [", 1)[0]
+                episode_list = rep.get_episode_list(selected_anime_title)
         elif len(anime_titles) == 1:
-            # Single result - use it directly
+            # Single result - try to load episodes
             selected_anime_title = anime_titles[0]
+
+            # Use saved source if available (faster and more accurate)
+            if saved_source:
+                with loading(f"Carregando episódios de {saved_source}..."):
+                    rep.search_episodes(selected_anime_title, source_filter=saved_source)
+            else:
+                with loading("Carregando episódios..."):
+                    rep.search_episodes(selected_anime_title)
+            episode_list = rep.get_episode_list(selected_anime_title)
         else:
             # No results - will be handled below
             selected_anime_title = search_title
-
-        # Load episodes for selected anime
-        # Use saved source if available (faster and more accurate)
-        if saved_source:
-            with loading(f"Carregando episódios de {saved_source}..."):
-                rep.search_episodes(selected_anime_title, source_filter=saved_source)
-        else:
-            with loading("Carregando episódios..."):
-                rep.search_episodes(selected_anime_title)
-        episode_list = rep.get_episode_list(selected_anime_title)
+            episode_list = []
 
         # Update anime reference to selected one
         anime = selected_anime_title
 
         if not episode_list:
-            # Anime not found in scrapers - offer options
-            print(f"\n⚠️  '{anime}' não foi encontrado nos scrapers disponíveis.")
-            print("Possíveis motivos:")
-            print("  • O anime foi removido do scraper")
-            print("  • O nome mudou no site")
-            print("  • O scraper está temporariamente offline")
+            # Anime found in search but no episodes available
+            was_found = len(anime_titles) > 0
+
+            if was_found:
+                print(f"\n⚠️  '{anime}' foi encontrado mas nenhuma fonte tem episódios disponíveis.")
+                print("\nPossíveis motivos:")
+                print("  • O anime foi removido temporariamente")
+                print("  • Os episódios ainda não foram adicionados")
+                print("  • A fonte original mudou de nome/formato")
+            else:
+                print(f"\n⚠️  '{anime}' não foi encontrado nos scrapers disponíveis.")
+                print("\nPossíveis motivos:")
+                print("  • O nome mudou no site")
+                print("  • O anime foi removido")
+                print("  • O scraper está temporariamente offline")
 
             retry_options = [
-                "🔄 Tentar novamente",
+                "🔍 Buscar manualmente (digite outro nome)",
                 "🗑️  Remover do histórico",
                 "← Voltar ao menu de histórico",
             ]
             retry_choice = menu_navigate(retry_options, msg="O que deseja fazer?")
 
-            if retry_choice == "🔄 Tentar novamente":
-                # Retry: recursively call load_history() again
-                return load_history()
+            if retry_choice == "🔍 Buscar manualmente (digite outro nome)":
+                # Let user search manually with a different title
+                manual_query = input("\n🔍 Digite o nome para buscar: ").strip()
+
+                if not manual_query:
+                    return load_history()  # Empty input - go back
+
+                # Search with manual query
+                rep.clear_search_results()
+                with loading(f"Buscando '{manual_query}'..."):
+                    rep.search_anime(manual_query)
+
+                anime_titles = rep.get_anime_titles()
+
+                if not anime_titles:
+                    print(f"\n❌ Nenhum resultado encontrado para '{manual_query}'")
+                    input("\nPressione Enter para continuar...")
+                    return load_history()
+
+                # Show results and let user choose
+                anime_with_sources = rep.get_anime_titles_with_sources()
+                if len(anime_with_sources) == 1:
+                    selected_anime_title = anime_titles[0]
+                else:
+                    selected = menu_navigate(
+                        anime_with_sources,
+                        msg=f"Resultados para '{manual_query}'. Escolha:",
+                    )
+                    if not selected:
+                        return load_history()
+                    selected_anime_title = selected.rsplit(" [", 1)[0]
+
+                # Load episodes from manually selected anime
+                with loading("Carregando episódios..."):
+                    rep.search_episodes(selected_anime_title)
+                episode_list = rep.get_episode_list(selected_anime_title)
+
+                if not episode_list:
+                    print(f"\n❌ '{selected_anime_title}' não tem episódios disponíveis")
+                    input("\nPressione Enter para continuar...")
+                    return load_history()
+
+                # Update anime reference to manually selected one
+                anime = selected_anime_title
+
+                # Ask if user wants to replace the old entry in history
+                replace_choice = menu_navigate(
+                    ["✅ Sim, substituir", "❌ Não, manter ambos"],
+                    msg=f"Deseja substituir '{original_anime_name}' por '{anime}' no histórico?",
+                )
+
+                if replace_choice == "✅ Sim, substituir":
+                    # Remove old entry and save new one with same progress
+                    reset_history(original_anime_name)
+                    save_history(anime, last_episode_idx, anilist_id, saved_source)
+                    print(f"✅ Histórico atualizado!")
+
             elif retry_choice == "🗑️  Remover do histórico":
-                reset_history(anime)
-                print(f"✅ '{anime}' removido do histórico.")
+                reset_history(original_anime_name)
+                print(f"✅ '{original_anime_name}' removido do histórico.")
                 input("\nPressione Enter para continuar...")
                 return load_history()  # Show history menu again
             else:
