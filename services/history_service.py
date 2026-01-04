@@ -147,7 +147,7 @@ def load_history():
                 ]
                 selected = menu_navigate(
                     valid_source_list,
-                    msg=f"Múltiplas fontes com episódios. Escolha uma:",
+                    msg="Múltiplas fontes com episódios. Escolha uma:",
                 )
                 if not selected:
                     exit()  # User cancelled
@@ -256,7 +256,7 @@ def load_history():
                     # Remove old entry and save new one with same progress
                     reset_history(original_anime_name)
                     save_history(anime, last_episode_idx, anilist_id, saved_source)
-                    print(f"✅ Histórico atualizado!")
+                    print("✅ Histórico atualizado!")
 
             elif retry_choice == "🗑️  Remover do histórico":
                 reset_history(original_anime_name)

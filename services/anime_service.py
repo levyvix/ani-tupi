@@ -668,6 +668,55 @@ def anilist_anime_flow(
                             return  # Sequel started, exit this flow
                     continue  # Loop to play next episode
             # Fall through to menu if no next episode data
+        elif result.action == "auto-next":
+            # Auto-play active and user pressed 'q' - already marked as watched in IPC handler
+            # Sync with AniList and move to next episode
+            current_episode = result.data.get("episode", episode)
+
+            # Update AniList if authenticated
+            if anilist_client.is_authenticated() and anilist_id:
+                # Check if anime is in any list
+                if not anilist_client.is_in_any_list(anilist_id):
+                    print("📝 Adicionando à sua lista do AniList...")
+                    anilist_client.add_to_list(anilist_id, "CURRENT")
+                else:
+                    # Auto-promote from PLANNING to CURRENT, or COMPLETED to REPEATING
+                    entry = anilist_client.get_media_list_entry(anilist_id)
+                    if entry:
+                        if entry.status == "PLANNING":
+                            print("📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
+                            anilist_client.add_to_list(anilist_id, "CURRENT")
+                        elif entry.status == "COMPLETED":
+                            print("🔄 Mudando para 'Recomassistindo'...")
+                            anilist_client.change_status(anilist_id, "REPEATING")
+
+                print(f"🔄 Sincronizando progresso com AniList (Ep {current_episode})...")
+                success = anilist_client.update_progress(anilist_id, current_episode)
+                if success:
+                    print("✅ Progresso salvo no AniList!")
+                else:
+                    # Verify token is still valid if sync failed
+                    viewer = anilist_client.get_viewer_info()
+                    if not viewer:
+                        print("⚠️  Token do AniList expirou")
+                        print("   Execute: ani-tupi anilist auth")
+                    else:
+                        print("⚠️  Não foi possível salvar no AniList (continuando...)")
+
+            # Check if there's a next episode
+            next_episode_idx = episode_idx + 1
+            if next_episode_idx < num_episodes:
+                # Move to next episode
+                episode_idx = next_episode_idx
+                print(f"▶️  Carregando próximo episódio: {episode_idx + 1}")
+                continue  # Loop to play next episode
+            else:
+                # Last episode - check for sequels
+                print("✅ Último episódio assistido!")
+                if anilist_id and offer_sequel_and_continue(anilist_id, args):
+                    return  # Sequel started, exit this flow
+                # No sequel or user declined - return to menu
+                return
         elif result.action == "previous":
             # User pressed Shift+P - go to previous episode
             if result.data and "episode" in result.data:

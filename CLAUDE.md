@@ -476,12 +476,13 @@ During playback, use these keybindings for episode navigation:
 | `Shift+P` | Previous | Resume from last watched position | `⏪ Voltando para Episódio {N}` | Loaded |
 | `Shift+M` | Mark & Menu | Mark watched, show menu (next/continue/quit) | `📋 Episódio {N} marcado - Retornando ao menu` | Saved |
 | `Shift+R` | Reload | Retry current episode | `🔄 Recarregando Episódio {N}` | No change |
-| `Shift+A` | Auto-play | Alterna auto-play global (toda a sessão): ao sair (q) vai para próximo episódio automaticamente | `🔄 Auto-play ATIVADO/DESATIVADO (válido para toda a sessão)` | Global session state |
+| `Shift+A` | Auto-play | Toggle auto-play mode (session-global): when enabled, pressing 'q' marks episode as watched and auto-loads next episode | `🔄 Auto-play ATIVADO/DESATIVADO (válido para toda a sessão)` | Global session state |
 | `Shift+T` | Toggle | Switch subtitle/dub (if available) | `🔄 Alternando legendado/dublado (se disponível)` | No change |
 
 **Notes:**
 - All keybindings display both terminal feedback (in the console) and OSD messages (on the MPV video player window)
 - **Auto-play is session-global:** When enabled with `Shift+A`, it persists across all episodes and even different anime until the app is closed. Default is OFF when starting the app.
+- **Auto-play behavior:** When auto-play is ON and you press 'q' to quit, the episode is marked as watched in AniList and the next episode starts automatically (if available). When auto-play is OFF, pressing 'q' shows the normal confirmation menu.
 
 ### Implementation Details
 

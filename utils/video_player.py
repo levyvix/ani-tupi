@@ -23,6 +23,22 @@ class VideoPlaybackResult(NamedTuple):
     data: dict | None = None
 
 
+# Global session state for auto-play (persists across episodes)
+_autoplay_enabled = False
+
+
+def get_autoplay_state() -> bool:
+    """Get current auto-play state."""
+    global _autoplay_enabled
+    return _autoplay_enabled
+
+
+def set_autoplay_state(enabled: bool) -> None:
+    """Set auto-play state."""
+    global _autoplay_enabled
+    _autoplay_enabled = enabled
+
+
 def play_video(url: str, debug=False, ytdl_format: str | None = None) -> int:
     """Play video using python-mpv and return exit code.
 
@@ -214,11 +230,13 @@ def _handle_keybinding_action(
             )
 
         case "toggle-autoplay":
-            # Toggle auto-play preference
+            # Toggle global auto-play state
+            global _autoplay_enabled
+            _autoplay_enabled = not _autoplay_enabled
             return VideoPlaybackResult(
                 exit_code=0,
                 action="toggle-autoplay",
-                data={"autoplay": True},  # Would be toggled at service layer
+                data={"enabled": _autoplay_enabled},
             )
 
         case "toggle-sub-dub":
@@ -257,7 +275,7 @@ def _launch_mpv_with_ipc(
         f"--input-ipc-server={socket_path}",
         f"--input-conf={input_conf}",
         "--fullscreen=yes",
-        "--osc=no",  # Disable on-screen controller for custom control
+        "--osc=yes",
         "--cache=yes",
         "--demuxer-max-bytes=400M",
         "--demuxer-max-back-bytes=100M",
@@ -340,6 +358,7 @@ def _ipc_event_loop(
     Returns:
         VideoPlaybackResult when MPV closes or action is triggered
     """
+    global _autoplay_enabled  # Declare at function level
     import json
     import time
 
@@ -509,7 +528,22 @@ def _ipc_event_loop(
                                         # Continue loop
                                         continue
 
-                                # Handle other actions (mark-menu, toggle-autoplay, toggle-sub-dub)
+                                elif action == "toggle-autoplay":
+                                    # Toggle global auto-play state (declared at function level)
+                                    _autoplay_enabled = not _autoplay_enabled
+
+                                    # Show OSD message
+                                    status = "ATIVADO" if _autoplay_enabled else "DESATIVADO"
+                                    message = f"🔄 Auto-play {status} (válido para toda a sessão)"
+                                    _send_mpv_command(sock, "show-text", [message, "3000"])
+
+                                    # Print terminal feedback
+                                    print(f"\n{message}")
+
+                                    # Continue loop - don't exit playback
+                                    continue
+
+                                # Handle other actions (mark-menu, toggle-sub-dub)
                                 result = _handle_keybinding_action(action, episode_context)
                                 if result:
                                     # For actions that require returning to caller
@@ -527,7 +561,40 @@ def _ipc_event_loop(
                 break
 
         # MPV process exited normally
-        return VideoPlaybackResult(exit_code=mpv_process.returncode or 0, action="quit", data=None)
+        exit_code = mpv_process.returncode or 0
+
+        # Check if auto-play is enabled (declared at function level)
+        if _autoplay_enabled and exit_code == 0:
+            # Auto-play active: mark as watched and move to next episode
+            from services.history_service import save_history_from_event
+
+            anime_title = episode_context.get("anime_title")
+            episode_number = episode_context.get("episode_number", 1)
+            source = episode_context.get("source")
+            anilist_id = episode_context.get("anilist_id")
+
+            # Save current episode as watched (0-indexed)
+            episode_idx = episode_number - 1
+            save_history_from_event(
+                anime_title=anime_title,
+                episode_idx=episode_idx,
+                action="watched",
+                source=source,
+                anilist_id=anilist_id,
+            )
+
+            # Print terminal feedback
+            print(f"\n▶️  Auto-play ativo: marcando Episódio {episode_number} como assistido")
+
+            # Return auto-next action
+            return VideoPlaybackResult(
+                exit_code=exit_code,
+                action="auto-next",
+                data={"episode": episode_number},
+            )
+
+        # Normal quit (auto-play disabled or error exit)
+        return VideoPlaybackResult(exit_code=exit_code, action="quit", data=None)
 
     finally:
         try:

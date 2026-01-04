@@ -31,7 +31,7 @@ def anilist_main_menu() -> tuple[str, int] | None:
     if is_logged_in:
         # Get user info
         user_info = anilist_client.get_viewer_info()
-        username = user_info["name"] if user_info else "User"
+        username = user_info.name if user_info else "User"
 
         menu_options.extend(
             [
@@ -305,9 +305,7 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
             display_title = anilist_client.format_title(media.title)
 
             # Get romaji first, then english
-            search_title = (
-                media.title.romaji or media.title.english or display_title
-            )
+            search_title = media.title.romaji or media.title.english or display_title
 
             anime_id = media.id
             episodes = media.episodes or "?"
@@ -453,11 +451,7 @@ def _show_recent_history() -> None:
             anime_info = anilist_client.get_anime_by_id(saved_anilist_id)
             if anime_info:
                 display_title = anilist_client.format_title(anime_info.title)
-                search_title = (
-                    anime_info.title.romaji
-                    or anime_info.title.english
-                    or display_title
-                )
+                search_title = anime_info.title.romaji or anime_info.title.english or display_title
                 # Get total episodes from AniList
                 total_episodes = anime_info.episodes
 
