@@ -1,11 +1,11 @@
-"""Browser pool for Firefox instances to eliminate startup overhead.
+"""Browser pool for Firefox instances.
 
-Optimized for video URL extraction:
-- Pool of pre-warmed Firefox instances (3-5 instances)
-- 80-90% reduction in video URL extraction time
-- Automatic cleanup and rotation of failed instances
-- Context isolation between requests
-- Health checking for failed instances
+Single-instance pool optimized for CLI usage:
+- Maintains 1 Firefox instance for all operations
+- Reused across all scrapers to minimize memory usage
+- Automatic health checking and recovery if browser crashes
+- Thread-safe access with timeout queuing
+- Automatic cleanup of old/unhealthy instances
 """
 
 import queue
@@ -18,6 +18,9 @@ from selenium import webdriver
 from selenium.webdriver.remote.webdriver import WebDriver
 
 from scrapers.plugins.utils import is_firefox_installed_as_snap
+
+# Semaphore to prevent creating too many browsers at once
+_creation_lock = threading.Semaphore(1)
 
 
 class BrowserContext:
@@ -51,16 +54,20 @@ class BrowserContext:
 
 
 class BrowserPool:
-    """Pool of Firefox instances for video URL extraction.
+    """Single Firefox instance pool for all operations.
 
-    Maintains a configurable number of browser instances to eliminate
-    the 7+ second startup time for each video URL extraction.
+    Maintains 1 reusable Firefox instance across the entire application.
+    This minimizes memory usage and startup overhead. Browser is only
+    recreated if it becomes unhealthy or crashes.
+
+    For CLI usage patterns where operations are sequential, this single-instance
+    approach is optimal: no browser spawn spam, minimal memory footprint.
     """
 
     _instance = None
     _lock = threading.Lock()
 
-    def __new__(cls, max_size: int = 3):
+    def __new__(cls, max_size: int = 1):
         """Singleton pattern with configurable pool size."""
         if cls._instance is None:
             with cls._lock:
@@ -68,7 +75,7 @@ class BrowserPool:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, max_size: int = 3):
+    def __init__(self, max_size: int = 1):
         """Initialize browser pool with specified size.
 
         Args:
@@ -93,6 +100,11 @@ class BrowserPool:
         Returns:
             tuple: (webdriver.Firefox, browser_id)
         """
+        # Prevent creating browsers beyond max_size
+        with self._lock:
+            if len(self._browsers) >= self._max_size:
+                raise RuntimeError(f"Browser pool at max capacity ({self._max_size})")
+
         options = webdriver.FirefoxOptions()
         options.add_argument("--headless")
         options.add_argument("--disable-gpu")
@@ -122,16 +134,16 @@ class BrowserPool:
 
     def _populate_pool(self):
         """Pre-populate pool with browser instances."""
-        # Start with 1-2 instances to balance memory vs performance
-        initial_count = min(2, self._max_size)
+        # Start with 1 instance (or up to max_size)
+        initial_count = min(1, self._max_size)
 
         for _ in range(initial_count):
             try:
                 browser, browser_id = self._create_browser()
                 self._pool.put((browser_id, browser))
             except Exception:
-                # If we can't create initial instances, that's ok
-                # We'll create them on-demand
+                # If we can't create initial instance, that's ok
+                # We'll create it on-demand
                 pass
 
     def _mark_unhealthy(self, browser_id: int):
@@ -199,18 +211,29 @@ class BrowserPool:
                 # ... use driver
             # Browser automatically returned to pool
         """
-        # Try to get existing browser from pool
-        try:
-            browser_id, browser = self._pool.get(timeout=10)
-        except queue.Empty:
-            # No available browsers, create a new one
-            browser, browser_id = self._create_browser()
+        # Cleanup old/unhealthy browsers periodically
+        self._cleanup_old_browsers()
 
+        browser = None
+        browser_id = None
+
+        # Try to get existing browser from pool (with timeout)
         try:
-            # Health check
+            browser_id, browser = self._pool.get(timeout=3)
+        except queue.Empty:
+            # No browser available, create one
+            with _creation_lock:
+                # Double-check within lock
+                try:
+                    browser_id, browser = self._pool.get_nowait()
+                except queue.Empty:
+                    browser, browser_id = self._create_browser()
+
+        # Health check on retrieved browser
+        try:
             browser.current_url  # Quick check if browser is responsive
         except Exception:
-            # Browser is unhealthy, create a new one
+            # Browser is unhealthy, kill it and create a new one
             try:
                 browser.quit()
             except Exception:
@@ -218,7 +241,8 @@ class BrowserPool:
             with self._lock:
                 self._browsers.pop(browser_id, None)
 
-            browser, browser_id = self._create_browser()
+            with _creation_lock:
+                browser, browser_id = self._create_browser()
 
         yield BrowserContext(self, browser, browser_id)
 

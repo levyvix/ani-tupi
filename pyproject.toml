@@ -37,6 +37,7 @@ dependencies = [
     "httpx>=0.28.1",
     "playwright>=1.57.0",
     "pillow>=12.1.0",
+    "yt-dlp>=2026.1.31",
 ]
 
 [project.scripts]
@@ -55,7 +56,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "mypy>=1.19.1",
-    "pre-commit>=4.5.1",
+    "prek>=4.5.1",
     "pyinstaller>=6.11.1",
     "pyright>=1.1.407",
     "pytest>=9.0.2",

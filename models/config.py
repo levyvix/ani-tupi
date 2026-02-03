@@ -121,7 +121,12 @@ class PluginSettings(BaseModel):
         description="List of disabled plugin names (e.g., ['animesonlinecc'])",
     )
     priority_order: list[str] = Field(
-        default_factory=lambda: ["animesdigital", "animefire", "animesonlinecc"],
+        default_factory=lambda: [
+            "animesdigital",
+            "animeplayer",
+            "animefire",
+            "animesonlinecc",
+        ],
         description="Priority order for scraper sources (first = highest priority)",
     )
 
@@ -157,10 +162,10 @@ class PerformanceSettings(BaseModel):
 
     # Browser Pool Settings
     browser_pool_size: int = Field(
-        3,
+        1,
         ge=1,
         le=5,
-        description="Maximum number of Firefox instances in browser pool",
+        description="Maximum number of Firefox instances in browser pool (1 for minimal memory usage)",
     )
     browser_max_age: int = Field(
         300,
@@ -169,8 +174,8 @@ class PerformanceSettings(BaseModel):
         description="Maximum age of browser instances before cleanup (seconds)",
     )
     browser_health_check_timeout: int = Field(
-        10,
-        ge=5,
+        3,
+        ge=1,
         le=30,
         description="Timeout for getting browser from pool (seconds)",
     )
@@ -237,6 +242,29 @@ class PerformanceSettings(BaseModel):
             "anilist_meta": 720,  # 30 days for AniList metadata
         },
         description="Source-specific TTL in hours",
+    )
+
+
+class AnimeDownloadSettings(BaseModel):
+    """Anime download and local library settings."""
+
+    download_directory: Path = Field(
+        default_factory=lambda: Path.home() / ".local" / "share" / "ani-tupi" / "anime",
+        description="Where to save downloaded anime episodes",
+    )
+    max_parallel_downloads: int = Field(
+        3,
+        ge=1,
+        le=16,
+        description="Maximum parallel episode downloads (1 = sequential, 16 = max)",
+    )
+    video_format: str = Field(
+        "mkv",
+        description="Default video format for downloads (mkv, mp4, etc)",
+    )
+    skip_already_downloaded: bool = Field(
+        True,
+        description="Skip already-downloaded episodes in batch operations",
     )
 
 
@@ -345,6 +373,7 @@ class AppSettings(BaseSettings):
     cache: CacheSettings = CacheSettings()  # type: ignore[call-arg]
     search: SearchSettings = SearchSettings()  # type: ignore[call-arg]
     plugins: PluginSettings = PluginSettings()  # type: ignore[call-arg]
+    anime_download: AnimeDownloadSettings = AnimeDownloadSettings()  # type: ignore[call-arg]
     manga: MangaSettings = MangaSettings()  # type: ignore[call-arg]
     performance: PerformanceSettings = PerformanceSettings()  # type: ignore[call-arg]
 

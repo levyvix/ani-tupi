@@ -295,6 +295,71 @@ AniList touches three places (because AniList is stateful—token, rate limits, 
 
 To add a feature: modify 1 (add the API method), then 2–3 if title mapping is needed.
 
+## Anime Download Feature
+
+### Overview
+
+Download episodes for offline viewing. Episodes are stored locally in `~/.local/share/ani-tupi/anime/` and organized by anime title.
+
+### How to Download Episodes
+
+1. **In Playback**: While watching an episode, press the menu and select "📥 Baixar para assistir depois"
+2. **Range Selection**: Enter an episode range:
+   - `5`: Download episode 5
+   - `1-12`: Download episodes 1 through 12
+   - `5-`: Download from episode 5 to the end
+   - `-12`: Download episodes 1 through 12
+   - `5-15`: Download episodes 5 through 15
+
+3. Episodes download in parallel (respects `max_parallel_downloads` config, default: 2)
+4. Already-downloaded episodes are skipped automatically
+
+### How to Access Local Library
+
+1. From main menu, select "📂 Biblioteca Local"
+2. Choose an anime from the list
+3. Select an episode to play
+4. Playback uses the same VideoPlayer as streaming
+
+### How to Configure Downloads
+
+Set environment variables to customize behavior:
+
+```bash
+# Maximum parallel downloads (1-16)
+export ANI_TUPI__ANIME__MAX_PARALLEL_DOWNLOADS=4
+
+# Download directory (default: ~/.local/share/ani-tupi/anime)
+export ANI_TUPI__ANIME__DOWNLOAD_DIRECTORY="~/Videos/Anime"
+
+# Video format (mkv, mp4, etc)
+export ANI_TUPI__ANIME__VIDEO_FORMAT="mp4"
+```
+
+### Architecture
+
+**Services**:
+- `AnimeDownloadService`: Orchestrates downloads with parallel queue and retry logic
+- `LocalAnimeService`: Scans and manages local library, discovers episodes
+
+**Data**:
+- Episodes stored in: `~/.local/share/ani-tupi/anime/{anime_title}/{episode_number}.mkv`
+- Metadata stored in: `~/.local/state/ani-tupi/anime_downloads.json`
+- Format: Pydantic models (serialized to JSON for persistence)
+
+**Commands**:
+- Download prompt in playback menu (`commands/anime.py`)
+- Local library browser in main menu (`main.py`)
+
+### Implementation Details
+
+- **Episode Range Parser**: Flexible input parsing with validation (`utils/episode_range_parser.py`)
+- **Download Models**: Pydantic models for type-safe download operations (`models/models.py`)
+- **Parallel Downloads**: ThreadPoolExecutor with ordered execution (ep 1 before ep 2)
+- **File Validation**: Skip files < 1MB (indicates HTML error pages)
+- **Retry Logic**: Exponential backoff (2s, 4s, 8s) for failed downloads
+- **Skip Logic**: If episode exists in database and skip_already_downloaded=True, download is skipped
+
 ## Known Issues & Solutions
 
 ### Issue: Scraper Results Not Cached

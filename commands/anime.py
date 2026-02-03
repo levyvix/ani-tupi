@@ -19,8 +19,81 @@ from services.anime.playback_service import (
     navigate_episodes,
     PlaybackContext,
 )
+from services.anime.download_service import AnimeDownloadService
 from ui.components import loading, menu_navigate
 from utils.video_player import VideoPlayer
+from utils.episode_range_parser import parse_episode_range, RangeParseError
+
+
+def handle_anime_download(ctx: "PlaybackContext", args) -> None:
+    """Handle anime download workflow.
+
+    Prompts user for episode range and downloads episodes for offline viewing.
+
+    Args:
+        ctx: Current playback context
+        args: Command-line arguments
+    """
+    print("\n📥 Baixar episódios para assistir depois")
+    print(f"   Anime: {ctx.anime_title}")
+    print(f"   Total de episódios: {ctx.num_episodes}")
+
+    # Calculate default range (next unwatched to end)
+    # ctx.episode_idx is 0-indexed, so next episode is episode_idx + 2
+    next_episode = ctx.episode_idx + 2
+    if next_episode > ctx.num_episodes:
+        next_episode = ctx.num_episodes
+
+    default_range = f"{next_episode}-"
+    print(f"   Padrão: {default_range} (do episódio {next_episode} até o fim)\n")
+
+    # Prompt for range
+    try:
+        range_input = input("Qual intervalo? (pressione Enter para padrão): ").strip()
+
+        # If empty, use default (next unwatched to end)
+        if not range_input:
+            range_input = default_range
+            print(f"   Usando: {range_input}")
+
+        # Parse range
+        episodes = parse_episode_range(range_input, ctx.num_episodes)
+    except RangeParseError as e:
+        print(f"❌ {e}")
+        return
+
+    # Initialize download service
+    service = AnimeDownloadService()
+
+    # Create a function to get episode URL from context
+    def get_episode_url_for_download(episode_num: int):
+        """Get episode URL for download."""
+        from services.anime.playback_service import get_episode_url_and_source
+
+        result = get_episode_url_and_source(ctx.anime_title, episode_num)
+        if result.success and result.player_url:
+            return (result.player_url, result.source or "unknown")
+        return None
+
+    # Download episodes
+    print(f"\n⏳ Baixando {len(episodes)} episódio(s)...")
+    try:
+        with loading(f"Baixando {len(episodes)} episódio(s)..."):
+            result = service.download_episodes(
+                anime_title=ctx.anime_title,
+                range_input=range_input,
+                total_episodes=ctx.num_episodes,
+                get_episode_url=get_episode_url_for_download,
+            )
+
+        # Show result
+        print(f"\n{result.summary}")
+
+        if result.successful > 0:
+            print(f"✅ {result.successful} episódio(s) baixado(s) com sucesso!")
+            print(f"   Localização: {service.download_dir / ctx.anime_title}")
+    except Exception as e:
+        print(f"❌ Erro ao baixar: {e}")
 
 
 def anime(args) -> None:
@@ -201,6 +274,7 @@ def anime(args) -> None:
             opts.append("◀️  Anterior")
         opts.append("🔁 Replay")
         opts.append("📋 Escolher outro episódio")
+        opts.append("📥 Baixar para assistir depois")
         opts.append("🔄 Trocar fonte")
 
         selected_opt = menu_navigate(list(opts), msg="O que quer fazer agora?")
@@ -220,6 +294,9 @@ def anime(args) -> None:
                 return  # User cancelled, exit function
             episode_idx = ctx.episode_list.index(selected_episode)
             ctx = navigate_episodes(ctx, "choose", episode_idx)
+        elif selected_opt == "📥 Baixar para assistir depois":
+            # Download episodes for offline viewing
+            handle_anime_download(ctx, args)
         elif selected_opt == "🔄 Trocar fonte":
             # Source switching
             result = anime_service.switch_anime_source(ctx.anime_title, args, ctx.anilist_id)

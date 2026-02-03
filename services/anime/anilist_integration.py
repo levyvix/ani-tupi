@@ -492,6 +492,72 @@ def anilist_anime_flow(
     current_episode_idx: int = episode_idx
     num_episodes = len(episode_list)
 
+    # Ask what user wants to do with the first episode
+    initial_episode = current_episode_idx + 1
+    action_options = ["▶️ Assistir agora", "📥 Baixar para assistir depois", "🔙 Voltar"]
+    initial_action = menu_navigate(
+        action_options, msg=f"O que deseja fazer com o episódio {initial_episode}?"
+    )
+
+    if initial_action == "📥 Baixar para assistir depois":
+        # Download episodes starting from current
+        from services.anime.download_service import AnimeDownloadService
+        from utils.episode_range_parser import parse_episode_range, RangeParseError
+
+        print(f"\n📥 Baixar episódios: {selected_anime}")
+        print(f"   Total de episódios: {num_episodes}")
+
+        # Calculate default range (from current episode to end)
+        default_range = f"{initial_episode}-"
+        print(f"   Padrão: {default_range} (do episódio {initial_episode} até o fim)\n")
+
+        # Prompt for range
+        try:
+            range_input = input("Qual intervalo? (pressione Enter para padrão): ").strip()
+
+            if not range_input:
+                range_input = default_range
+                print(f"   Usando: {range_input}")
+
+            # Parse range
+            episodes = parse_episode_range(range_input, num_episodes)
+        except RangeParseError as e:
+            print(f"❌ {e}")
+            return
+
+        # Download episodes
+        service = AnimeDownloadService()
+
+        def get_episode_url_for_download(episode_num: int):
+            """Get episode URL for download."""
+            player_url = rep.search_player(selected_anime, episode_num)
+            if player_url:
+                return (player_url, source or "unknown")
+            return None
+
+        print(f"\n⏳ Baixando {len(episodes)} episódio(s)...")
+        try:
+            with loading(f"Baixando {len(episodes)} episódio(s)..."):
+                result = service.download_episodes(
+                    anime_title=selected_anime,
+                    range_input=range_input,
+                    total_episodes=num_episodes,
+                    get_episode_url=get_episode_url_for_download,
+                )
+
+            # Show result
+            print(f"\n{result.summary}")
+
+            if result.successful > 0:
+                print(f"✅ {result.successful} episódio(s) baixado(s) com sucesso!")
+                print(f"   Localização: {service.download_dir / selected_anime}")
+        except Exception as e:
+            print(f"❌ Erro ao baixar: {e}")
+        return
+    elif initial_action != "▶️ Assistir agora":
+        # User cancelled
+        return
+
     # Initialize video player for this session
     player = VideoPlayer()
 
