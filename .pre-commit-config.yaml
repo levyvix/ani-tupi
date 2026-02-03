@@ -22,4 +22,4 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
-        stages: [prek]
+        stages: [pre-commit]
