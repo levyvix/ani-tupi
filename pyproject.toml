@@ -56,7 +56,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "mypy>=1.19.1",
-    "prek>=4.5.1",
+    "prek>=0.3.0",
     "pyinstaller>=6.11.1",
     "pyright>=1.1.407",
     "pytest>=9.0.2",

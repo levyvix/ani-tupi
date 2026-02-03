@@ -15,7 +15,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 try:
-    from scrapling.fetchers import StealthySession
+    from scrapling.fetchers import StealthySession  # type: ignore[import-not-found]
 
     HAS_SCRAPLING = True
 except ImportError:
