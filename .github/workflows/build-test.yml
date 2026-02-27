@@ -54,13 +54,12 @@ jobs:
     - name: Verificar CLI instalado (Linux/macOS)
       if: runner.os != 'Windows'
       run: |
-        ani-tupi --help
         which ani-tupi
-        which manga-tupi
+        ani-tupi --help
 
     - name: Verificar CLI instalado (Windows)
       if: runner.os == 'Windows'
       shell: powershell
       run: |
+        Get-Command ani-tupi
         ani-tupi --help
-        manga-tupi --help
