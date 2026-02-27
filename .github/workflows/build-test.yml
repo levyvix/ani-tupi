@@ -2,12 +2,23 @@ name: Build Test
 
 on:
   push:
+    branches: [main, master]
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'install-cli.py'
+      - '.github/workflows/build-test.yml'
   pull_request:
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'install-cli.py'
+      - '.github/workflows/build-test.yml'
   workflow_dispatch:
 
 jobs:
   test-install-cli:
-    name: Testar install-cli.py - ${{ matrix.os }}
+    name: Test install-cli.py - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -24,25 +35,31 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Cache uv
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.local/bin/uv
+          ~/.cache/uv
+        key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-uv-
+
+    - name: Instalar UV
+      run: pip install uv
+
     - name: Executar install-cli.py
-      run: python3 install-cli.py || python install-cli.py
+      run: python3 install-cli.py
 
-    - name: Verificar UV instalado
-      run: uv --version
-
-    - name: Verificar comandos instalados (Linux/macOS)
+    - name: Verificar CLI instalado (Linux/macOS)
       if: runner.os != 'Windows'
       run: |
-        which ani-tupi
-        which manga-tupi
         ani-tupi --help
-        echo "✅ CLI instalado e funcionando!"
+        manga-tupi --help
 
-    - name: Verificar comandos instalados (Windows)
+    - name: Verificar CLI instalado (Windows)
       if: runner.os == 'Windows'
       shell: powershell
       run: |
-        Get-Command ani-tupi
-        Get-Command manga-tupi
         ani-tupi --help
-        echo "✅ CLI instalado e funcionando!"
+        manga-tupi --help
