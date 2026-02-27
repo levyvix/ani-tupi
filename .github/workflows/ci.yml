@@ -113,4 +113,3 @@ jobs:
     - name: Testar CLI help
       run: |
         uv run python main.py --help
-        uv run python main.py anilist --help

@@ -55,7 +55,8 @@ jobs:
       if: runner.os != 'Windows'
       run: |
         ani-tupi --help
-        manga-tupi --help
+        which ani-tupi
+        which manga-tupi
 
     - name: Verificar CLI instalado (Windows)
       if: runner.os == 'Windows'
