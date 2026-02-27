@@ -76,7 +76,7 @@ class TestMangaReader:
         """Should prioritize user-configured reader."""
         # Patch the global settings object directly
         with patch("models.config.settings.manga.pdf_reader", "myreader"):  # noqa
-            mock_which.side_effect = lambda x: ("/usr/bin/myreader" if x == "myreader" else None)
+            mock_which.side_effect = lambda x: "/usr/bin/myreader" if x == "myreader" else None
             reader = find_pdf_reader()
             assert reader == "myreader"
             mock_which.assert_called_with("myreader")
@@ -90,7 +90,7 @@ class TestMangaReader:
                 "models.config.settings.manga.pdf_reader_priority",  # noqa
                 ["nonexistent", "evince", "zathura"],
             ):
-                mock_which.side_effect = lambda x: (f"/usr/bin/{x}" if x == "evince" else None)
+                mock_which.side_effect = lambda x: f"/usr/bin/{x}" if x == "evince" else None
                 reader = find_pdf_reader()
                 assert reader == "evince"
                 # Verify the order of calls
