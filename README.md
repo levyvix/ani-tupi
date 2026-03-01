@@ -9,7 +9,35 @@ Assista anime e leia mangá direto do terminal sem anúncios! Interface CLI em p
 
 ## 🚀 Instalação Rápida
 
-### Instalação CLI Global (Recomendado)
+### Instalação com Um Comando (Recomendado)
+
+A forma mais fácil de instalar - execute apenas um comando:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/levyvix/ani-tupi/main/install.sh | bash
+```
+
+Ou se preferir salvar o script primeiro:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/levyvix/ani-tupi/main/install.sh -o install.sh
+bash install.sh
+```
+
+**O instalador faz automaticamente:**
+- ✅ Detecta seu sistema (Linux, macOS, WSL)
+- ✅ Verifica dependências (git, Python 3.12+)
+- ✅ Instala UV se necessário
+- ✅ Clona o repositório
+- ✅ Instala ani-tupi como CLI global
+- ✅ Configura o PATH automaticamente
+
+**Requisitos do instalador:**
+- `curl` - para baixar o script
+- `git` - para clonar o repositório
+- `Python 3.12+` - será detectado automaticamente
+
+### Instalação CLI Global (Alternativa)
 
 Instala `ani-tupi` e `manga-tupi` como comandos globais - use em qualquer lugar do sistema!
 
