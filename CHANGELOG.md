@@ -1,6 +1,66 @@
 # CHANGELOG
 
 
+## v0.8.0 (2026-03-15)
+
+### Bug Fixes
+
+- Implement JSON debug logging with custom sink instead of format parameter
+  ([`44d805c`](https://github.com/levyvix/ani-tupi/commit/44d805c00336981f70b7be8a3c93d71afe00f465))
+
+- Remove incorrect SensitiveDataFilter sink in logging config
+  ([`a8e42f4`](https://github.com/levyvix/ani-tupi/commit/a8e42f4866fc0721c8ff1e774c76da8c6f297bcc))
+
+- Respect --query argument in search flow
+  ([`5690179`](https://github.com/levyvix/ani-tupi/commit/569017955481e26d7994bb3f513d4c4f44399d02))
+
+The debug stub (if not args.debug else 'eva') was overriding the user's --query argument, causing
+  searches to always use 'eva' when --debug was set. Removed the unconditional override to respect
+  the provided query.
+
+- **tests**: Update manga_reader tests to assert on logger.info instead of print
+  ([`07e299d`](https://github.com/levyvix/ani-tupi/commit/07e299df4eddcf555f52a266d01509ca4f40c65b))
+
+### Chores
+
+- Init gsd
+  ([`080c669`](https://github.com/levyvix/ani-tupi/commit/080c66909d6e1acdaebc2099f03e5014ea59b251))
+
+- **S02/T01**: Start print replacement — services/anime/search.py done
+  ([`04f1f57`](https://github.com/levyvix/ani-tupi/commit/04f1f5780c003ca146040de0b555e7b824efea98))
+
+### Code Style
+
+- Apply ruff format to 9 files
+  ([`db74f6f`](https://github.com/levyvix/ani-tupi/commit/db74f6f90d05c35be5b16c6b10638dcdb7717982))
+
+### Continuous Integration
+
+- Add smoke test job for ani-tupi -q naruto to catch playwright/scrapling install errors
+  ([`e83abe3`](https://github.com/levyvix/ani-tupi/commit/e83abe3c9e2a1a494b9a6ba23f609a3b68a8b218))
+
+### Documentation
+
+- **M001**: Context, requirements, and roadmap
+  ([`946f5a7`](https://github.com/levyvix/ani-tupi/commit/946f5a72e31e3a7cb20890823a50985499d07f5c))
+
+- **M001**: Mark milestone complete — all slices done, 28 tests passing
+  ([`309333e`](https://github.com/levyvix/ani-tupi/commit/309333e51cb97cf9114f2b08ff932b269ffd9434))
+
+### Features
+
+- **S01/T01**: Logging infrastructure with JSON format, rotation, and sensitive data masking
+  ([`d6a7fd0`](https://github.com/levyvix/ani-tupi/commit/d6a7fd0e8b813a341928367e484afd4e3716ae16))
+
+- **S02**: Replace all 495+ print() calls with loguru logger calls across 30 files
+  ([`0486ac5`](https://github.com/levyvix/ani-tupi/commit/0486ac5c9ad875f8dec86ef37d66ba00bff2802e))
+
+### Testing
+
+- **S03**: Add integration tests for debug logging
+  ([`e17896d`](https://github.com/levyvix/ani-tupi/commit/e17896d4a6e42c6ed86bbbd09b29adfe157824b4))
+
+
 ## v0.7.0 (2026-03-14)
 
 ### Chores
