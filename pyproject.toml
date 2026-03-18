@@ -1,6 +1,6 @@
 [project]
 name = "ani-tupi"
-version = "0.2.2"
+version = "0.8.0"
 description = "Assista anime e leia mangá direto do terminal sem anúncios"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -127,3 +127,23 @@ check_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "master"
+upload_to_pypi = false
+upload_to_release = true
+build_command = "echo 'no build needed'"
+commit_message = "chore(version): bump to {version}"
+tag_format = "v{version}"
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["feat", "fix", "perf", "refactor", "docs", "chore", "test", "ci", "style", "build"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
+
+[tool.semantic_release.remote]
+type = "github"

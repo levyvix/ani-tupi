@@ -513,9 +513,17 @@ git push origin master
 The release bot commits the version bump and CHANGELOG directly to remote, so the local branch will be behind. This is expected — just rebase and push.
 
 **Configuration**:
-- Release rules: `.releaserc.json` (what triggers bumps)
+- Release rules: `[tool.semantic_release]` in `pyproject.toml` (what triggers bumps)
 - Workflow: `.github/workflows/release.yml` (GitHub Actions)
+- Tool: `python-semantic-release` (not Node.js `semantic-release`)
 - Always use conventional commits to get the correct version bump
+
+**Troubleshooting Release Failures**:
+- **Release workflow didn't trigger**: Check that CI workflow name is exactly "CI" (matches `workflow_run` trigger)
+- **Version not bumped**: Ensure commits use correct conventional format (`feat:`, `fix:`, etc.)
+- **Push permission error**: Ensure `GITHUB_TOKEN` has `contents: write` permission in workflow
+- **"no release will be made"**: Normal for feature branches; release only happens on `master`/`main`
+- **Version mismatch**: If `pyproject.toml` version diverges from latest git tag, manually update to match (`git tag -l | sort -V | tail -1`)
 
 ---
 
