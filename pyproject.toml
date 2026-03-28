@@ -38,6 +38,7 @@ dependencies = [
     "selenium>=4.0.0",
     "bs4>=0.0.2",
     "scrapling[fetchers]>=0.4.2",
+    "cloakbrowser>=0.3.18",
 ]
 
 [project.scripts]

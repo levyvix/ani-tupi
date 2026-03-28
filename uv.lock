@@ -17,6 +17,7 @@ version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "bs4" },
+    { name = "cloakbrowser" },
     { name = "diskcache" },
     { name = "fuzzywuzzy" },
     { name = "httpx" },
@@ -56,6 +57,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "bs4", specifier = ">=0.0.2" },
+    { name = "cloakbrowser", specifier = ">=0.3.18" },
     { name = "diskcache", specifier = ">=5.6.3" },
     { name = "fuzzywuzzy", specifier = ">=0.18.0" },
     { name = "httpx", specifier = ">=0.28.1" },
@@ -312,6 +314,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ef/ff/d291d66595b30b83d1cb9e314b2c9be7cfc7327d4a0d40a15da2416ea97b/click_option_group-0.5.9.tar.gz", hash = "sha256:f94ed2bc4cf69052e0f29592bd1e771a1789bd7bfc482dd0bc482134aff95823", size = 22222, upload-time = "2025-10-09T09:38:01.474Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/75/45/54bb2d8d4138964a94bef6e9afe48b0be4705ba66ac442ae7d8a8dc4ffef/click_option_group-0.5.9-py3-none-any.whl", hash = "sha256:ad2599248bd373e2e19bec5407967c3eec1d0d4fc4a5e77b08a0481e75991080", size = 11553, upload-time = "2025-10-09T09:38:00.066Z" },
+]
+
+[[package]]
+name = "cloakbrowser"
+version = "0.3.18"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "playwright" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/54/19/e6e07d32a1463039780b625f1eeb792ed8da803a312b438ce706f34c4ef7/cloakbrowser-0.3.18.tar.gz", hash = "sha256:48874975cad210c7a1d1042d8cabb3eabdf888b607b369f607ea1f17e6982725", size = 5244832, upload-time = "2026-03-15T16:23:02.032Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c8/f3/fd3f00535420543ce9add0ccee66d9afe75c7c669af6f118f736f4987a6a/cloakbrowser-0.3.18-py3-none-any.whl", hash = "sha256:a47e66b7162cb3ec654d597525f743f5f104a8d16d3ea0cb4ae0f58956f59dd9", size = 53055, upload-time = "2026-03-15T16:23:00.416Z" },
 ]
 
 [[package]]
