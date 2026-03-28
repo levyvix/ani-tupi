@@ -208,13 +208,33 @@ class TestDattebayoEpisodes:
         assert all(u.startswith("https://") for u in urls)
 
 
+def _make_selenium_mock(js_candidates: list[str]) -> MagicMock:
+    """Create a mock SeleniumWebDriver context manager returning given JS candidates."""
+    mock_driver = MagicMock()
+    mock_driver.fetch.return_value = MagicMock()
+    mock_driver.driver.execute_script.return_value = js_candidates
+    mock_ctx = MagicMock()
+    mock_ctx.__enter__ = MagicMock(return_value=mock_driver)
+    mock_ctx.__exit__ = MagicMock(return_value=False)
+    return mock_ctx
+
+
+def _make_requests_get_mock(status_code: int) -> MagicMock:
+    mock_resp = MagicMock()
+    mock_resp.status_code = status_code
+    return mock_resp
+
+
 class TestDattebayoPlayerSrc:
     def setup_method(self):
         self.scraper = DattebayoBR()
 
     @patch("scrapers.plugins.dattebayo.requests.get")
-    def test_extracts_url_via_meta_tag(self, mock_get):
-        mock_get.return_value = _make_response(VIDEO_PAGE_META_HTML)
+    @patch("scrapers.plugins.dattebayo.SeleniumWebDriver")
+    def test_extracts_url_via_meta_tag(self, mock_selenium_cls, mock_get):
+        video_url = "https://r2.example.com/fful/544709.mp4?sig=abc"
+        mock_selenium_cls.return_value = _make_selenium_mock([video_url])
+        mock_get.return_value = _make_requests_get_mock(206)
         container = []
         event = MagicMock()
         event.is_set.return_value = False
@@ -226,8 +246,18 @@ class TestDattebayoPlayerSrc:
         event.set.assert_called_once()
 
     @patch("scrapers.plugins.dattebayo.requests.get")
-    def test_fallback_to_js_var_vid(self, mock_get):
-        mock_get.return_value = _make_response(VIDEO_PAGE_JS_HTML)
+    @patch("scrapers.plugins.dattebayo.SeleniumWebDriver")
+    def test_fallback_hd_when_fullhd_404(self, mock_selenium_cls, mock_get):
+        fullhd_url = "https://r2.example.com/fful/12345.mp4?sig=abc"
+        hd_url = "https://r2.example.com/f222/12345.mp4?sig=abc"
+        mock_selenium_cls.return_value = _make_selenium_mock([fullhd_url, hd_url])
+
+        def side_effect(url, **kwargs):
+            resp = MagicMock()
+            resp.status_code = 200 if "f222" in url else 404
+            return resp
+
+        mock_get.side_effect = side_effect
         container = []
         event = MagicMock()
         event.is_set.return_value = False
@@ -235,12 +265,13 @@ class TestDattebayoPlayerSrc:
         self.scraper.search_player_src("https://www.dattebayo-br.com/videos/1", container, event)
 
         assert len(container) == 1
-        assert "12345.mp4" in container[0]
+        assert "f222" in container[0]
         event.set.assert_called_once()
 
     @patch("scrapers.plugins.dattebayo.requests.get")
-    def test_no_url_found_does_not_crash(self, mock_get):
-        mock_get.return_value = _make_response(VIDEO_PAGE_NO_URL_HTML)
+    @patch("scrapers.plugins.dattebayo.SeleniumWebDriver")
+    def test_no_url_found_does_not_crash(self, mock_selenium_cls, mock_get):
+        mock_selenium_cls.return_value = _make_selenium_mock([])
         container = []
         event = MagicMock()
         event.is_set.return_value = False
