@@ -237,13 +237,14 @@ Veja automaticamente quais animes da sua lista AniList têm novos episódios no 
 - **Tab "🎬 Novos Episódios"** no menu AniList
 - Mostra quanto você está atrasado em cada anime (gap em episódios)
 - Ordena por urgência (animes com maior atraso primeiro)
+- **Grace period de 60 dias**: animes que terminaram de ser transmitidos continuam visíveis por 60 dias, para você não perder o fio da meada
 - Selecione para assistir diretamente
 
 **Exemplo:**
 ```
-Jujutsu Kaisen - Ep 25 aired, você viu 22 (3 atrasado) ⭐82%
-Dandadan - Ep 18 aired, você viu 15 (3 atrasado) ⭐79%
-Blue Lock - Ep 11 aired, você viu 11 (0 atrasado) ⭐75%
+(2 atrasado) Frieren S2 - Anime finalizado, você viu 26/28 ⭐91%
+(3 atrasado) Jujutsu Kaisen - Próximo Ep 25 sai em 2d 4h, você viu 22 ⭐82%
+Blue Lock - Próximo Ep 11 sai em 5d, você viu 11 ⭐75%
 ```
 
 ### 🏠 Biblioteca Local - Assistir Offline
@@ -360,6 +361,7 @@ Veja automaticamente quais animes da sua lista AniList têm novos episódios no 
 - **Tab "🎬 Novos Episódios"** no menu AniList
 - Mostra quanto você está atrasado em cada anime (gap em episódios)
 - Ordena por urgência (animes com maior atraso primeiro)
+- **Grace period de 60 dias**: animes recém-finalizados permanecem visíveis com o label "Anime finalizado, você viu X/Y" (configurável via `ANI_TUPI__AIRING__GRACE_PERIOD_DAYS`)
 - Selecione para assistir diretamente
 
 ### 🏠 Biblioteca Local (Download & Offline)
