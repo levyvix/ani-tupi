@@ -379,6 +379,17 @@ class MangaSettings(BaseModel):
     )
 
 
+class AiringSettings(BaseModel):
+    """Settings for airing episodes feature."""
+
+    grace_period_days: int = Field(
+        60,
+        ge=1,
+        le=365,
+        description="Days after a show finishes airing to keep it visible in the New Episodes tab (default: 60)",
+    )
+
+
 class AppSettings(BaseSettings):
     """Root application settings with environment variable support.
 
@@ -407,6 +418,7 @@ class AppSettings(BaseSettings):
     offline_sync: OfflineSyncConfig = OfflineSyncConfig()  # type: ignore[call-arg]
     manga: MangaSettings = MangaSettings()  # type: ignore[call-arg]
     performance: PerformanceSettings = PerformanceSettings()  # type: ignore[call-arg]
+    airing: AiringSettings = AiringSettings()  # type: ignore[call-arg]
 
 
 # Singleton instance - import and use throughout the app

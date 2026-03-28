@@ -1013,8 +1013,13 @@ def _show_airing_episodes() -> None:
 
         for entry in airing_anime:
             # Format: "(Z atrasado) Title - Próximo Ep X sai em Xh Ym, você viu Y ⭐Score%"
-            time_until = _format_time_until_airing(entry.airing_at)
-            status_str = f"Próximo Ep {entry.next_episode_number} sai {time_until}, você viu {entry.progress}"
+            if entry.airing_at is None and entry.episodes_behind > 0:
+                status_str = (
+                    f"Anime finalizado, você viu {entry.progress}/{entry.next_episode_number}"
+                )
+            else:
+                time_until = _format_time_until_airing(entry.airing_at)
+                status_str = f"Próximo Ep {entry.next_episode_number} sai {time_until}, você viu {entry.progress}"
 
             prefix = f"({entry.episodes_behind} atrasado) " if entry.episodes_behind > 0 else ""
 

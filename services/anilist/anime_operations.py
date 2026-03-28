@@ -609,6 +609,12 @@ class AnimeOperationsMixin:
                             }
                             averageScore
                             status
+                            episodes
+                            endDate {
+                                year
+                                month
+                                day
+                            }
                             nextAiringEpisode {
                                 episode
                                 airingAt

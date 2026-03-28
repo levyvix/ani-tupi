@@ -431,3 +431,133 @@ class TestAiringEpisodesServiceMultipleAnime:
         assert result[0].episodes_behind == 14  # Anime 2: 20 - 5 = 15
         assert result[1].episodes_behind == 6  # Anime 3: 10 - 3 = 7
         assert result[2].episodes_behind == 2  # Anime 1: 15 - 12 = 3
+
+
+class TestGracePeriodIntegration:
+    """Integration tests for recently-finished anime grace period."""
+
+    def _finished_entry(
+        self,
+        anilist_id: int,
+        title: str,
+        progress: int,
+        total_episodes: int,
+        end_date: dict,
+    ) -> dict:
+        return {
+            "progress": progress,
+            "media": {
+                "id": anilist_id,
+                "title": {"romaji": title, "english": None, "native": None},
+                "averageScore": 80,
+                "status": "FINISHED",
+                "episodes": total_episodes,
+                "endDate": end_date,
+                "nextAiringEpisode": None,
+            },
+        }
+
+    def test_recently_finished_with_pending_episodes_appears(
+        self, airing_episodes_service, mock_anilist_client
+    ):
+        """Anime finished within grace period with pending episodes should appear."""
+        from datetime import datetime, timedelta, timezone
+
+        recent = datetime.now(tz=timezone.utc) - timedelta(days=10)
+        end_date = {"year": recent.year, "month": recent.month, "day": recent.day}
+
+        mock_anilist_client.get_airing_episodes_for_watching.return_value = [
+            self._finished_entry(9001, "Frieren S2", 20, 28, end_date),
+        ]
+
+        result = airing_episodes_service.get_watching_with_airing_episodes()
+
+        assert len(result) == 1
+        assert result[0].anilist_id == 9001
+        assert result[0].episodes_behind == 8  # 28 - 20
+        assert result[0].airing_at is None
+
+    def test_finished_outside_grace_period_does_not_appear(
+        self, airing_episodes_service, mock_anilist_client
+    ):
+        """Anime that finished more than 60 days ago should not appear."""
+        from datetime import datetime, timedelta, timezone
+
+        old = datetime.now(tz=timezone.utc) - timedelta(days=90)
+        end_date = {"year": old.year, "month": old.month, "day": old.day}
+
+        mock_anilist_client.get_airing_episodes_for_watching.return_value = [
+            self._finished_entry(9002, "Old Anime", 10, 20, end_date),
+        ]
+
+        result = airing_episodes_service.get_watching_with_airing_episodes()
+
+        assert result == []
+
+    def test_finished_with_no_end_date_does_not_appear(
+        self, airing_episodes_service, mock_anilist_client
+    ):
+        """Anime finished without endDate should not appear in grace period."""
+        mock_anilist_client.get_airing_episodes_for_watching.return_value = [
+            {
+                "progress": 5,
+                "media": {
+                    "id": 9003,
+                    "title": {"romaji": "No Date Anime", "english": None, "native": None},
+                    "averageScore": 80,
+                    "status": "FINISHED",
+                    "episodes": 12,
+                    "endDate": None,
+                    "nextAiringEpisode": None,
+                },
+            }
+        ]
+
+        result = airing_episodes_service.get_watching_with_airing_episodes()
+
+        assert result == []
+
+    def test_finished_with_no_total_episodes_does_not_appear(
+        self, airing_episodes_service, mock_anilist_client
+    ):
+        """Anime finished without known total episodes should not appear."""
+        from datetime import datetime, timedelta, timezone
+
+        recent = datetime.now(tz=timezone.utc) - timedelta(days=5)
+        end_date = {"year": recent.year, "month": recent.month, "day": recent.day}
+
+        mock_anilist_client.get_airing_episodes_for_watching.return_value = [
+            {
+                "progress": 5,
+                "media": {
+                    "id": 9004,
+                    "title": {"romaji": "Unknown Count", "english": None, "native": None},
+                    "averageScore": 80,
+                    "status": "FINISHED",
+                    "episodes": None,
+                    "endDate": end_date,
+                    "nextAiringEpisode": None,
+                },
+            }
+        ]
+
+        result = airing_episodes_service.get_watching_with_airing_episodes()
+
+        assert result == []
+
+    def test_finished_and_fully_watched_does_not_appear(
+        self, airing_episodes_service, mock_anilist_client
+    ):
+        """Anime finished and fully watched (progress >= episodes) should not appear."""
+        from datetime import datetime, timedelta, timezone
+
+        recent = datetime.now(tz=timezone.utc) - timedelta(days=5)
+        end_date = {"year": recent.year, "month": recent.month, "day": recent.day}
+
+        mock_anilist_client.get_airing_episodes_for_watching.return_value = [
+            self._finished_entry(9005, "Completed Anime", 24, 24, end_date),
+        ]
+
+        result = airing_episodes_service.get_watching_with_airing_episodes()
+
+        assert result == []

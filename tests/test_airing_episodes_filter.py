@@ -180,3 +180,60 @@ class TestGetWatchingWithAwaitingEpisodes:
 
         assert len(result) == 1
         assert result[0].anilist_id == 1001
+
+
+class TestParseEndDate:
+    """Tests for _parse_end_date helper method."""
+
+    def test_complete_date(self):
+        """Full date returns correct datetime."""
+        from datetime import datetime, timezone
+
+        result = AiringEpisodesService._parse_end_date({"year": 2025, "month": 3, "day": 15})
+        assert result == datetime(2025, 3, 15, tzinfo=timezone.utc)
+
+    def test_missing_day_uses_first(self):
+        """Missing day falls back to day 1."""
+        from datetime import datetime, timezone
+
+        result = AiringEpisodesService._parse_end_date({"year": 2025, "month": 3, "day": None})
+        assert result == datetime(2025, 3, 1, tzinfo=timezone.utc)
+
+    def test_missing_month_and_day_uses_january_first(self):
+        """Missing month and day falls back to Jan 1."""
+        from datetime import datetime, timezone
+
+        result = AiringEpisodesService._parse_end_date({"year": 2025, "month": None, "day": None})
+        assert result == datetime(2025, 1, 1, tzinfo=timezone.utc)
+
+    def test_none_returns_none(self):
+        """None input returns None."""
+        assert AiringEpisodesService._parse_end_date(None) is None
+
+    def test_missing_year_returns_none(self):
+        """Missing year returns None (not enough data)."""
+        assert AiringEpisodesService._parse_end_date({"year": None, "month": 3, "day": 15}) is None
+
+
+class TestIsWithinGracePeriod:
+    """Tests for _is_within_grace_period helper method."""
+
+    def test_ended_recently_returns_true(self):
+        """Anime that ended 10 days ago is within grace period."""
+        from datetime import datetime, timedelta, timezone
+
+        recent = datetime.now(tz=timezone.utc) - timedelta(days=10)
+        end_date = {"year": recent.year, "month": recent.month, "day": recent.day}
+        assert AiringEpisodesService._is_within_grace_period(end_date) is True
+
+    def test_ended_beyond_grace_period_returns_false(self):
+        """Anime that ended 90 days ago is outside grace period."""
+        from datetime import datetime, timedelta, timezone
+
+        old = datetime.now(tz=timezone.utc) - timedelta(days=90)
+        end_date = {"year": old.year, "month": old.month, "day": old.day}
+        assert AiringEpisodesService._is_within_grace_period(end_date) is False
+
+    def test_none_returns_false(self):
+        """None end_date returns False."""
+        assert AiringEpisodesService._is_within_grace_period(None) is False

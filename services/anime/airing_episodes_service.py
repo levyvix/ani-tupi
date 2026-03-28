@@ -11,7 +11,9 @@ This service supports the "Novos Episódios" (New Episodes) tab feature by:
 
 import logging
 import time
+from datetime import datetime, timezone
 
+from models.config import settings
 from models.models import AiringAnimeEntry, AniListTitle
 from services.anilist_service import anilist_client
 
@@ -28,6 +30,49 @@ class AiringEpisodesService:
     def __init__(self):
         """Initialize service with AniList client."""
         self.client = anilist_client
+
+    @staticmethod
+    def _parse_end_date(end_date: dict | None) -> datetime | None:
+        """Parse AniList endDate object to datetime using conservative fallback.
+
+        Args:
+            end_date: Dict with year, month, day keys (any may be None)
+
+        Returns:
+            datetime in UTC or None if end_date is None or year is missing
+        """
+        if not end_date:
+            return None
+
+        year = end_date.get("year")
+        if not year:
+            return None
+
+        month = end_date.get("month") or 1
+        day = end_date.get("day") or 1
+
+        try:
+            return datetime(year, month, day, tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _is_within_grace_period(end_date_obj: dict | None) -> bool:
+        """Check if an anime's end date is within the 60-day grace period.
+
+        Args:
+            end_date_obj: AniList endDate dict with year, month, day
+
+        Returns:
+            True if the anime ended less than GRACE_PERIOD_DAYS days ago
+        """
+        end_dt = AiringEpisodesService._parse_end_date(end_date_obj)
+        if end_dt is None:
+            return False
+
+        now = datetime.now(tz=timezone.utc)
+        delta = now - end_dt
+        return delta.days < settings.airing.grace_period_days
 
     @staticmethod
     def _is_awaiting_episode(airing_at: int | None) -> bool:
@@ -94,21 +139,7 @@ class AiringEpisodesService:
                 if not media:
                     continue
 
-                # Skip if no airing episode data
-                next_airing = media.get("nextAiringEpisode")
-                if not next_airing:
-                    continue
-
-                # NEW: Filter for only "awaiting" episodes
-                airing_at = next_airing.get("airingAt")
-                if not self._is_awaiting_episode(airing_at):
-                    logger.debug(
-                        f"Skipping anime {media.get('id')}: episode not awaiting "
-                        f"(airing_at={airing_at})"
-                    )
-                    continue
-
-                # Extract title
+                # Extract title (shared by both airing and grace period paths)
                 title_obj = media.get("title", {})
                 if isinstance(title_obj, dict):
                     title = (
@@ -122,29 +153,66 @@ class AiringEpisodesService:
                 else:
                     title = str(title_obj)
 
-                # Extract next episode number
-                next_episode_number = next_airing.get("episode", 0)
-                if next_episode_number <= 0:
-                    continue
-
-                # Calculate gap: episodes behind = (last aired episode) - (user progress)
-                # where last aired episode = next_episode_number - 1
-                episodes_behind = max(0, (next_episode_number - 1) - progress)
-
-                # Extract optional fields
                 anilist_id = media.get("id", 0)
                 average_score = media.get("averageScore")
 
-                # Create AiringAnimeEntry
-                entry_obj = AiringAnimeEntry(
-                    anilist_id=anilist_id,
-                    title=title,
-                    progress=progress,
-                    next_episode_number=next_episode_number,
-                    episodes_behind=episodes_behind,
-                    airing_at=airing_at,
-                    average_score=average_score,
-                )
+                next_airing = media.get("nextAiringEpisode")
+
+                if next_airing:
+                    # Active airing: filter for only "awaiting" episodes
+                    airing_at = next_airing.get("airingAt")
+                    if not self._is_awaiting_episode(airing_at):
+                        logger.debug(
+                            f"Skipping anime {media.get('id')}: episode not awaiting "
+                            f"(airing_at={airing_at})"
+                        )
+                        continue
+
+                    next_episode_number = next_airing.get("episode", 0)
+                    if next_episode_number <= 0:
+                        continue
+
+                    # episodes behind = (last aired episode) - (user progress)
+                    episodes_behind = max(0, (next_episode_number - 1) - progress)
+
+                    entry_obj = AiringAnimeEntry(
+                        anilist_id=anilist_id,
+                        title=title,
+                        progress=progress,
+                        next_episode_number=next_episode_number,
+                        episodes_behind=episodes_behind,
+                        airing_at=airing_at,
+                        average_score=average_score,
+                    )
+                else:
+                    # No next airing episode — check grace period for recently finished anime
+                    media_status = media.get("status")
+                    total_episodes = media.get("episodes")
+                    end_date_obj = media.get("endDate")
+
+                    if media_status != "FINISHED":
+                        continue
+                    if not total_episodes:
+                        continue
+                    if not self._is_within_grace_period(end_date_obj):
+                        logger.debug(
+                            f"Skipping finished anime {media.get('id')}: outside grace period"
+                        )
+                        continue
+                    if progress >= total_episodes:
+                        continue
+
+                    episodes_behind = total_episodes - progress
+
+                    entry_obj = AiringAnimeEntry(
+                        anilist_id=anilist_id,
+                        title=title,
+                        progress=progress,
+                        next_episode_number=total_episodes,
+                        episodes_behind=episodes_behind,
+                        airing_at=None,
+                        average_score=average_score,
+                    )
 
                 airing_anime.append(entry_obj)
 
