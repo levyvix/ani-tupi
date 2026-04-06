@@ -3,14 +3,35 @@
 Mixin class providing manga trending, lists, search, and sync.
 """
 
+from typing import Protocol
+
 from models.models import (
     AniListManga,
     AniListMediaListEntry,
+    AniListViewerInfo,
     Status,
 )
 
 
-class MangaOperationsMixin:
+class _MangaOperationsRequired(Protocol):
+    """Protocol defining methods required by MangaOperationsMixin."""
+
+    user_id: int | None
+
+    def _query(self, query: str, variables: dict | None = None) -> dict | None:
+        """Execute GraphQL query."""
+        ...
+
+    def is_authenticated(self) -> bool:
+        """Check if authenticated."""
+        ...
+
+    def get_viewer_info(self) -> AniListViewerInfo | None:
+        """Get authenticated user info."""
+        ...
+
+
+class MangaOperationsMixin(_MangaOperationsRequired):  # type: ignore[misc]
     """Mixin providing manga-specific AniList operations.
 
     Requires: self._query(), self.is_authenticated(), self.get_viewer_info(),

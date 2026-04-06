@@ -203,7 +203,9 @@ class MangaDex:
 
         # Fallback to first available language in title
         if isinstance(title, dict):
-            return next(iter(title.values()))
+            value = next(iter(title.values()))
+            if isinstance(value, str):
+                return value
 
         return "Unknown"
 

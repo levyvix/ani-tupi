@@ -57,19 +57,14 @@ class MangaLivre:
                 if retry_count > 0:
                     time.sleep(2)
 
-                # Fetch with adaptive StealthyFetcher for robustness against design changes
-                # Increase timeout on retry attempts
-                timeout = 30000 + (retry_count * 10000)  # 30s, 40s, 50s
-                tree = SeleniumWebDriver().fetch(
-                    search_url, headless=True, adaptive=True, timeout=timeout
-                )
+                # Fetch search results with Selenium
+                tree = SeleniumWebDriver().fetch(search_url)
 
                 results = []
 
                 # Parse manga results from WordPress theme
                 # Search results use div.manga-card structure
-                # Using adaptive=True to survive website design changes
-                manga_cards = tree.select("div.manga-card", adaptive=True, auto_save=True)
+                manga_cards = tree.select("div.manga-card")
 
                 for card in manga_cards:
                     try:
@@ -79,7 +74,12 @@ class MangaLivre:
                             continue
 
                         link = links[0]
-                        url = link.attrib.get("href", "")
+                        if not link:
+                            continue
+                        url_val = link.attrib.get("href", "")  # type: ignore
+                        url = (
+                            url_val if isinstance(url_val, str) else str(url_val) if url_val else ""
+                        )
                         if not url:
                             continue
 
@@ -125,7 +125,10 @@ class MangaLivre:
                         )
 
                         # Extract manga ID from URL (slug)
-                        manga_id = url.rstrip("/").split("/")[-1]
+                        if isinstance(url, str):
+                            manga_id = url.rstrip("/").split("/")[-1]
+                        else:
+                            manga_id = str(url).rstrip("/").split("/")[-1] if url else "unknown"
 
                         results.append(
                             {
@@ -174,9 +177,8 @@ class MangaLivre:
             ]
         """
         try:
-            # Use DynamicFetcher to render page and wait for AJAX-loaded chapters
-            # Use Firefox for better library compatibility
-            tree = SeleniumWebDriver().fetch(manga_url, timeout=15000, browser="firefox")
+            # Use Selenium to render page and wait for AJAX-loaded chapters
+            tree = SeleniumWebDriver().fetch(manga_url)
 
             chapters = []
 
@@ -190,8 +192,13 @@ class MangaLivre:
                         continue
 
                     link = links[0]
-                    chapter_url = link.attrib.get("href", "")
-                    chapter_title = str(link.text).strip()
+                    if not link:
+                        continue
+                    url_val = link.attrib.get("href", "")  # type: ignore[union-attr]
+                    chapter_url = (
+                        url_val if isinstance(url_val, str) else str(url_val) if url_val else ""
+                    )
+                    chapter_title = str(link.text).strip() if hasattr(link, "text") else ""
 
                     if not chapter_url:
                         continue
@@ -205,14 +212,20 @@ class MangaLivre:
                         chapter_number = number_match.group(1)
                     else:
                         # Try extracting from URL
-                        url_match = re.search(r"capitulo-(\d+(?:\.\d+)?)", chapter_url)
+                        chapter_url_str = (
+                            chapter_url if isinstance(chapter_url, str) else str(chapter_url)
+                        )
+                        url_match = re.search(r"capitulo-(\d+(?:\.\d+)?)", chapter_url_str)
                         if url_match:
                             chapter_number = url_match.group(1)
                         else:
                             continue  # Skip if no number found
 
                     # Generate chapter ID from URL
-                    chapter_id = chapter_url.rstrip("/").split("/")[-1]
+                    chapter_url_str = (
+                        chapter_url if isinstance(chapter_url, str) else str(chapter_url)
+                    )
+                    chapter_id = chapter_url_str.rstrip("/").split("/")[-1]
 
                     # Clean chapter title (remove "Capítulo X" and similar)
                     clean_title = re.sub(
@@ -261,15 +274,12 @@ class MangaLivre:
 
         while retry_count < max_retries:
             try:
-                # Use DynamicFetcher to render the page with JavaScript
-                # Use Firefox for better library compatibility
-                # Increase timeout significantly for MangaLivre's slow loading
-                timeout = 30000 + (retry_count * 10000)  # 30s, 40s, 50s
+                # Use Selenium to render the page with JavaScript
 
                 if retry_count > 0:
                     time.sleep(2)  # Wait before retrying
 
-                tree = SeleniumWebDriver().fetch(chapter_url, timeout=timeout, browser="firefox")
+                tree = SeleniumWebDriver().fetch(chapter_url)
 
                 page_urls = []
 
@@ -277,13 +287,15 @@ class MangaLivre:
                 all_images = tree.select("img")
 
                 for img in all_images:
+                    if not img:
+                        continue
                     # Try multiple attributes where image URL might be
                     # WordPress lazy-loading uses data-src or data-lazy-src
                     img_url = (
-                        img.attrib.get("data-src")
-                        or img.attrib.get("data-lazy-src")
-                        or img.attrib.get("src")
-                        or img.attrib.get("data-original")
+                        img.attrib.get("data-src")  # type: ignore
+                        or img.attrib.get("data-lazy-src")  # type: ignore
+                        or img.attrib.get("src")  # type: ignore
+                        or img.attrib.get("data-original")  # type: ignore
                     )
 
                     # Skip if no URL
@@ -291,7 +303,8 @@ class MangaLivre:
                         continue
 
                     # Strip whitespace
-                    img_url = img_url.strip()
+                    img_url_str = img_url if isinstance(img_url, str) else str(img_url)
+                    img_url = img_url_str.strip()
 
                     # Normalize URL - handle relative URLs
                     if not img_url.startswith("http"):

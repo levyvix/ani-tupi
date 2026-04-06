@@ -723,8 +723,9 @@ class EpisodeList(BaseModel, frozen=True):
         if not self.episodes:
             return []
         # Return longest episode list (most complete source)
-        longest_list = max([ep[1] for ep in self.episodes], key=len)
-        return longest_list
+        episode_lists = [ep[1] for ep in self.episodes]
+        longest_list = max(episode_lists, key=len)
+        return list(longest_list)
 
     def get_episode_url(self, episode_num: int) -> tuple[str, str] | None:
         """Get episode URL and source name (1-indexed).

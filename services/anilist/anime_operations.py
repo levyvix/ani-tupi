@@ -4,19 +4,40 @@ Mixin class providing anime trending, lists, search, sync, and relations.
 """
 
 import logging
+from typing import Protocol
+
 from models.models import (
     AniListAnime,
     AniListMediaListEntry,
     AniListActivity,
     AniListRelationEdge,
     AniListRelationNode,
+    AniListViewerInfo,
     Status,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class AnimeOperationsMixin:
+class _AnimeOperationsRequired(Protocol):
+    """Protocol defining methods required by AnimeOperationsMixin."""
+
+    user_id: int | None
+
+    def _query(self, query: str, variables: dict | None = None) -> dict | None:
+        """Execute GraphQL query."""
+        ...
+
+    def is_authenticated(self) -> bool:
+        """Check if authenticated."""
+        ...
+
+    def get_viewer_info(self) -> AniListViewerInfo | None:
+        """Get authenticated user info."""
+        ...
+
+
+class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
     """Mixin providing anime-specific AniList operations.
 
     Requires: self._query(), self.is_authenticated(), self.get_viewer_info(),

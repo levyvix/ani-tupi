@@ -26,7 +26,7 @@ def get_data_path() -> Path:
         Path: ~/.local/state/ani-tupi (Linux/macOS) or C:\\Program Files\\ani-tupi (Windows)
     """
     if os.name == "nt":
-        return Path("C:\\Program Files\\ani-tupi")  # type: ignore
+        return Path("C:\\Program Files\\ani-tupi")
     return Path.home() / ".local" / "state" / "ani-tupi"
 
 
