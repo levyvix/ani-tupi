@@ -146,7 +146,6 @@ install_cli() {
     cd "$INSTALL_DIR"
 
     if check_command uv; then
-        uv run scrapling install || true
         uv tool install --reinstall .
         local result=$?
     else

@@ -51,7 +51,6 @@ New service: RandomAnimeService in services/anime/random_anime_service.py
 
 - Replace sync_playwright mocks with SeleniumWebDriver in test_anitube_episode_ordering.py - Update
   mock setup to match SeleniumWebDriver context manager interface - Update BeautifulSoup selector
-  calls from query_selector_all to select - Clean up docstring references from Scrapling to
   SeleniumWebDriver in manga scrapers
 
 All 697 unit tests pass. Scrapers fully migrated to Selenium (except topanimes which uses Playwright
@@ -113,7 +112,6 @@ When a CDN URL follows a predictable episode pattern (e.g. /11.mp4/index.m3u8), 
 
 ### Features
 
-- Run scrapling install before tool install
   ([`1422d66`](https://github.com/levyvix/ani-tupi/commit/1422d665389a8688732df0d7f3a414f887a4b257))
 
 
@@ -1359,11 +1357,9 @@ These changes eliminate the cascade of API calls that was exceeding AniList's ra
 - Resolve AnimesDigital episode scraping with css_first() compatibility
   ([`49cfccb`](https://github.com/levyvix/ani-tupi/commit/49cfccbf41a29d1983460e505bc55f853386efb1))
 
-Fix compatibility issue with scrapling 0.3.14+ where individual Selector objects returned from css()
   don't have css_first() method. Only the root tree object has this method.
 
 Changes: - Replace css_first() calls with css() and array indexing pattern - More defensive approach
-  works across all scrapling versions - Add requests dependency to pyproject.toml
 
 Files: - scrapers/plugins/animesdigital.py: Fix css() usage in _scrape_series_page() -
   pyproject.toml: Add requests>=2.32.5 dependency
@@ -1410,11 +1406,8 @@ Scenario fixed: 1. User searches 'Jujutsu Kaisen' in Mugiwaras 2. Changes to Man
 
 The fix is transparent to users - automatic validation on source switch.
 
-- Resolve Scrapling dependency conflict
   ([`5f98432`](https://github.com/levyvix/ani-tupi/commit/5f984326f7de11a4d649e43f549cbc2a7b0aae8e))
 
-Remove explicit playwright and curl-cffi versions to avoid conflicts with Scrapling[all] which pins
-  its own versions: - scrapling[all]>=0.3.14 includes playwright==1.56.0 - Let Scrapling provide
   these dependencies transitively
 
 uv sync now succeeds with no dependency conflicts
@@ -2572,7 +2565,6 @@ prek is a Rust-based pre-commit alternative with full .pre-commit-config.yaml co
 * fix: replace pre-commit with prek and resolve pyright import error
 
 - Replace pre-commit tool with prek (Rust-based alternative) in dev dependencies - Fix pyright error
-  by adding type: ignore for optional scrapling import - All prek hooks now pass successfully
 
 - Implement anime title normalization for multi-source deduplication
   ([`692212a`](https://github.com/levyvix/ani-tupi/commit/692212aca4784fcf960fbf09f1056904a6d51b8c))
@@ -2779,7 +2771,6 @@ Search improvements: - Remove pagination in results (show all results directly) 
   Re-search when filtering returns ≤3 results for better coverage
 
 Scraper updates: - Increase AnimesDigital API limit from 90 to 200 episodes - Update AnimeFire to
-  use css()[0] pattern for scrapling compatibility - Set default dubbed_priority_order in config
 
 Test updates: - Update incremental search tests for new re-search behavior - Update AnimesDigital
   limit tests to expect 200
@@ -2863,15 +2854,12 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 
-- Migrate Phase 1 scrapers to Scrapling.Fetcher
   ([`a12c9ee`](https://github.com/levyvix/ani-tupi/commit/a12c9ee113708b7be73cc65be25a9496997229fc))
 
-Update AnimeFire, AnimesonlineCC, and MangaDex to use Scrapling.Fetcher for static HTTP requests
   instead of requests library.
 
 Changes: - Replace requests.get() with Fetcher().fetch() for HTTP requests - Update response
   attribute access: .text → .html, .json() unchanged - Add curl_cffi and playwright as dependencies
-  (required by Scrapling) - Keep selectolax for HTML parsing - Phase 1 static scrapers complete
 
 Scrapers updated: - scrapers/plugins/animefire.py: search_anime, search_episodes -
   scrapers/plugins/animesonlinecc.py: search_anime, search_episodes -
@@ -2899,12 +2887,8 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 - Phase 3 cleanup - remove Selenium and requests
   ([`1e7cdee`](https://github.com/levyvix/ani-tupi/commit/1e7cdeecd2ea55f8f64ea924ec63a798787ca481))
 
-Delete browser_pool.py: - No longer needed, replaced by Scrapling.DynamicFetcher - All scrapers
-  updated to use Scrapling
 
 Update pyproject.toml: - Remove: selenium>=4.26.1 (no longer used) - Remove: requests>=2.32.3
-  (Scrapling includes it) - Update: scrapling[all]>=0.3.14 (was 0.1.0, now includes all features) -
-  Keep: curl-cffi and playwright (added for Scrapling support)
 
 Phase 3.1-3.3 complete Remaining: uv sync to validate dependency resolution
 
@@ -2981,13 +2965,10 @@ Resolve problema onde buscava no AniList usando nome do scraper (ex: "Shangri-La
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 
-- Simplify AnimePlyer Phase 2.4 - always use Scrapling
   ([`6d49890`](https://github.com/levyvix/ani-tupi/commit/6d498906b214da19b4d149ffb20b077c7b1f8a61))
 
-Remove HAS_SCRAPLING conditional logic: - Always use StealthySession (no fallback to Selenium for
   search/episodes) - Remove browser_pool fallback from search_episodes
 
-Replace selectolax HTMLParser with Scrapling's native Selector API: - search_anime: Use native
   Selector (.css, .attrib, .text) - search_episodes: Use native Selector
 
 Update HTML parsing: - Use .attrib instead of .attributes - Use .text property instead of .text()
@@ -2995,7 +2976,6 @@ Update HTML parsing: - Use .attrib instead of .attributes - Use .text property i
 
 Note: search_player_src still uses Selenium (complex dynamic rendering)
 
-Phase 2 COMPLETE: All 7 scrapers now use Scrapling consistently - 4 anime scrapers (AnimeFire,
   AnimesonlineCC, AnimePlyer, AnimesDigital) - 3 manga scrapers (MangaDex, MangaLivre,
   MugiwarasOficial)
 
@@ -3053,52 +3033,38 @@ Updated plugins: - animefire.py: Use selectolax parser for search and episodes -
 
 Performance improvement: ~30-50% faster HTML parsing for searches
 
-- Update AnimesDigital Phase 2.1 - migrate to Scrapling APIs
   ([`4df6243`](https://github.com/levyvix/ani-tupi/commit/4df62435f0a188b027e6c48d13674e0437032e12))
 
-Replace requests + selectolax with Scrapling.Fetcher (static content): - search_anime: Use
   Fetcher.get() with native Selector API - search_episodes: Use Fetcher.get() with native Selector
   API - Update attribute access: .attributes → .attrib, .text() → .text
 
-Replace Selenium with Scrapling.DynamicFetcher (dynamic content): - search_player_src: Use
   DynamicFetcher.fetch() for JavaScript rendering - Extract iframes directly from rendered Selector
   - Remove browser_pool usage
 
-Benefits: - Unified HTTP handling via Scrapling - No Selenium overhead for dynamic content - Cleaner
   code with native Selector API
 
 Phase 2.1 complete
 
-- Update MangaLivre Phase 2.2 - migrate to Scrapling APIs
   ([`f5f2a65`](https://github.com/levyvix/ani-tupi/commit/f5f2a6576dc8e860f3b111451688341bf189e30a))
 
-Replace requests.Session with Scrapling.Fetcher for search: - search_manga: Use Fetcher.get() with
   native Selector API
 
-Replace Selenium WebDriver with Scrapling.DynamicFetcher for AJAX: - get_chapters: Render page and
   wait for AJAX-loaded chapter list - get_chapter_pages: Render page and extract lazy-loaded images
 
-Update HTML parsing: - Replace selectolax.HTMLParser with Scrapling's native Selector - Use .attrib
   instead of .attributes - Use .text property instead of .text() method
 
-Phase 2.2 complete: MangaLivre now uses Scrapling throughout
 
-- Update MugiwarasOficial Phase 2.3 - migrate to Scrapling APIs
   ([`6b2110a`](https://github.com/levyvix/ani-tupi/commit/6b2110aa992b04b1f9d8356c0acee354e9540ff2))
 
-Replace requests.Session with Scrapling.Fetcher for search: - search_manga: Use Fetcher.get() with
   native Selector API
 
-Replace Selenium with Scrapling.DynamicFetcher for AJAX + modal: - get_chapters: Render page and
   wait for AJAX-loaded chapter list - get_chapter_pages: Render page (handles age modal
   automatically)
 
-Update HTML parsing: - Replace selectolax.HTMLParser with Scrapling's native Selector - Use .attrib
   instead of .attributes - Use .text property instead of .text() method
 
 Note: Age verification modal is handled by DynamicFetcher's JavaScript rendering
 
-Phase 2.3 complete: MugiwarasOficial now uses Scrapling throughout
 
 - Upgrade AnimesDigital scraper to use Selenium with #termo_busca
   ([`a36e5d3`](https://github.com/levyvix/ani-tupi/commit/a36e5d36c7dc15e353fb346dd2217e70bc2fce81))
@@ -3416,18 +3382,14 @@ Images were never displayed in the terminal UI, so these fields were unnecessary
 - Reorganize imports and format code in video_player.py
   ([`73f94a1`](https://github.com/levyvix/ani-tupi/commit/73f94a1d83552278f1a262d9d1f5e71907dd9288))
 
-- Replace selectolax with Scrapling's native parser in Phase 1 scrapers
   ([`762fc00`](https://github.com/levyvix/ani-tupi/commit/762fc007d9cd59b43ce67df5b4d524f639b95c52))
 
-Use Scrapling's built-in HTML parsing (Selector API) instead of selectolax: - Fetcher.get() returns
   a Selector object with .css(), .xpath(), etc. - Use .attrib for attributes instead of .attributes
   - Use .text property for text content instead of .text() method - Remove selectolax imports from
   AnimeFire, AnimesonlineCC
 
 Benefits: - One fewer dependency to manage - Consistent HTML parsing across static and dynamic
-  fetching - Cleaner integration with Scrapling
 
-Phase 1 now complete: All static scrapers use Scrapling.Fetcher with native parser
 
 - Replace Textual with Rich + InquirerPy for TUI
   ([`69c5b2c`](https://github.com/levyvix/ani-tupi/commit/69c5b2cda837119526ce9c01d25fdbdc4b8ec421))
@@ -3583,7 +3545,6 @@ Remove test files that require complex HTTP/browser mocking: -
   tests/test_manga_workflow_integration.py - tests/test_mangalivre_integration.py -
   tests/test_mangalivre_plugin.py
 
-These tests were failing due to Scrapling DynamicFetcher mocking issues, not application code
   issues. Since app works perfectly, these can be reimplemented with proper test infrastructure
   later.
 
