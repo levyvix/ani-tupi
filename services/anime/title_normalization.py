@@ -7,6 +7,20 @@ for improved search results across different anime sources.
 import re
 import unicodedata
 
+_DUB_MARKERS = ("dublado", "dub", "dubbed")
+_SUB_MARKERS = ("legendado", "legendadas", "sub", "subbed", "subtitles", "subtitle")
+
+_SEASON_PATTERNS = (
+    re.compile(r"\bseason\s+(\d+)\b", re.IGNORECASE),
+    re.compile(r"\b(\d+)(?:st|nd|rd|th)\s+season\b", re.IGNORECASE),
+    re.compile(r"\btemporada\s+(\d+)\b", re.IGNORECASE),
+    re.compile(r"\bs(\d+)\b", re.IGNORECASE),
+)
+_PART_PATTERNS = (
+    re.compile(r"\bpart\s+(\d+)(?:st|nd|rd|th)?\b", re.IGNORECASE),
+    re.compile(r"\bcour\s+(\d+)\b", re.IGNORECASE),
+)
+
 
 def normalize_title_for_dedup(title: str) -> str:
     """Normalize title for deduplication across multiple sources.
@@ -83,6 +97,49 @@ def normalize_title_for_dedup(title: str) -> str:
 
     # Return normalized form, or original title (lowercased) if everything was removed
     return normalized if normalized else title.lower()
+
+
+def get_compact_normalized_title_key(normalized_title: str) -> str:
+    """Return whitespace-insensitive key from normalized title."""
+    return normalized_title.replace(" ", "")
+
+
+def get_language_version_markers(normalized_title: str) -> set[str]:
+    """Extract language/version markers from normalized title."""
+    marker_set = set()
+    words = set(normalized_title.split())
+
+    if any(marker in words for marker in _DUB_MARKERS):
+        marker_set.add("dub")
+    if any(marker in words for marker in _SUB_MARKERS):
+        marker_set.add("sub")
+
+    return marker_set
+
+
+def are_language_version_markers_compatible(title_a: str, title_b: str) -> bool:
+    """Allow compact-key dedup only when language/version markers align."""
+    return get_language_version_markers(title_a) == get_language_version_markers(title_b)
+
+
+def get_season_markers(normalized_title: str) -> set[tuple[str, int]]:
+    """Extract season/part markers from normalized title."""
+    markers = set()
+
+    for pattern in _SEASON_PATTERNS:
+        for match in pattern.findall(normalized_title):
+            markers.add(("season", int(match)))
+
+    for pattern in _PART_PATTERNS:
+        for match in pattern.findall(normalized_title):
+            markers.add(("part", int(match)))
+
+    return markers
+
+
+def are_season_markers_compatible(title_a: str, title_b: str) -> bool:
+    """Allow compact-key dedup only when season markers align."""
+    return get_season_markers(title_a) == get_season_markers(title_b)
 
 
 def normalize_anime_title(title: str, is_english: bool = False):

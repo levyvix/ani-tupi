@@ -15,7 +15,12 @@ PRESERVES (does NOT remove):
 - All meaningful content words
 """
 
-from services.anime.title_normalization import normalize_title_for_dedup
+from services.anime.title_normalization import (
+    are_language_version_markers_compatible,
+    are_season_markers_compatible,
+    get_compact_normalized_title_key,
+    normalize_title_for_dedup,
+)
 
 
 class TestSeparatorNormalization:
@@ -398,3 +403,37 @@ class TestDubladoVsLegendado:
         assert dubbed != subtitled
         assert subtitled != english_dub
         assert dubbed != english_dub
+
+
+class TestCompactFallbackHelpers:
+    """Test helper functions used by compact fallback dedup logic."""
+
+    def test_compact_key_removes_whitespace_only(self):
+        """Compact key removes spaces while preserving remaining characters."""
+        normalized = normalize_title_for_dedup("aaa b b cc")
+        assert normalized == "aaa b b cc"
+        assert get_compact_normalized_title_key(normalized) == "aaabbcc"
+
+    def test_language_compatibility_equal_markers(self):
+        """Same language markers are compatible."""
+        left = normalize_title_for_dedup("Anime A Dublado")
+        right = normalize_title_for_dedup("Anime A - Dublado")
+        assert are_language_version_markers_compatible(left, right) is True
+
+    def test_language_compatibility_incompatible_markers(self):
+        """Different language markers are incompatible."""
+        left = normalize_title_for_dedup("Anime A Dublado")
+        right = normalize_title_for_dedup("Anime A Legendado")
+        assert are_language_version_markers_compatible(left, right) is False
+
+    def test_season_compatibility_equal_markers(self):
+        """Equal season markers are compatible."""
+        left = normalize_title_for_dedup("Anime A Season 2")
+        right = normalize_title_for_dedup("Anime A - Season 2")
+        assert are_season_markers_compatible(left, right) is True
+
+    def test_season_compatibility_different_markers(self):
+        """Different season markers are incompatible."""
+        left = normalize_title_for_dedup("Anime A Season 2")
+        right = normalize_title_for_dedup("Anime A Season 3")
+        assert are_season_markers_compatible(left, right) is False

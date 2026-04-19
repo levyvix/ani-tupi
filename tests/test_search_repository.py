@@ -87,6 +87,59 @@ class TestSearchRepository:
         title = list(repo.anime_to_urls.keys())[0]
         assert len(repo.anime_to_urls[title]) == 2
 
+    def test_add_anime_compact_key_fallback_merges_split_join_variation(self):
+        """Compact fallback should merge split/join token variants safely."""
+        repo = SearchRepository()
+
+        repo.add_anime("aaa b b cc", "http://url1.com", "source1", {})
+        repo.add_anime("aaa bb cc", "http://url2.com", "source2", {})
+
+        assert len(repo.anime_to_urls) == 1
+        title = list(repo.anime_to_urls.keys())[0]
+        assert len(repo.anime_to_urls[title]) == 2
+
+    def test_add_anime_compact_key_does_not_merge_incompatible_language(self):
+        """Compact fallback should not merge dubbed and subtitled variants."""
+        repo = SearchRepository()
+
+        repo.add_anime("aaa b b cc dublado", "http://url1.com", "source1", {})
+        repo.add_anime("aaa bb cc legendado", "http://url2.com", "source2", {})
+
+        assert len(repo.anime_to_urls) == 2
+
+    def test_add_anime_compact_key_does_not_merge_different_season_markers(self):
+        """Compact fallback should not merge when detected season markers differ."""
+        repo = SearchRepository()
+
+        repo.add_anime("aaa b b cc season 2", "http://url1.com", "source1", {})
+        repo.add_anime("aaa bb cc season 3", "http://url2.com", "source2", {})
+
+        assert len(repo.anime_to_urls) == 2
+
+    def test_add_anime_exact_match_behavior_unchanged(self):
+        """Exact normalized equality should still merge without fallback."""
+        repo = SearchRepository()
+
+        repo.add_anime("Anime A: Title", "http://url1.com", "source1", {})
+        repo.add_anime("Anime A - Title", "http://url2.com", "source2", {})
+
+        assert len(repo.anime_to_urls) == 1
+        title = list(repo.anime_to_urls.keys())[0]
+        assert len(repo.anime_to_urls[title]) == 2
+
+    def test_add_anime_multi_source_aggregation_unchanged(self):
+        """Deduped title should still aggregate all source entries."""
+        repo = SearchRepository()
+
+        repo.add_anime("Anime A: Title", "http://url1.com", "source1", {})
+        repo.add_anime("Anime A - Title", "http://url2.com", "source2", {})
+        repo.add_anime("Anime A | Title", "http://url3.com", "source3", {})
+
+        assert len(repo.anime_to_urls) == 1
+        title = list(repo.anime_to_urls.keys())[0]
+        aggregated_sources = {source for _, source, _ in repo.anime_to_urls[title]}
+        assert aggregated_sources == {"source1", "source2", "source3"}
+
     def test_clear_search_results(self):
         """clear_search_results should clear data but keep sources."""
         repo = SearchRepository()

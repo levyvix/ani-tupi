@@ -9,6 +9,9 @@ from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from models.config import settings
 from models.models import SearchResults, SearchMetadata, AnimeSearchResult
 from services.anime.title_normalization import (
+    are_language_version_markers_compatible,
+    are_season_markers_compatible,
+    get_compact_normalized_title_key,
     normalize_search_cache_key,
     normalize_title_for_dedup,
 )
@@ -224,6 +227,7 @@ class SearchRepository:
 
         # Normalize the new title using aggressive deduplication normalization
         normalized_new = normalize_title_for_dedup(title)
+        compact_new = get_compact_normalized_title_key(normalized_new)
         self.norm_titles[title] = normalized_new
 
         # Check if this anime (by normalized title) already exists
@@ -235,8 +239,17 @@ class SearchRepository:
                 existing_normalized = normalize_title_for_dedup(existing_title)
                 self.norm_titles[existing_title] = existing_normalized
 
-            # If normalized forms match, append to existing entry
+            # Primary path: strict normalized-title equality
             if normalized_new == existing_normalized:
+                self.anime_to_urls[existing_title].append((url, source, params))
+                return
+
+            # Fallback path: compact key match, guarded by compatibility checks
+            if (
+                compact_new == get_compact_normalized_title_key(existing_normalized)
+                and are_language_version_markers_compatible(normalized_new, existing_normalized)
+                and are_season_markers_compatible(normalized_new, existing_normalized)
+            ):
                 self.anime_to_urls[existing_title].append((url, source, params))
                 return
 
