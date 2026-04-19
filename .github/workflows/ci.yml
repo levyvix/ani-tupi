@@ -134,18 +134,12 @@ jobs:
     - name: Instalar dependências
       run: uv sync
 
-    - name: Instalar Playwright browsers
-      run: uv run playwright install --with-deps chromium
-
-    - name: Verificar instalação Playwright
-      run: uv run python -c "from playwright.sync_api import sync_playwright; print('playwright ok')"
-
     - name: Smoke test - buscar naruto
       run: |
         # Send empty input so interactive menu exits; capture output including stderr
         echo "" | timeout 60 uv run ani-tupi -q "naruto" 2>&1 | tee /tmp/smoke_output.txt || true
         # Fail if installation/import errors are detected
-        if grep -iE "(ImportError|ModuleNotFoundError|No module named|playwright.*error)" /tmp/smoke_output.txt; then
+        if grep -iE "(ImportError|ModuleNotFoundError|No module named)" /tmp/smoke_output.txt; then
           echo "❌ Installation error detected in output"
           cat /tmp/smoke_output.txt
           exit 1
