@@ -7,6 +7,9 @@ cache integration, and scraper discovery.
 import time
 from dataclasses import dataclass, field
 
+from models.config import settings
+from models.models import AnimeTitleResolution
+from services.anime.title_resolution import AnimeTitleResolver
 from services.repository import rep
 from ui.components import loading, menu_navigate
 from utils.scraper_cache import get_cache
@@ -15,6 +18,20 @@ from utils.logging import get_logger
 
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class ManualSearchSelection:
+    """Result of manual anime search selection before episode loading."""
+
+    selected_anime: str | None
+    source: str | None
+    was_cancelled: bool = False
+    search_query_used: str | None = None
+
+    @property
+    def found(self) -> bool:
+        return self.selected_anime is not None
 
 
 def _filter_anime_results(titles: list[str], query: str) -> list[str]:
@@ -493,6 +510,102 @@ def incremental_search_anime(
     return state, current_results
 
 
+def _select_from_manual_search_results(query: str, args) -> ManualSearchSelection:
+    """Run the manual incremental search UI for one query."""
+    search_state, current_titles = incremental_search_anime(query)
+    while True:
+        current_result = search_state.get_current()
+        used_query = current_result.used_query if current_result else query
+        titles_with_sources = current_titles
+
+        if not titles_with_sources:
+            return ManualSearchSelection(
+                selected_anime=None,
+                source=None,
+                was_cancelled=False,
+                search_query_used=query,
+            )
+
+        filtered_titles = titles_with_sources
+        if hasattr(args, "season") and args.season is not None:
+            requested_season = args.season
+
+            if requested_season > 1:
+                filtered_titles = []
+                for title in titles_with_sources:
+                    base_title = title.split(" [")[0] if " [" in title else title
+                    inferred_season = rep._infer_season_from_title(base_title)
+                    inferred_season = inferred_season or 1
+
+                    if inferred_season == requested_season:
+                        filtered_titles.append(title)
+
+                if not filtered_titles:
+                    logger.warning(
+                        f"⚠️  Nenhum resultado encontrado especificamente para a estação {requested_season}. "
+                        f"Mostrando todos os resultados."
+                    )
+                    filtered_titles = titles_with_sources
+                else:
+                    logger.info(f"🎬 Filtrando resultados para estação {requested_season}")
+
+        continue_button = "🔍 Continuar buscando (menos palavras)"
+        if search_state.has_previous():
+            titles_with_button = [continue_button] + filtered_titles
+            word_count = current_result.word_count if current_result else len(used_query.split())
+            show_continue_msg = f" (usando {word_count} palavras)"
+        else:
+            titles_with_button = filtered_titles
+            show_continue_msg = ""
+
+        selected_anime_with_source = menu_navigate(
+            titles_with_button,
+            msg=f"Escolha o Anime.{show_continue_msg}",
+        )
+
+        if not selected_anime_with_source:
+            return ManualSearchSelection(
+                selected_anime=None,
+                source=None,
+                was_cancelled=True,
+                search_query_used=used_query,
+            )
+
+        if selected_anime_with_source == continue_button:
+            previous = search_state.go_back()
+            current_titles = previous.results if previous else current_titles
+            continue
+
+        selected_anime = selected_anime_with_source.split(" [")[0]
+        source = None
+        if " [" in selected_anime_with_source and selected_anime_with_source.endswith("]"):
+            source = selected_anime_with_source.split(" [")[1].rstrip("]")
+
+        return ManualSearchSelection(
+            selected_anime=selected_anime,
+            source=source,
+            was_cancelled=False,
+            search_query_used=used_query,
+        )
+
+
+def _resolve_search_query(query: str) -> AnimeTitleResolution | None:
+    """Resolve a failed manual query into a more canonical title."""
+    if not settings.search.enable_title_resolution:
+        return None
+
+    resolver = AnimeTitleResolver()
+    resolution = resolver.resolve(query)
+    if resolution and resolution.resolved_title.casefold() != query.strip().casefold():
+        logger.info(
+            "🔎 Tentando novamente com título resolvido via %s: %s",
+            resolution.provider,
+            resolution.resolved_title,
+        )
+        return resolution
+    return None
+
+
 def search_anime_flow(args):
     """Flow for searching and selecting an anime with progressive search support.
 
@@ -522,126 +635,25 @@ def search_anime_flow(args):
 
         selected_anime = query
     else:
-        # Not in cache or expired: search scrapers normally
-        # Start with full word count
-        current_word_count = len(query.split())
-        min_words = 1  # Minimum words to search (support single-word anime like "Dandadan")
+        search_result = _select_from_manual_search_results(query, args)
+        if search_result.was_cancelled:
+            return None, None, None
 
-        # Progressive search loop: try full query, then reduce words if user wants more
-        while True:
-            rep.clear_search_results()
-            # Show what will actually be searched (may be reduced from full query)
-            words = query.split()
-            search_query = " ".join(words[:current_word_count])
-            with loading(f"Buscando '{search_query}'..."):
-                rep.search_anime_with_word_limit(query, current_word_count, verbose=False)
+        if not search_result.found:
+            resolution = _resolve_search_query(query)
+            if resolution:
+                search_result = _select_from_manual_search_results(resolution.resolved_title, args)
+                if search_result.was_cancelled:
+                    return None, None, None
 
-            # Get what query was actually used (may be reduced from original)
-            search_metadata = rep.get_search_metadata()
-            used_query = search_metadata.used_query or query
-
-            # Display cache/scraper status with timing
-            if search_metadata.source == "cache":
-                cache_age_str = ""
-                if search_metadata.cache_age_seconds is not None:
-                    cache_age_str = f", {search_metadata.cache_age_seconds}s atrás"
-                logger.info(f"Cache '{used_query}'{cache_age_str}")
-                if search_metadata.total_execution_time_ms > 0:
-                    logger.debug(f"Execution time: {search_metadata.total_execution_time_ms}ms")
-            elif search_metadata.source == "scraper":
-                sources_str = (
-                    ", ".join(search_metadata.scraper_sources)
-                    if search_metadata.scraper_sources
-                    else "desconhecido"
-                )
-                logger.info(f"Scraper '{used_query}' ({sources_str})")
-                if search_metadata.total_execution_time_ms > 0:
-                    logger.debug(f"Execution time: {search_metadata.total_execution_time_ms}ms")
-
-            # Try to get AniList match to rank results by romaji name
-            ranking_query = used_query
-            try:
-                from utils.anilist_discovery import auto_discover_anilist_id
-
-                anilist_results = auto_discover_anilist_id(used_query)
-                if anilist_results:
-                    # Use the best match's romaji name for ranking scraper results
-                    ranking_query = anilist_results[0].title
-            except Exception:
-                # If AniList lookup fails, fall back to ranking by search query
-                pass
-
-            # Filter by what was actually searched for, rank by AniList romaji if available
-            titles_with_sources = rep.get_anime_titles_with_sources(
-                filter_by_query=used_query, original_query=ranking_query
+        if not search_result.found:
+            logger.error(
+                "❌ Nenhum resultado encontrado nem pela busca direta nem pela resolução externa."
             )
+            return None, None, None
 
-            # If no results, automatically try with fewer words
-            if not titles_with_sources:
-                current_word_count -= 1
-                if current_word_count < min_words:
-                    return None, None, None  # No results found at all
-                continue
-
-            # If user specified a season with -S flag, filter results to match that season
-            filtered_titles = titles_with_sources
-            if hasattr(args, "season") and args.season is not None:
-                requested_season = args.season
-
-                if requested_season > 1:
-                    # Use the same season inference function for consistency
-                    filtered_titles = []
-                    for title in titles_with_sources:
-                        # Extract base title (without source list)
-                        base_title = title.split(" [")[0] if " [" in title else title
-                        # Use repository's season inference function
-                        inferred_season = rep._infer_season_from_title(base_title)
-                        inferred_season = inferred_season or 1  # Default to season 1
-
-                        if inferred_season == requested_season:
-                            filtered_titles.append(title)
-
-                    # If no exact matches, still show all (user can select manually)
-                    if not filtered_titles:
-                        logger.warning(
-                            f"⚠️  Nenhum resultado encontrado especificamente para a estação {requested_season}. "
-                            f"Mostrando todos os resultados."
-                        )
-                        filtered_titles = titles_with_sources
-                    else:
-                        logger.info(f"🎬 Filtrando resultados para estação {requested_season}")
-
-            # Add "Continue searching" button if we can reduce words further
-            CONTINUE_BUTTON = "🔍 Continuar buscando (menos palavras)"
-            if current_word_count > min_words:
-                titles_with_button = [CONTINUE_BUTTON] + filtered_titles
-                show_continue_msg = f" (usando {current_word_count} palavras)"
-            else:
-                titles_with_button = filtered_titles
-                show_continue_msg = ""
-
-            selected_anime_with_source = menu_navigate(
-                titles_with_button,
-                msg=f"Escolha o Anime.{show_continue_msg}",
-            )
-
-            if not selected_anime_with_source:
-                return None, None, None  # User cancelled
-
-            # Check if user selected "Continue searching"
-            if selected_anime_with_source == CONTINUE_BUTTON:
-                current_word_count -= 1
-                if current_word_count < min_words:
-                    current_word_count = min_words
-                continue  # Loop back and search with fewer words
-
-            # User selected an anime - break out of loop
-            selected_anime = selected_anime_with_source.split(" [")[0]
-            # Extract source (if present)
-            source = None
-            if " [" in selected_anime_with_source and selected_anime_with_source.endswith("]"):
-                source = selected_anime_with_source.split(" [")[1].rstrip("]")
-            break
+        selected_anime = search_result.selected_anime
+        source = search_result.source
 
     # At this point, selected_anime is set from either cache or scrapers
     with loading("Carregando episódios..."):

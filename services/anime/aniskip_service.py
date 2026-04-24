@@ -11,6 +11,7 @@ from typing import Optional
 import httpx
 
 from models.models import SkipTimes
+from services.jikan_client import jikan_client
 
 logger = logging.getLogger(__name__)
 
@@ -225,20 +226,11 @@ class AniSkipService:
             logger.debug(f"MAL ID cache hit: {cache_key}")
             return self._mal_id_cache[cache_key]
 
-        # Search using Jikan API (unofficial MAL API)
-        url = "https://api.jikan.moe/v4/anime"
-        params = {"q": anime_title, "limit": 1}
-
         try:
             logger.debug(f"Searching MAL ID for: {anime_title}")
-            with httpx.Client(timeout=self._timeout) as client:
-                response = client.get(url, params=params)
-                response.raise_for_status()
-                data = response.json()
-
-            # Parse response
-            if data.get("data") and len(data["data"]) > 0:
-                mal_id = data["data"][0].get("mal_id")
+            results = jikan_client.search_anime(anime_title, limit=1)
+            if results:
+                mal_id = results[0].mal_id
                 if mal_id:
                     self._mal_id_cache[cache_key] = mal_id
                     logger.info(f"MAL ID found for '{anime_title}': {mal_id}")
@@ -249,12 +241,6 @@ class AniSkipService:
             self._mal_id_cache[cache_key] = None
             return None
 
-        except httpx.HTTPStatusError as e:
-            logger.warning(f"Jikan API error: {e.response.status_code} for '{anime_title}'")
-            return None
-        except httpx.TimeoutException:
-            logger.warning(f"Jikan API timeout for '{anime_title}'")
-            return None
         except Exception as e:
             logger.warning(f"Jikan API request failed for '{anime_title}': {e}")
             return None

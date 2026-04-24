@@ -147,6 +147,27 @@ class SearchSettings(BaseModel):
         pattern="^(dublado|legendado)$",
         description="Preferred audio type for AnimesDigital: 'dublado' or 'legendado'",
     )
+    enable_title_resolution: bool = Field(
+        True,
+        description="Retry manual anime searches with externally resolved titles when direct search fails",
+    )
+    title_resolution_timeout_seconds: float = Field(
+        8.0,
+        gt=0,
+        le=30,
+        description="Timeout for each external title resolution provider",
+    )
+    title_resolution_cache_ttl_seconds: int = Field(
+        7 * 24 * 3600,
+        ge=60,
+        description="TTL for cached resolved anime titles in seconds",
+    )
+    title_resolution_min_confidence: int = Field(
+        75,
+        ge=0,
+        le=100,
+        description="Minimum confidence required before retrying search with an externally resolved title",
+    )
 
 
 class PluginSettings(BaseModel):

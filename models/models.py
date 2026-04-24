@@ -377,6 +377,35 @@ class AniListAnime(BaseModel):
     )
 
 
+class JikanAnimeEntry(BaseModel):
+    """Jikan/MyAnimeList anime search result."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    mal_id: int = Field(..., description="MyAnimeList anime ID")
+    title: str = Field(..., min_length=1, description="Primary MAL title")
+    title_english: str | None = Field(None, alias="title_english", description="English title")
+    title_japanese: str | None = Field(None, alias="title_japanese", description="Japanese title")
+    titles: list[dict[str, str | None]] = Field(
+        default_factory=list,
+        description="Additional title variants returned by Jikan",
+    )
+    synonyms: list[str] = Field(default_factory=list, description="Title synonyms")
+
+
+class AnimeTitleResolution(BaseModel, frozen=True):
+    """Resolved title used to retry manual anime searches conservatively."""
+
+    original_query: str = Field(..., min_length=1, description="Original user query")
+    resolved_title: str = Field(..., min_length=1, description="Canonical title for re-search")
+    provider: str = Field(..., min_length=1, description="Provider name used for resolution")
+    confidence: int = Field(..., ge=0, le=100, description="Confidence score for the match")
+    aliases: tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Useful aliases returned by the provider",
+    )
+
+
 class SkipTimes(BaseModel):
     """Skip times for anime intro (OP) and outro (ED) from AniSkip API.
 
