@@ -50,7 +50,13 @@ def _calculate_confidence(query: str, candidates: tuple[str, ...]) -> int:
     if not candidates:
         return 0
     query_text = query.strip().lower()
-    return max(fuzz.token_sort_ratio(query_text, candidate.lower()) for candidate in candidates)
+    return max(
+        max(
+            fuzz.token_sort_ratio(query_text, candidate.lower()),
+            fuzz.WRatio(query_text, candidate.lower()),
+        )
+        for candidate in candidates
+    )
 
 
 def _run_with_timeout(fn, timeout: float):
@@ -181,7 +187,7 @@ class AnimeTitleResolver:
         providers: list[TitleResolverProvider] | None = None,
         cache=None,
     ) -> None:
-        self.providers = providers or [AniListTitleResolver(), JikanTitleResolver()]
+        self.providers = providers or [JikanTitleResolver()]
         self.cache = cache or get_cache()
 
     def resolve(self, query: str) -> AnimeTitleResolution | None:
@@ -194,23 +200,14 @@ class AnimeTitleResolver:
         if cached:
             try:
                 result = AnimeTitleResolution.model_validate(cached)
-                if result.confidence >= settings.search.title_resolution_min_confidence:
-                    logger.debug("Using cached title resolution for '%s'", query)
-                    return result
+                logger.debug("Using cached title resolution for '%s'", query)
+                return result
             except Exception:
                 pass
 
         for provider in self.providers:
             result = provider.resolve(normalized_query)
             if result is None:
-                continue
-            if result.confidence < settings.search.title_resolution_min_confidence:
-                logger.info(
-                    "Ignoring weak title resolution from %s for '%s' (%s%%)",
-                    provider.name,
-                    query,
-                    result.confidence,
-                )
                 continue
             self.cache.set(
                 cache_key,

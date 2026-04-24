@@ -5,7 +5,7 @@ and formatting while PRESERVING all meaningful content (language markers, season
 
 Purpose: Normalize anime display by:
 1. Converting to lowercase
-2. Normalizing separators (: - | / \ → space)
+2. Normalizing separators (: - | / \\ → space)
 3. Removing accents
 4. Keeping only letters, numbers, spaces, apostrophes
 

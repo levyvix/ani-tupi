@@ -597,11 +597,6 @@ def _resolve_search_query(query: str) -> AnimeTitleResolution | None:
     resolver = AnimeTitleResolver()
     resolution = resolver.resolve(query)
     if resolution and resolution.resolved_title.casefold() != query.strip().casefold():
-        logger.info(
-            "🔎 Tentando novamente com título resolvido via %s: %s",
-            resolution.provider,
-            resolution.resolved_title,
-        )
         return resolution
     return None
 
@@ -612,7 +607,7 @@ def search_anime_flow(args):
     Supports decreasing word count if user wants to see more results.
     Example: "Spy Family Season 2" (4 words) → Try 4 → 3 → 2 words progressively.
 
-    Cache-first: Checks cache before searching scrapers to avoid unnecessary requests.
+    Jikan-first: resolves the canonical title before cache and scraper search.
     """
     # Clear previous search results to avoid accumulating data from previous calls
     # (Repository is singleton, so it keeps data between calls)
@@ -622,29 +617,31 @@ def search_anime_flow(args):
 
     source = None
 
+    resolution = _resolve_search_query(query)
+    search_query = resolution.resolved_title if resolution else query
+    if resolution:
+        logger.info(
+            f"🔎 Tentando novamente com título resolvido via {resolution.provider}: "
+            f"{resolution.resolved_title}"
+        )
     # Cache-first: Check if query is in cache before searching scrapers
-    cache_data = get_cache(query)
+    cache_data = get_cache(search_query)
+    if cache_data is None and search_query != query:
+        cache_data = get_cache(query)
     selected_anime = None
     if cache_data:
         logger.info(f"Usando cache ({cache_data.episode_count} eps disponíveis)")
         # Populate repository from cache
-        rep.load_from_cache(query, cache_data)
+        rep.load_from_cache(search_query, cache_data)
 
         # Discover available sources for this anime (background search)
-        rep.search_anime(query, verbose=False)
+        rep.search_anime(search_query, verbose=False)
 
-        selected_anime = query
+        selected_anime = search_query
     else:
-        search_result = _select_from_manual_search_results(query, args)
+        search_result = _select_from_manual_search_results(search_query, args)
         if search_result.was_cancelled:
             return None, None, None
-
-        if not search_result.found:
-            resolution = _resolve_search_query(query)
-            if resolution:
-                search_result = _select_from_manual_search_results(resolution.resolved_title, args)
-                if search_result.was_cancelled:
-                    return None, None, None
 
         if not search_result.found:
             logger.error(
@@ -671,6 +668,7 @@ def search_anime_flow(args):
                 f"Estações disponíveis: {available_seasons}"
             )
             return None, None, None
+
         logger.info(f"🎬 Filtrando: Estação {requested_season}")
     else:
         # Show season menu if applicable
