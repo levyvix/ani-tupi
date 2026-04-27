@@ -9,7 +9,7 @@ Handles offline viewing of downloaded anime episodes with:
 
 from pathlib import Path
 
-from models.config import settings
+from models.config import get_data_path
 from services.local_anime_service import LocalAnimeService
 from utils.anilist_discovery import (
     get_anilist_id_from_title,
@@ -18,8 +18,98 @@ from utils.anilist_discovery import (
 from utils.logging import get_logger
 from ui.components import menu_navigate
 from utils.video_player import VideoPlayer
+from utils.persistence import JSONStore
 
 logger = get_logger(__name__)
+
+
+def _sanitize_title(raw_title: str) -> str:
+    """Sanitize anime title to prevent path traversal."""
+    safe_title = Path(raw_title).name
+    if not safe_title or safe_title != raw_title:
+        raise ValueError("Título de anime inválido")
+    return safe_title
+
+
+def _extract_selected_title(selection: str) -> str:
+    """Extract anime title from formatted selection string."""
+    return _sanitize_title(selection.split(" (")[0])
+
+
+def _discover_anilist_id(selected_title: str) -> int | None:
+    """Discover AniList ID for local anime title."""
+    anilist_id = None
+    try:
+        # Check if this is first watched episode (non-interactive load of history)
+        try:
+            history_path = get_data_path()
+            history_store = JSONStore(history_path / "history.json")
+            history_data = history_store.load({})
+            is_first_watched = selected_title not in history_data
+        except Exception:
+            is_first_watched = True
+
+        if is_first_watched:
+            # Interactive discovery for first watched episode
+            anilist_id = get_anilist_id_with_interactive_fallback(
+                selected_title,
+                strict_threshold=95,
+            )
+        else:
+            # Standard discovery (use cached result if available)
+            anilist_id = get_anilist_id_from_title(selected_title)
+    except Exception:
+        pass  # Discovery failure is silent - proceed without AniList ID
+
+    return anilist_id
+
+
+def _format_anime_list(service: LocalAnimeService, anime_titles: list[str]) -> list[str]:
+    """Format anime list with downloaded episode counts."""
+    anime_list_with_counts = []
+    for title in anime_titles:
+        info = service.get_anime_info(title)
+        count = info["total_episodes"]
+        anime_list_with_counts.append(f"{title} ({count} eps)")
+    return anime_list_with_counts
+
+
+def _select_episode_action(selected_title: str, selected_ep_num: int) -> str | None:
+    """Show episode action menu before playback."""
+    opts = ["▶️  Assistir agora", "🗑️  Apagar episódio"]
+    return menu_navigate(
+        opts,
+        msg=f"📺 {selected_title} - Episódio {selected_ep_num}",
+        enable_search=False,
+    )
+
+
+def _show_post_playback_menu(
+    episodes: list[tuple[int, Path]],
+    final_episode: int,
+) -> str | None:
+    """Show post-playback action menu."""
+    opts = []
+    current_idx = next(
+        (i for i, (ep_num, _) in enumerate(episodes) if ep_num == final_episode), None
+    )
+
+    if current_idx is not None:
+        if current_idx < len(episodes) - 1:
+            opts.append("▶️  Próximo")
+        if current_idx > 0:
+            opts.append("◀️  Anterior")
+
+    opts.extend(
+        [
+            "🔁 Replay",
+            "📚 Voltar à biblioteca do anime",
+            "🗑️  Apagar episódio atual",
+            "📂 Voltar à biblioteca local",
+        ]
+    )
+
+    return menu_navigate(opts, msg="O que quer fazer agora?", enable_search=False)
 
 
 def handle_local_library_playback(args) -> None:
@@ -32,198 +122,160 @@ def handle_local_library_playback(args) -> None:
     4. Navigate to next/previous episodes or replay
     5. Sync progress to AniList with offline queue fallback
     """
-    service = LocalAnimeService()
-
-    # Get list of downloaded anime
-    anime_list = service.get_downloaded_anime_list()
-
-    if not anime_list:
-        logger.info("\n📂 Biblioteca Local")
-        logger.info("❌ Nenhum anime baixado ainda")
-        logger.info("   💡 Use '📥 Baixar para assistir depois' no menu de reprodução")
-        return
-
-    # Let user select anime
-    anime_list_with_counts = []
-    for title in anime_list:
-        info = service.get_anime_info(title)
-        count = info["total_episodes"]
-        anime_list_with_counts.append(f"{title} ({count} eps)")
-
-    selected = menu_navigate(anime_list_with_counts, msg="📂 Biblioteca Local - Selecione um anime")
-
-    if not selected:
-        return
-
-    # Extract title (remove episode count)
-    selected_title = selected.split(" (")[0]
-    safe_title = Path(selected_title).name
-    if not safe_title or safe_title != selected_title:
-        raise ValueError("Título de anime inválido")
-    selected_title = safe_title
-
-    # Initialize selected_ep_str - will be set by menu or navigation
-    selected_ep_str = None
-
-    # Playback loop for this anime
     while True:
-        # Get episodes
-        try:
-            episodes = service.get_downloaded_episodes(selected_title)
-        except FileNotFoundError:
-            logger.info(f"❌ Anime não encontrado: {selected_title}")
+        service = LocalAnimeService()
+        anime_list = service.get_downloaded_anime_list()
+
+        if not anime_list:
+            logger.info("\n📂 Biblioteca Local")
+            logger.info("❌ Nenhum anime baixado ainda")
+            logger.info("   💡 Use '📥 Baixar para assistir depois' no menu de reprodução")
             return
 
-        if not episodes:
-            logger.info(f"❌ Nenhum episódio encontrado para {selected_title}")
-            return
-
-        # Show episodes for selection only if not already selected by navigation
-        if selected_ep_str is None:
-            episode_options = [f"Episódio {ep_num}" for ep_num, _ in episodes]
-            selected_ep_str = menu_navigate(
-                episode_options,
-                msg=f"📂 {selected_title} - Selecione um episódio",
-            )
-
-            if not selected_ep_str:
-                return  # User cancelled, back to library
-
-        # Extract episode number
-        selected_ep_num = int(selected_ep_str.split()[1])
-
-        # Find the file path
-        ep_path = None
-        for ep_num, file_path in episodes:
-            if ep_num == selected_ep_num:
-                ep_path = file_path
-                break
-
-        if not ep_path:
-            logger.info("❌ Episódio não encontrado")
-            selected_ep_str = None  # Reset so menu shows again on next iteration
-            continue
-
-        # Play the episode
-        player = VideoPlayer()
-        file_url = f"file://{ep_path.resolve()}"
-
-        logger.info(f"\n▶️  Reproduzindo: {selected_title} - Episódio {selected_ep_num}")
-        logger.info(f"   Arquivo: {ep_path}")
-
-        player.play_episode(
-            url=file_url,
-            anime_title=selected_title,
-            episode_number=selected_ep_num,
-            total_episodes=len(episodes),
-            source="local",
-            use_ipc=True,
+        anime_list_with_counts = _format_anime_list(service, anime_list)
+        selected = menu_navigate(
+            anime_list_with_counts,
+            msg="📂 Biblioteca Local - Selecione um anime",
         )
+        if not selected:
+            return
 
-        # Post-playback: Discover AniList ID, save history, sync, and cleanup
-        from services.anime.playback_service import sync_progress_to_anilist
-        from services.history_service import save_history
-        from utils.persistence import JSONStore
-        from models.config import get_data_path
+        selected_title = _extract_selected_title(selected)
+        selected_ep_num: int | None = None
+        anilist_id: int | None = None
 
-        # Step 1: Discover AniList ID for first watched episode
-        anilist_id = None
-        try:
-            # Check if this is first watched episode (non-interactive load of history)
+        # Episode loop for selected anime
+        while True:
             try:
-                history_path = get_data_path()
-                history_store = JSONStore(history_path / "history.json")
-                history_data = history_store.load({})
-                is_first_watched = selected_title not in history_data
-            except Exception:
-                is_first_watched = True
-
-            if is_first_watched:
-                # Interactive discovery for first watched episode
-                anilist_id = get_anilist_id_with_interactive_fallback(
-                    selected_title,
-                    strict_threshold=95,
-                )
-            else:
-                # Standard discovery (use cached result if available)
-                anilist_id = get_anilist_id_from_title(selected_title)
-        except Exception:
-            pass  # Discovery failure is silent - proceed without AniList ID
-
-        # Step 2: Save history with discovered AniList ID
-        try:
-            save_history(
-                selected_title,
-                selected_ep_num - 1,
-                anilist_id,
-                source="local",
-                total_episodes=len(episodes),
-            )
-        except Exception:
-            pass  # History save failure is silent
-
-        # Step 3: Attempt AniList sync (best effort, no blocking)
-        try:
-            if anilist_id:
-                sync_progress_to_anilist(
-                    anilist_id,
-                    selected_ep_num,
-                    len(episodes),
-                    selected_title,
-                )
-        except Exception:
-            pass  # Sync failure is silent - user can continue watching
-
-        # Step 4: Delete file if configured
-        if settings.offline_sync.delete_after_watch:
-            try:
-                service = LocalAnimeService()
-                service.delete_episode(selected_title, selected_ep_num)
-            except Exception:
-                pass
-
-        # Navigation menu after playback
-        opts = []
-
-        # Find current episode index
-        current_idx = None
-        for i, (ep_num, _) in enumerate(episodes):
-            if ep_num == selected_ep_num:
-                current_idx = i
+                episodes = service.get_downloaded_episodes(selected_title)
+            except FileNotFoundError:
+                logger.info(f"❌ Anime não encontrado: {selected_title}")
                 break
 
-        if current_idx is not None:
-            if current_idx < len(episodes) - 1:
-                opts.append("▶️  Próximo")
-            if current_idx > 0:
-                opts.append("◀️  Anterior")
+            if not episodes:
+                logger.info(f"❌ Nenhum episódio encontrado para {selected_title}")
+                break
 
-        opts.append("🔁 Replay")
-        opts.append("📂 Voltar à Biblioteca")
+            episode_numbers = [ep_num for ep_num, _ in episodes]
+            if selected_ep_num not in episode_numbers:
+                selected_ep_num = None
 
-        selected_opt = menu_navigate(opts, msg="O que quer fazer agora?", enable_search=False)
+            # Episode selection + per-episode menu
+            if selected_ep_num is None:
+                episode_options = [f"Episódio {ep_num}" for ep_num in episode_numbers]
+                selected_ep_str = menu_navigate(
+                    episode_options,
+                    msg=f"📂 {selected_title} - Selecione um episódio",
+                )
+                if not selected_ep_str:
+                    break  # Back to local library anime list
 
-        if not selected_opt or selected_opt == "📂 Voltar à Biblioteca":
-            return  # Back to library selection
+                selected_ep_num = int(selected_ep_str.split()[1])
+                episode_action = _select_episode_action(selected_title, selected_ep_num)
 
-        # Handle navigation
-        if selected_opt == "▶️  Próximo":
-            if current_idx is not None and current_idx < len(episodes) - 1:
-                # Loop will reload episodes and select next episode
-                selected_ep_num = episodes[current_idx + 1][0]
-                # Re-create selected_ep_str to trigger next playback
-                selected_ep_str = f"Episódio {selected_ep_num}"
-                # Continue loop to play next episode
+                if not episode_action:
+                    selected_ep_num = None
+                    continue
+
+                if episode_action == "🗑️  Apagar episódio":
+                    deleted = service.delete_episode(selected_title, selected_ep_num)
+                    if deleted:
+                        logger.info(f"🗑️  Episódio {selected_ep_num} apagado")
+                    else:
+                        logger.info("❌ Episódio não encontrado para apagar")
+                    selected_ep_num = None
+                    continue
+
+            ep_path = next(
+                (file_path for ep_num, file_path in episodes if ep_num == selected_ep_num), None
+            )
+            if not ep_path:
+                logger.info("❌ Episódio não encontrado")
+                selected_ep_num = None
                 continue
 
-        elif selected_opt == "◀️  Anterior":
-            if current_idx is not None and current_idx > 0:
-                # Loop will reload episodes and select previous episode
-                selected_ep_num = episodes[current_idx - 1][0]
-                selected_ep_str = f"Episódio {selected_ep_num}"
-                # Continue loop to play previous episode
+            player = VideoPlayer()
+            file_url = f"file://{ep_path.resolve()}"
+
+            logger.info(f"\n▶️  Reproduzindo: {selected_title} - Episódio {selected_ep_num}")
+            logger.info(f"   Arquivo: {ep_path}")
+
+            playback_result = player.play_episode(
+                url=file_url,
+                anime_title=selected_title,
+                episode_number=selected_ep_num,
+                total_episodes=len(episodes),
+                source="local",
+                use_ipc=True,
+            )
+
+            final_episode = selected_ep_num
+            if (
+                playback_result
+                and isinstance(playback_result.data, dict)
+                and isinstance(playback_result.data.get("episode"), int)
+            ):
+                final_episode = playback_result.data["episode"]
+
+            final_ep_path = next(
+                (file_path for ep_num, file_path in episodes if ep_num == final_episode),
+                ep_path,
+            )
+
+            if anilist_id is None:
+                anilist_id = _discover_anilist_id(selected_title)
+
+            from commands.anime import handle_post_playback_confirmation
+
+            handle_post_playback_confirmation(
+                anime_title=selected_title,
+                episode_number=final_episode,
+                num_episodes=len(episodes),
+                anilist_id=anilist_id,
+                source="local",
+                is_local=True,
+                file_path=final_ep_path,
+            )
+
+            post_playback_action = _show_post_playback_menu(episodes, final_episode)
+            current_idx = next(
+                (i for i, (ep_num, _) in enumerate(episodes) if ep_num == final_episode),
+                None,
+            )
+
+            if not post_playback_action:
+                selected_ep_num = None
                 continue
 
-        elif selected_opt == "🔁 Replay":
-            # Keep same episode_num, loop will replay
-            continue
+            if post_playback_action == "📂 Voltar à biblioteca local":
+                break
+
+            if post_playback_action == "▶️  Próximo" and current_idx is not None:
+                if current_idx < len(episodes) - 1:
+                    selected_ep_num = episodes[current_idx + 1][0]
+                else:
+                    selected_ep_num = None
+                continue
+
+            if post_playback_action == "◀️  Anterior" and current_idx is not None:
+                if current_idx > 0:
+                    selected_ep_num = episodes[current_idx - 1][0]
+                else:
+                    selected_ep_num = None
+                continue
+
+            if post_playback_action == "🔁 Replay":
+                selected_ep_num = final_episode
+                continue
+
+            if post_playback_action == "📚 Voltar à biblioteca do anime":
+                selected_ep_num = None
+                continue
+
+            if post_playback_action == "🗑️  Apagar episódio atual":
+                deleted = service.delete_episode(selected_title, final_episode)
+                if deleted:
+                    logger.info(f"🗑️  Episódio {final_episode} apagado")
+                else:
+                    logger.info("❌ Episódio não encontrado para apagar")
+                selected_ep_num = None
