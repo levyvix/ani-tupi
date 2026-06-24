@@ -279,12 +279,13 @@ class VideoPlayer:
                 demuxer_max_back_bytes="100M",
                 demuxer_readahead_secs=40,
                 stream_buffer_size="2M",
-                speed=1.8,  # Default playback speed
-                input_default_bindings=True,  # Enable default key bindings
-                input_vo_keyboard=True,  # Handle keyboard input on video output
-                input_conf=input_conf_path,  # Use custom ani-tupi keybindings
-                osc=True,  # On-screen controller for mouse interaction
+                speed=1.8,
+                input_default_bindings=True,
+                input_vo_keyboard=True,
+                input_conf=input_conf_path,
+                osc=True,
                 referrer=referrer,
+                user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
             )
 
             # Start playback (blocking)
@@ -482,6 +483,7 @@ shift+t script-message toggle-sub-dub
             "--speed=1.8",
             "--ytdl=yes",
             "--ytdl-format=bestvideo[height<=1080]+bestaudio/best",
+            "--user-agent=Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
         ]
 
         # Keep MPV log enabled by default for debugging playback failures.

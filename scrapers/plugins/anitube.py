@@ -3,21 +3,23 @@ import urllib.parse
 import requests
 from bs4 import BeautifulSoup
 
-from scrapers.core.selenium_driver import SeleniumWebDriver
 from scrapers.plugins.utils import load_plugin, store_player_source
 from services.repository import rep
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
+}
 
 
 class AniTube:
     languages = ["pt-br"]
     name = "anitube"
-    base_url = "https://www.anitube.news"
+    base_url = "https://www.anitube.zip"
 
     def search_anime(self, query: str) -> None:
         def _do_search(q: str) -> None:
             url = f"{self.base_url}/wp-json/wp/v2/posts?search={urllib.parse.quote(q)}&per_page=20"
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-            response = requests.get(url, headers=headers, timeout=30)
+            response = requests.get(url, headers=HEADERS, timeout=30)
             results = response.json()
             for post in results:
                 title = post.get("title", {}).get("rendered", "")
@@ -43,8 +45,7 @@ class AniTube:
         separator = "&" if "?" in url else "?"
         episodes_url = f"{url}{separator}ord=1"
 
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        response = requests.get(episodes_url, headers=headers, timeout=30)
+        response = requests.get(episodes_url, headers=HEADERS, timeout=30)
         response.raise_for_status()
         page = BeautifulSoup(response.text, "html.parser")
 
@@ -62,27 +63,22 @@ class AniTube:
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            with SeleniumWebDriver() as driver:
-                page = driver.fetch(url)
+            response = requests.get(url, headers=HEADERS, timeout=30)
+            response.raise_for_status()
+            page = BeautifulSoup(response.text, "html.parser")
 
-            iframe = page.select_one("iframe")
-            if iframe:
-                src = iframe.get("src")
-                if src and "api." in src:
+            # Prefer the anivideo iframe which contains a direct m3u8 URL
+            for iframe in page.select("iframe.metaframe"):
+                src = iframe.get("src") or ""
+                if "api." in src:
                     if store_player_source(container, event, src):
                         return
 
-            video = page.select_one("video")
-            if video:
-                video_src = video.get("src") or video.get("data-src")
-                if video_src and "api." in video_src:
-                    if store_player_source(container, event, video_src):
-                        return
-
-            source = page.select_one("video source")
-            if source:
-                src = source.get("src")
-                if src and "api." in src:
+            # Fallback: any iframe
+            iframe = page.select_one("iframe")
+            if iframe:
+                src = iframe.get("src", "")
+                if src:
                     if store_player_source(container, event, src):
                         return
 
