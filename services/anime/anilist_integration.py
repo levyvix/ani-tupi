@@ -764,13 +764,7 @@ def anilist_anime_flow(
             # Don't fetch skip times upfront - load them on-demand when playing
             # This avoids loading skip times for all episodes when user only plays 1-2
 
-            # Format episode list WITHOUT skip indicators (will be fetched later)
-            from commands.anime import format_episode_list_with_skip
-
-            formatted_episode_list = format_episode_list_with_skip(
-                tuple(episode_list),
-                {},  # Empty dict - skip times loaded on-demand
-            )
+            formatted_episode_list = list(episode_list)
 
             # Let user choose from full episode list
             selected_episode = menu_navigate(formatted_episode_list, msg="Escolha o episódio.")
@@ -885,13 +879,7 @@ def anilist_anime_flow(
             # Don't fetch skip times upfront - load them on-demand when playing
             # This avoids loading skip times for all episodes when user only plays 1-2
 
-            # Format episode list WITHOUT skip indicators (will be fetched later)
-            from commands.anime import format_episode_list_with_skip
-
-            formatted_episode_list = format_episode_list_with_skip(
-                tuple(episode_list),
-                {},  # Empty dict - skip times loaded on-demand
-            )
+            formatted_episode_list = list(episode_list)
 
             # Let user choose from full episode list
             selected_episode = menu_navigate(formatted_episode_list, msg="Escolha o episódio.")
