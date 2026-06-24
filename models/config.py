@@ -16,7 +16,7 @@ import os
 import json
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -227,6 +227,16 @@ class PluginSettings(BaseModel):
         ],
         description="Priority order for scraper sources (first = highest priority)",
     )
+
+    @field_validator("priority_order")
+    @classmethod
+    def append_missing_plugins(cls, v: list[str]) -> list[str]:
+        """Append any installed plugins not yet in the saved priority list."""
+        plugins_dir = Path(__file__).parent.parent / "scrapers" / "plugins"
+        skip = {"__init__.py", "utils.py"}
+        installed = {f.stem for f in plugins_dir.glob("*.py") if f.name not in skip}
+        missing = [p for p in installed if p not in v]
+        return v + sorted(missing)
 
 
 class PerformanceSettings(BaseModel):
