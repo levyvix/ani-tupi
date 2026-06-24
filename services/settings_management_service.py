@@ -142,6 +142,12 @@ def _deep_merge(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]
     return result
 
 
+def _get_available_plugin_names() -> set[str]:
+    plugins_dir = Path(__file__).parent.parent / "scrapers" / "plugins"
+    skip = {"__init__.py", "utils.py"}
+    return {f.stem for f in plugins_dir.glob("*.py") if f.name not in skip}
+
+
 def _parse_priority_order(raw_value: str, current_order: list[Any]) -> list[Any]:
     text = raw_value.strip()
     if not text:
@@ -158,7 +164,8 @@ def _parse_priority_order(raw_value: str, current_order: list[Any]) -> list[Any]
             parts = [part.strip() for part in parts[0].split() if part.strip()]
         desired = parts
 
-    unknown = [name for name in desired if name not in current_order]
+    available = _get_available_plugin_names()
+    unknown = [name for name in desired if name not in available]
     if unknown:
         raise ValueError(f"Unknown source(s): {', '.join(unknown)}")
 

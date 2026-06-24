@@ -222,6 +222,8 @@ class PluginSettings(BaseModel):
             "anitube",
             "animesdigital",
             "animefire",
+            "goyabu",
+            "animesonlinecc",
         ],
         description="Priority order for scraper sources (first = highest priority)",
     )
