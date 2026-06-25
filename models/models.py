@@ -16,7 +16,7 @@ Defines DTOs (Data Transfer Objects) for:
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -710,7 +710,7 @@ class EpisodeList(BaseModel, frozen=True):
         if not self.episodes:
             return []
         # Return longest episode list (most complete source)
-        episode_lists = [ep[1] for ep in self.episodes]
+        episode_lists = [ep[0] for ep in self.episodes]
         longest_list = max(episode_lists, key=len)
         return list(longest_list)
 
@@ -751,7 +751,9 @@ class DownloadedEpisode(BaseModel):
     file_size_mb: float = Field(..., ge=0.0, description="File size in MB")
     source: str = Field(..., min_length=1, description="Source scraper name")
     downloaded_at: datetime = Field(default_factory=datetime.now, description="Download timestamp")
-    status: str = Field("success", description="Download status (success, failed, corrupted)")
+    status: Literal["success", "failed", "corrupted"] = Field(
+        "success", description="Download status (success, failed, corrupted)"
+    )
 
 
 class DownloadResult(BaseModel):

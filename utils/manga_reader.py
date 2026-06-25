@@ -7,14 +7,11 @@ Auto-detects available readers with fallback chain: Zathura → Evince → Okula
 import shutil
 import subprocess
 from pathlib import Path
-import logging
 
 from models.config import settings
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-logger = logging.getLogger(__name__)
 
 
 def is_zathura_running() -> bool:

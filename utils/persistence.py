@@ -43,7 +43,7 @@ class JSONStore:
             default = {}
 
         try:
-            with self.file_path.open() as f:
+            with self.file_path.open(encoding="utf-8") as f:
                 return load(f)
         except FileNotFoundError:
             return default
@@ -67,7 +67,7 @@ class JSONStore:
         """
         try:
             self.file_path.parent.mkdir(parents=True, exist_ok=True)
-            with self.file_path.open("w") as f:
+            with self.file_path.open("w", encoding="utf-8") as f:
                 dump(data, f, indent=indent)
         except TypeError as e:
             raise PersistenceError(f"Cannot serialize data: {e}") from e

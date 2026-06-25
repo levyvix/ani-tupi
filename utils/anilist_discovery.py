@@ -9,7 +9,7 @@ from fuzzywuzzy import fuzz
 
 from models.models import AniListAnime, AniListSearchResult
 from models.config import settings
-from utils.cache_manager import get_cache
+from utils.cache_manager import get_cache, clear_cache_by_prefix
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -202,12 +202,10 @@ def clear_discovery_cache(anime_title: str | None = None) -> int:
         except Exception:
             return 0
 
-    # Clear all anilist_id entries
-    # This requires enumerating all keys - not ideal, but functional
-    # For now, we'll document this limitation
-    cleared = 0
-    # In practice, users can set individual titles
-    return cleared
+    # Clear all anilist_id entries using prefix-based clearing
+    clear_cache_by_prefix("anilist_id:")
+    # Return a non-zero sentinel since we can't count keys cleared
+    return 1
 
 
 def get_anilist_metadata(anilist_id: int) -> AniListAnime | None:
