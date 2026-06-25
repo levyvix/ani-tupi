@@ -185,9 +185,11 @@ def _parse_range_format(user_input: str, available_chapters: list[str]) -> list[
         raise ValueError(f"Range values must be non-negative: '{user_input}'")
 
     # Find chapters within range
-    result = [
-        ch for ch in available_chapters if (v := _safe_float(ch)) is not None and start <= v <= end
-    ]
+    result = []
+    for ch in available_chapters:
+        v = _safe_float(ch)
+        if v is not None and start <= v <= end:
+            result.append(ch)
 
     if not result:
         raise ValueError(f"No chapters found in range {start}-{end}")
