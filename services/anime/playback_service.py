@@ -448,14 +448,14 @@ def sync_progress_to_anilist(
         # Check if anime is in any list
         if not anilist_client.is_in_any_list(anilist_id):
             logger.info("Adding anime %d to AniList CURRENT list", anilist_id)
-            anilist_client.add_to_list(anilist_id, Status.CURRENT)
+            anilist_client.add_to_list(anilist_id, Status.CURRENT.value)
         else:
             # Check current status and promote if needed
             entry = anilist_client.get_media_list_entry(anilist_id)
             if entry:
                 if entry.status == "PLANNING":
                     logger.info("Promoting anime %d from PLANNING to CURRENT", anilist_id)
-                    anilist_client.add_to_list(anilist_id, Status.CURRENT)
+                    anilist_client.add_to_list(anilist_id, Status.CURRENT.value)
 
         # Update progress
         success = anilist_client.update_progress(anilist_id, episode)
@@ -468,7 +468,7 @@ def sync_progress_to_anilist(
             )
             return False
 
-        # Check if anime is already completed
+        # Fetch entry once for log and completion check
         entry = anilist_client.get_media_list_entry(anilist_id)
         if entry and entry.status == "COMPLETED":
             logger.info(
@@ -486,7 +486,6 @@ def sync_progress_to_anilist(
 
         # Check if last episode - mark as completed
         if episode == num_episodes and num_episodes > 0:
-            entry = anilist_client.get_media_list_entry(anilist_id)
             if entry and entry.status == "CURRENT":
                 logger.info("Marking anime %d as COMPLETED", anilist_id)
                 logger.info("✅ Anime marcado como COMPLETO no AniList")

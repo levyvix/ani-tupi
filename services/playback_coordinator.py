@@ -202,21 +202,21 @@ class PlaybackCoordinator:
                         # This source failed, try next
                         continue
 
-                # Get video URL if found, otherwise return None
-                video_url = container[0] if container else None
+            # Get video URL if found, otherwise return None
+            video_url = container[0] if container else None
 
-                # CACHE SAVE: Save video URL to cache with TTL
-                if video_url and dc and cache_key_full:
-                    try:
-                        dc.set(
-                            cache_key_full,
-                            video_url,
-                            ttl=settings.performance.video_url_cache_ttl_seconds,
-                        )
-                    except Exception:
-                        pass
+            # CACHE SAVE: Save video URL to cache with TTL
+            if video_url and dc and cache_key_full:
+                try:
+                    dc.set(
+                        cache_key_full,
+                        video_url,
+                        ttl=settings.performance.video_url_cache_ttl_seconds,
+                    )
+                except Exception:
+                    pass
 
-                return video_url
+            return video_url
 
         return asyncio.run(search_all_sources())
 
