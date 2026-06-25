@@ -275,11 +275,9 @@ class TestEdgeCases:
         assert normalize_title_for_dedup("   ") == ""
 
     def test_only_symbols(self):
-        """Only symbols returns original (symbols removed, nothing left)."""
-        # When only symbols, they're removed but original title is returned as fallback
+        """Only symbols returns empty string (no alphanumeric content to dedup by)."""
         result = normalize_title_for_dedup("!!!***@@@")
-        # The symbols get removed, leaving empty string, so we get the original lowercased
-        assert result == "!!!***@@@"
+        assert result == ""
 
     def test_only_language_markers(self):
         """Only language markers preserved."""

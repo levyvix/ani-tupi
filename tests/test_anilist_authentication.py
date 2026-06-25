@@ -244,7 +244,7 @@ class TestTokenStorage:
         # Create new client to load token
         client = AniListClient()
         assert client.token == "saved_token"
-        assert client.user_id == "12345"
+        assert client.user_id == 12345
 
     def test_load_token_file_missing(self, anilist_client, temp_token_file):
         """Load token returns None when file doesn't exist."""
