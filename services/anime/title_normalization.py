@@ -7,6 +7,12 @@ for improved search results across different anime sources.
 import re
 import unicodedata
 
+
+# Normalize typographic apostrophe variants to straight apostrophe before any processing
+def _normalize_apostrophes(text: str) -> str:
+    return text.replace("’", "'").replace("‘", "'").replace("ʼ", "'")
+
+
 _DUB_MARKERS = ("dublado", "dub", "dubbed")
 _SUB_MARKERS = ("legendado", "legendadas", "sub", "subbed", "subtitles", "subtitle")
 
@@ -14,7 +20,7 @@ _SEASON_PATTERNS = (
     re.compile(r"\bseason\s+(\d+)\b", re.IGNORECASE),
     re.compile(r"\b(\d+)(?:st|nd|rd|th)\s+season\b", re.IGNORECASE),
     re.compile(r"\btemporada\s+(\d+)\b", re.IGNORECASE),
-    re.compile(r"\bs(\d+)\b", re.IGNORECASE),
+    re.compile(r"(?<=[\s])s(\d+)\b", re.IGNORECASE),
 )
 _PART_PATTERNS = (
     re.compile(r"\bpart\s+(\d+)(?:st|nd|rd|th)?\b", re.IGNORECASE),
@@ -61,6 +67,13 @@ def normalize_title_for_dedup(title: str) -> str:
     if not title or not title.strip():
         return ""
 
+    # Early exit: if stripped input has no alphanumeric characters, return ""
+    if not re.search(r"[a-zA-Z0-9]", title):
+        return ""
+
+    # Normalize typographic apostrophes before unicode normalization
+    title = _normalize_apostrophes(title)
+
     # Step 1: Normalize Unicode
     # Decompose accents: "Café" → "Cafe"
     normalized = unicodedata.normalize("NFKD", title)
@@ -95,8 +108,8 @@ def normalize_title_for_dedup(title: str) -> str:
     # Final normalized form for display
     normalized = normalized.lower()
 
-    # Return normalized form, or original title (lowercased) if everything was removed
-    return normalized if normalized else title.lower()
+    # Return normalized form, or empty string if everything was removed
+    return normalized
 
 
 def get_compact_normalized_title_key(normalized_title: str) -> str:
@@ -105,13 +118,29 @@ def get_compact_normalized_title_key(normalized_title: str) -> str:
 
 
 def get_language_version_markers(normalized_title: str) -> set[str]:
-    """Extract language/version markers from normalized title."""
-    marker_set = set()
-    words = set(normalized_title.split())
+    """Extract language/version markers from normalized title.
 
-    if any(marker in words for marker in _DUB_MARKERS):
+    Only matches 'sub'/'dub' markers as the LAST word (trailing suffix position)
+    to avoid false positives like "Sub Zero" or "Subaru".
+    """
+    marker_set = set()
+    words = normalized_title.split()
+    if not words:
+        return marker_set
+
+    # Check full word set for multi-character unambiguous markers
+    word_set = set(words)
+    dub_full = {"dublado", "dubbed"}
+    sub_full = {"legendado", "legendadas", "subbed", "subtitles", "subtitle"}
+
+    if any(marker in word_set for marker in dub_full):
         marker_set.add("dub")
-    if any(marker in words for marker in _SUB_MARKERS):
+    elif words[-1] == "dub":
+        marker_set.add("dub")
+
+    if any(marker in word_set for marker in sub_full):
+        marker_set.add("sub")
+    elif words[-1] == "sub":
         marker_set.add("sub")
 
     return marker_set
@@ -279,6 +308,9 @@ def normalize_search_cache_key(query: str, language: str = "pt-br") -> str:
     if not query or not query.strip():
         return f"search:empty-{language}"
 
+    # Normalize typographic apostrophes before unicode normalization
+    query = _normalize_apostrophes(query)
+
     # Step 1: Normalize unicode (decompose accents, etc.)
     normalized = unicodedata.normalize("NFKD", query)
     # Remove combining marks (accents)
@@ -289,9 +321,10 @@ def normalize_search_cache_key(query: str, language: str = "pt-br") -> str:
 
     # Step 3: Extract season numbers BEFORE removing season patterns
     # This preserves "2" from "2nd Season" or "Season 2"
+    # For bare 's', require preceding whitespace to avoid matching start of title
     extracted_season = None
     season_match = re.search(
-        r"(?:season\s+|temporada\s+|s)(\d+)|(\d+)(?:st|nd|rd|th)?\s+season",
+        r"(?:season\s+|temporada\s+|(?<=\s)s)(\d+)|(\d+)(?:st|nd|rd|th)?\s+season",
         normalized,
         re.IGNORECASE,
     )
@@ -309,8 +342,8 @@ def normalize_search_cache_key(query: str, language: str = "pt-br") -> str:
         r"\s+arc\s+[^:]+",
         r"\s+final\s+season",
         r"\s+dublado.*$",
-        r"\s+legenda.*$",
-        r"\s+sub.*$",
+        r"\s+legendad[oa]s?\b.*$",
+        r"\s+(?:sub|subbed|subtitles?)\b.*$",
     ]
 
     for pattern in season_patterns:
