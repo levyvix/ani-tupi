@@ -497,9 +497,11 @@ def _continue_manga_flow(
 
     # Sort chapters in ascending order (1 → 2 → 3 → ...)
     chapters.sort(
-        key=lambda c: float(str(c.number).replace(",", "."))
-        if str(c.number).replace(",", ".").replace("-", "").replace(".", "").isdigit()
-        else 0.0
+        key=lambda c: (
+            float(str(c.number).replace(",", "."))
+            if str(c.number).replace(",", ".").replace("-", "").replace(".", "").isdigit()
+            else 0.0
+        )
     )
 
     # Handle immediate resume if user chose to resume
