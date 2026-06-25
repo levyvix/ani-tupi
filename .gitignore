@@ -48,6 +48,7 @@ build/
 *_cache
 
 # Markdown files (allow README.md and .planning/)
+docs/
 
 # AI / editor tooling (local only)
 .codex/
