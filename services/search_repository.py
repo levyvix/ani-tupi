@@ -41,7 +41,6 @@ class SearchRepository:
         return SearchRepository._instance
 
     def __init__(self) -> None:
-        # Only initialize once to prevent resetting state on subsequent calls
         if SearchRepository._initialized:
             return
 
@@ -59,45 +58,22 @@ class SearchRepository:
         cls._initialized = False
 
     def register(self, plugin) -> None:
-        """Register a scraper plugin."""
         self.sources[plugin.name] = plugin
 
     def get_active_sources(self) -> list[str]:
-        """Get list of currently registered plugin names.
-
-        Returns:
-            List of plugin names (e.g., ["animefire", "sushianimes"])
-        """
         return sorted(list(self.sources.keys()))
 
     def clear_search_results(self) -> None:
-        """Clear all search results, keeping registered plugins."""
         self.anime_to_urls = defaultdict(list)
         self.norm_titles = {}
 
     def _build_search_results(self, query: str) -> SearchResults:
-        """Build immutable SearchResults from current repository state.
-
-        Converts the mutable anime_to_urls dictionary into an immutable
-        SearchResults object with AnimeSearchResult tuples.
-
-        Args:
-            query: The search query used
-
-        Returns:
-            Immutable SearchResults with all current search results
-        """
         results = []
         for title, sources_list in self.anime_to_urls.items():
-            # Normalize sources: ensure params is always a dict (not None or int)
-            normalized_sources = []
-            for url, source, params in sources_list:
-                # Params should be dict at this point (enforced in add_anime)
-                if isinstance(params, dict):
-                    normalized_sources.append((url, source, params))
-                else:
-                    normalized_sources.append((url, source, {}))
-
+            normalized_sources = [
+                (url, source, params if isinstance(params, dict) else {})
+                for url, source, params in sources_list
+            ]
             anime = AnimeSearchResult(
                 title=title,
                 normalized_title=self.norm_titles.get(title, title),
@@ -105,23 +81,22 @@ class SearchRepository:
             )
             results.append(anime)
 
-        ranked_results = self._rank_search_results(results, query)
-        return SearchResults(query=query, results=tuple(ranked_results), metadata={})
+        ranked = self._rank_search_results(results, query)
+        return SearchResults(query=query, results=tuple(ranked), metadata={})
+
+    @staticmethod
+    def _strip_dublado(text: str) -> str:
+        return text.replace(" dublado ", " ").replace(" dublado", "").replace("dublado ", "")
 
     @staticmethod
     def _normalize_for_similarity(text: str) -> str:
-        """Normalize text for similarity ranking."""
         text = SearchRepository._normalize_for_filter(text)
-        text = text.replace(" dublado ", " ").replace(" dublado", "").replace("dublado ", "")
-        return get_compact_normalized_title_key(text)
+        return get_compact_normalized_title_key(SearchRepository._strip_dublado(text))
 
     @staticmethod
     def _normalize_words_for_similarity(text: str) -> list[str]:
-        normalized = SearchRepository._normalize_for_filter(text)
-        normalized = (
-            normalized.replace(" dublado ", " ").replace(" dublado", "").replace("dublado ", "")
-        )
-        return normalized.split()
+        text = SearchRepository._normalize_for_filter(text)
+        return SearchRepository._strip_dublado(text).split()
 
     @staticmethod
     def _contains_word_sequence(haystack: list[str], needle: list[str]) -> bool:
@@ -135,230 +110,182 @@ class SearchRepository:
         return re.findall(r"\d+", text)
 
     @staticmethod
+    def _extract_result_title(result) -> str:
+        return result.title if hasattr(result, "title") else result[1]
+
+    @staticmethod
+    def _title_features(title: str) -> tuple[str, str, list[str]]:
+        norm = SearchRepository._normalize_for_filter(title)
+        compact = SearchRepository._normalize_for_similarity(title)
+        words = SearchRepository._normalize_words_for_similarity(title)
+        return norm, compact, words
+
+    @staticmethod
+    def _fuzz_score(norm_a: str, compact_a: str, norm_b: str, compact_b: str) -> int:
+        from fuzzywuzzy import fuzz
+
+        return max(
+            fuzz.ratio(norm_a, norm_b),
+            fuzz.partial_ratio(norm_a, norm_b),
+            fuzz.token_sort_ratio(norm_a, norm_b),
+            fuzz.ratio(compact_a, compact_b),
+        )
+
+    @staticmethod
+    def _apply_word_count_adjustment(score: int, title_words: list, ref_words: list) -> int:
+        if len(title_words) < len(ref_words):
+            if title_words == ref_words[: len(title_words)]:
+                return 0
+            return max(0, score - 50)
+        elif len(title_words) > len(ref_words):
+            return min(100, score + min(30, (len(title_words) - len(ref_words)) * 5))
+        return score
+
+    @staticmethod
     def _rank_search_results(
         results: list[AnimeSearchResult], query: str
     ) -> list[AnimeSearchResult]:
-        """Rank search results by similarity to the full query.
+        """Rank search results by similarity to query."""
+        norm_query, compact_query, query_words = SearchRepository._title_features(query)
 
-        Keeps grouped sources intact and preserves deterministic tie-breaking.
-        """
-        from fuzzywuzzy import fuzz
-
-        normalized_query = SearchRepository._normalize_for_filter(query)
-        compact_query = SearchRepository._normalize_for_similarity(query)
-        query_words = SearchRepository._normalize_words_for_similarity(query)
-
-        scored_results = []
+        scored = []
         for result in results:
-            if hasattr(result, "title"):
-                title = result.title
-            else:
-                title = result[1]
+            title = SearchRepository._extract_result_title(result)
+            norm_title, compact_title, title_words = SearchRepository._title_features(title)
 
-            normalized_title = SearchRepository._normalize_for_filter(title)
-            compact_title = SearchRepository._normalize_for_similarity(title)
-            title_words = SearchRepository._normalize_words_for_similarity(title)
-
-            score = max(
-                fuzz.ratio(normalized_query, normalized_title),
-                fuzz.partial_ratio(normalized_query, normalized_title),
-                fuzz.token_sort_ratio(normalized_query, normalized_title),
-                fuzz.ratio(compact_query, compact_title),
+            score = SearchRepository._fuzz_score(
+                norm_query, compact_query, norm_title, compact_title
             )
 
             if query_words and title_words[: len(query_words)] == query_words:
                 score = min(100, score + 45)
-            elif query_words and all(word in title_words for word in query_words):
+            elif query_words and all(w in title_words for w in query_words):
                 score = min(100, score + 25)
-            elif normalized_query in normalized_title:
+            elif norm_query in norm_title:
                 score = min(100, score + 15)
             elif compact_query in compact_title:
                 score = min(100, score + 10)
 
-            if len(title_words) < len(query_words):
-                if title_words == query_words[: len(title_words)]:
-                    score = 0
-                else:
-                    score = max(0, score - 50)
-            elif len(title_words) > len(query_words):
-                score = min(100, score + min(30, (len(title_words) - len(query_words)) * 5))
+            score = SearchRepository._apply_word_count_adjustment(score, title_words, query_words)
+            scored.append((result, score, len(title_words), title))
 
-            scored_results.append((result, score, len(title_words), title))
-
-        scored_results.sort(key=lambda item: (-item[1], item[2], item[3]))
-        return [item[0] for item in scored_results]
+        scored.sort(key=lambda x: (-x[1], x[2], x[3]))
+        return [x[0] for x in scored]
 
     @staticmethod
     def _rank_search_results_with_reference(
         results: list[AnimeSearchResult | tuple[str, str]], reference_title: str
     ) -> list[AnimeSearchResult | tuple[str, str]]:
-        """Rank results using a canonical reference title when available."""
-        from fuzzywuzzy import fuzz
-
+        """Rank results using a canonical reference title."""
         reference_title = reference_title.split(" / ")[0]
-        reference_normalized = SearchRepository._normalize_for_filter(reference_title)
-        reference_compact = SearchRepository._normalize_for_similarity(reference_title)
-        reference_words = SearchRepository._normalize_words_for_similarity(reference_title)
-        reference_numbers = SearchRepository._extract_numeric_tokens(reference_title)
+        ref_norm, ref_compact, ref_words = SearchRepository._title_features(reference_title)
+        ref_numbers = SearchRepository._extract_numeric_tokens(reference_title)
 
-        scored_results = []
+        scored = []
         for result in results:
-            if hasattr(result, "title"):
-                title = result.title
-            else:
-                title = result[1]
-
-            normalized_title = SearchRepository._normalize_for_filter(title)
-            compact_title = SearchRepository._normalize_for_similarity(title)
-            title_words = SearchRepository._normalize_words_for_similarity(title)
+            title = SearchRepository._extract_result_title(result)
+            norm_title, compact_title, title_words = SearchRepository._title_features(title)
             title_numbers = SearchRepository._extract_numeric_tokens(title)
 
-            score = max(
-                fuzz.ratio(reference_normalized, normalized_title),
-                fuzz.partial_ratio(reference_normalized, normalized_title),
-                fuzz.token_sort_ratio(reference_normalized, normalized_title),
-                fuzz.ratio(reference_compact, compact_title),
-            )
+            score = SearchRepository._fuzz_score(ref_norm, ref_compact, norm_title, compact_title)
 
-            if reference_words and title_words[: len(reference_words)] == reference_words:
+            if ref_words and title_words[: len(ref_words)] == ref_words:
                 score = min(100, score + 40)
-            elif reference_normalized in normalized_title:
+            elif ref_norm in norm_title:
                 score = min(100, score + 20)
-            elif reference_compact in compact_title:
+            elif ref_compact in compact_title:
                 score = min(100, score + 10)
 
-            if SearchRepository._contains_word_sequence(title_words, reference_words):
+            if SearchRepository._contains_word_sequence(title_words, ref_words):
                 score = min(100, score + 25)
             else:
                 score = max(0, score - 25)
 
-            if reference_numbers:
-                if all(number in title_numbers for number in reference_numbers):
+            if ref_numbers:
+                if all(n in title_numbers for n in ref_numbers):
                     score = min(100, score + 25)
-                elif any(number in title_numbers for number in reference_numbers):
+                elif any(n in title_numbers for n in ref_numbers):
                     score = min(100, score + 10)
                 else:
                     score = max(0, score - 15)
 
-            if len(title_words) < len(reference_words):
-                if title_words == reference_words[: len(title_words)]:
-                    score = 0
-                else:
-                    score = max(0, score - 50)
-            elif len(title_words) > len(reference_words):
-                score = min(100, score + min(30, (len(title_words) - len(reference_words)) * 5))
+            score = SearchRepository._apply_word_count_adjustment(score, title_words, ref_words)
+            scored.append((result, score, len(title_words), title))
 
-            scored_results.append((result, score, len(title_words), title))
-
-        scored_results.sort(key=lambda item: (-item[1], item[2], item[3]))
-        return [item[0] for item in scored_results]
+        scored.sort(key=lambda x: (-x[1], x[2], x[3]))
+        return [x[0] for x in scored]
 
     @staticmethod
     def _normalize_for_filter(text: str) -> str:
-        """Normalize text for filtering (same logic as add_anime).
-
-        Removes punctuation, converts to lowercase, removes multiple spaces.
-        Used for both queries and titles before comparison.
-        """
         text = text.lower()
-        # Remove punctuation and special characters (including em-dash and en-dash)
         for char in ["-", ":", "(", ")", "!", "?", ".", "–", "—"]:
             text = text.replace(char, " ")
-        # Remove multiple spaces
-        text = " ".join(text.split())
-        return text
+        return " ".join(text.split())
 
     @staticmethod
     def _matches_filter_query(title: str, filter_by_query: str) -> bool:
-        """Match filter query against titles using normalized and compact forms."""
-        query_normalized = SearchRepository._normalize_for_filter(filter_by_query)
-        title_normalized = SearchRepository._normalize_for_filter(title)
-
-        query_compact = get_compact_normalized_title_key(query_normalized)
-        title_compact = get_compact_normalized_title_key(title_normalized)
-
-        query_words = query_normalized.split()
-        title_words = title_normalized.split()
-
+        query_norm = SearchRepository._normalize_for_filter(filter_by_query)
+        title_norm = SearchRepository._normalize_for_filter(title)
+        query_compact = get_compact_normalized_title_key(query_norm)
+        title_compact = get_compact_normalized_title_key(title_norm)
+        query_words = query_norm.split()
+        title_words = title_norm.split()
         return (
-            query_normalized in title_normalized
+            query_norm in title_norm
             or query_compact in title_compact
-            or all(word in title_words for word in query_words)
+            or all(w in title_words for w in query_words)
         )
+
+    def _sorted_sources(self) -> list[tuple]:
+        """Return sources sorted by priority order, then alphabetically."""
+        sources = list(self.sources.items())
+        priority = settings.plugins.priority_order
+        if priority:
+            priority_map = {name: i for i, name in enumerate(priority)}
+            sources.sort(key=lambda x: priority_map.get(x[0], len(priority)))
+        else:
+            sources.sort(key=lambda x: x[0])
+        return sources
 
     def _search_with_incremental_results(self, query: str, verbose: bool = True) -> None:
         """Search anime with incremental results respecting configured priority order."""
-
         if verbose:
             logger.info(f"⠼ Buscando '{query}'...")
 
-        n_cpu = cpu_count()
-        if not n_cpu:
-            n_cpu = 10
-
+        n_cpu = cpu_count() or 10
         executor = ThreadPoolExecutor(max_workers=min(len(self.sources), n_cpu))
 
         try:
-            # Get a snapshot of sources to avoid race conditions
-            sources_list = list(self.sources.items())
+            future_to_source = {
+                executor.submit(plugin.search_anime, query): name
+                for name, plugin in self._sorted_sources()
+            }
 
-            # Apply priority order from settings (agnóstico a nomes específicos)
-            priority_order = settings.plugins.priority_order
-            if priority_order:
-                # Create a priority map based on configured order
-                priority_map = {name: idx for idx, name in enumerate(priority_order)}
-
-                # Sort sources: prioritized first, then others in alphabetical order
-                def sort_priority(item):
-                    source_name = item[0]
-                    return priority_map.get(source_name, len(priority_order))
-
-                sources_list.sort(key=sort_priority)
-            else:
-                # If no priority configured, use alphabetical ordering
-                sources_list.sort(key=lambda x: x[0])
-
-            # Submit all search tasks
-            future_to_source = {}
-            for source_name, plugin in sources_list:
-                future = executor.submit(plugin.search_anime, query)
-                future_to_source[future] = source_name
-
-            # Wait for all tasks to complete with timeout
-            # Timeout for concurrent scraper requests: 6x http timeout to account for multiple parallel requests
             timeout = settings.performance.http_timeout * 6
             done, not_done = wait(
-                future_to_source.keys(),
-                timeout=timeout,
-                return_when=ALL_COMPLETED,
+                future_to_source.keys(), timeout=timeout, return_when=ALL_COMPLETED
             )
 
-            # Handle timeout: cancel pending tasks and show partial results
             if not_done:
-                timed_out_sources = [future_to_source[f] for f in not_done]
+                timed_out = [future_to_source[f] for f in not_done]
                 if verbose:
                     logger.info(
-                        f"\n⚠️  Timeout em {len(timed_out_sources)} fonte(s): {', '.join(timed_out_sources)}"
+                        f"\n⚠️  Timeout em {len(timed_out)} fonte(s): {', '.join(timed_out)}"
                     )
                     logger.info(f"   Usando resultados parciais de {len(done)} fonte(s)")
-
-                # Cancel pending tasks to free resources
                 for future in not_done:
                     future.cancel()
 
-            # Process completed futures
             for future in done:
                 source = future_to_source[future]
                 try:
                     future.result()
                     if verbose and len(self.sources) > 1:
-                        count = len(self.anime_to_urls)
-                        logger.info(f"✓ {source} ({count} resultados)", end="\r")
+                        logger.info(f"✓ {source} ({len(self.anime_to_urls)} resultados)", end="\r")
                 except Exception as e:
                     if verbose:
                         logger.info(f"❌ Erro em {source}: {e}")
 
-            # Clear progress line and show summary
             if verbose and len(self.sources) > 1:
                 logger.info(" " * 70 + "\r", end="")
 
@@ -367,105 +294,92 @@ class SearchRepository:
                 total = len(self.sources)
                 if total > 1 and count > 0:
                     logger.info(f"✓ {count} resultado(s) de {total} fonte(s)")
-
         finally:
-            # Shutdown executor and wait for all tasks
             executor.shutdown(wait=True)
 
+    def _try_cache(self, query: str, verbose: bool) -> tuple[dict | None, int]:
+        """Check cache for query. Returns (cached_data, check_time_ms)."""
+        start = time.time()
+        try:
+            from utils.cache_manager import get_cache
+
+            cached = get_cache().get(normalize_search_cache_key(query))
+        except Exception as e:
+            if verbose:
+                logger.info(f"⚠️  Erro ao acessar cache: {e}")
+            cached = None
+        return cached, int((time.time() - start) * 1000)
+
+    def _save_cache(self, query: str, verbose: bool) -> None:
+        try:
+            from utils.cache_manager import get_cache
+
+            get_cache().set(
+                normalize_search_cache_key(query),
+                dict(self.anime_to_urls),
+                ttl=settings.cache.search_cache_ttl_seconds,
+            )
+        except Exception as e:
+            if verbose:
+                logger.info(f"⚠️  Erro ao salvar cache: {e}")
+
+    def _collect_scraper_sources(self) -> list[str]:
+        return sorted({src for entries in self.anime_to_urls.values() for _, src, _ in entries})
+
     def add_anime(self, title: str, url: str, source: str, params: dict | None = None) -> None:
-        """Add anime with intelligent multi-source deduplication.
-
-        Uses normalize_title_for_dedup() to recognize when the same anime appears
-        from multiple sources with different title formats. This enables merging of:
-        - Different separators: "Anime A: Title" and "Anime A - Title"
-        - Different language markers: "Anime A Dublado" and "Anime A Legendado"
-        - Different season formats: "Season 2" and "2nd Season" and "Temporada 2"
-
-        Args:
-            title: Original title from scraper
-            url: Episode/anime URL
-            source: Source plugin name
-            params: Optional parameters dict (default: {})
-        """
-        # Enforce params as dict at entry point
+        """Add anime with multi-source deduplication via title normalization."""
         params = params or {}
-
-        # Normalize the new title using aggressive deduplication normalization
         normalized_new = normalize_title_for_dedup(title)
         compact_new = get_compact_normalized_title_key(normalized_new)
         self.norm_titles[title] = normalized_new
 
-        # Check if this anime (by normalized title) already exists
         for existing_title in self.anime_to_urls:
-            # Get normalized form of existing title
-            existing_normalized = self.norm_titles.get(existing_title)
-            if existing_normalized is None:
-                # Anime was loaded from cache, compute normalization now
-                existing_normalized = normalize_title_for_dedup(existing_title)
-                self.norm_titles[existing_title] = existing_normalized
+            existing_norm = self.norm_titles.get(existing_title)
+            if existing_norm is None:
+                existing_norm = normalize_title_for_dedup(existing_title)
+                self.norm_titles[existing_title] = existing_norm
 
-            # Primary path: strict normalized-title equality
-            if normalized_new == existing_normalized:
+            if normalized_new == existing_norm:
                 self.anime_to_urls[existing_title].append((url, source, params))
                 return
 
-            # Fallback path: compact key match, guarded by compatibility checks
             if (
-                compact_new == get_compact_normalized_title_key(existing_normalized)
-                and are_language_version_markers_compatible(normalized_new, existing_normalized)
-                and are_season_markers_compatible(normalized_new, existing_normalized)
+                compact_new == get_compact_normalized_title_key(existing_norm)
+                and are_language_version_markers_compatible(normalized_new, existing_norm)
+                and are_season_markers_compatible(normalized_new, existing_norm)
             ):
                 self.anime_to_urls[existing_title].append((url, source, params))
                 return
 
-        # No match found, create new entry using original title
         self.anime_to_urls[title].append((url, source, params))
+
+    def _guard_sources(self, query: str) -> SearchResults | None:
+        if not self.sources:
+            logger.info("\n❌ Erro: Nenhum plugin carregado!")
+            logger.info("Verifique se os plugins estão instalados em plugins/")
+            return SearchResults(query=query, results=(), metadata={})
+        return None
 
     def search_anime(self, query: str, verbose: bool = True) -> SearchResults:
         """Search for anime across all registered sources.
 
         Uses progressive search: starts with full query, decreases words if no results.
         Caches results for faster retrieval on subsequent queries.
-
-        Args:
-            query: Anime search query
-            verbose: Show progress messages
-
-        Returns:
-            Immutable SearchResults with anime matches
         """
-        search_start_time = time.time()
+        search_start = time.time()
 
-        if not self.sources:
-            logger.info("\n❌ Erro: Nenhum plugin carregado!")
-            logger.info("Verifique se os plugins estão instalados em plugins/")
-            return SearchResults(query=query, results=(), metadata={})
+        if guard := self._guard_sources(query):
+            return guard
 
-        # CACHE CHECK: Try to get search results from cache first
-        cache_key = normalize_search_cache_key(query)
-        cache_check_start = time.time()
-        try:
-            from utils.cache_manager import get_cache as get_dc
+        cached_data, cache_check_ms = self._try_cache(query, verbose)
 
-            dc = get_dc()
-            cached_results = dc.get(cache_key)
-        except Exception as e:
+        if cached_data and isinstance(cached_data, dict):
             if verbose:
-                logger.info(f"⚠️  Erro ao acessar cache: {e}")
-            cached_results = None
-        cache_check_time_ms = int((time.time() - cache_check_start) * 1000)
-
-        if cached_results and isinstance(cached_results, dict):
-            # Cache hit! Load results directly without scraping
-            if verbose:
-                logger.info(f"ℹ️  Usando cache para '{query}' ({len(cached_results)} animes)")
-
-            for anime_title, sources_list in cached_results.items():
+                logger.info(f"ℹ️  Usando cache para '{query}' ({len(cached_data)} animes)")
+            for anime_title, sources_list in cached_data.items():
                 for url, source, params in sources_list:
                     self.add_anime(anime_title, url, source, params)
-
-            total_time_ms = int((time.time() - search_start_time) * 1000)
-            # Set search metadata for consistency
+            total_ms = int((time.time() - search_start) * 1000)
             self._last_search_metadata = {
                 "original_query": query,
                 "used_query": query,
@@ -476,46 +390,26 @@ class SearchRepository:
                 "cache_hit": True,
                 "cache_age_seconds": 0,
                 "scraper_sources": [],
-                "cache_check_time_ms": cache_check_time_ms,
+                "cache_check_time_ms": cache_check_ms,
                 "scraper_execution_time_ms": 0,
-                "total_execution_time_ms": total_time_ms,
+                "total_execution_time_ms": total_ms,
             }
-            # Convert results to immutable SearchResults
             return self._build_search_results(query)
 
-        # Progressive search: start with all words, decrease if no results
         words = query.split()
         min_words = settings.search.progressive_search_min_words
-        scraper_execution_start = time.time()
+        scraper_start = time.time()
 
-        # Progressive search (DECRESCENTE): len(words), len(words)-1, ..., min_words
-        # Tries full query first, then progressively removes words from the end
         for num_words in range(len(words), min_words - 1, -1):
             partial_query = " ".join(words[:num_words])
-
-            # Clear previous attempt results
             self.clear_search_results()
-
-            # Search with current query (incremental)
             self._search_with_incremental_results(partial_query, verbose=False)
 
-            # If found results, stop
-            results_found = len(self.anime_to_urls)
-            if results_found > 0:
+            if len(self.anime_to_urls) > 0:
                 if verbose and num_words < len(words):
                     logger.info(
                         f"ℹ️  Busca com: '{partial_query}' ({num_words}/{len(words)} palavras)"
                     )
-                # Store metadata about the search
-                scraper_execution_time_ms = int((time.time() - scraper_execution_start) * 1000)
-                total_time_ms = int((time.time() - search_start_time) * 1000)
-
-                # Extract unique scraper sources from results
-                scraper_sources = set()
-                for sources_list in self.anime_to_urls.values():
-                    for url, source, params in sources_list:
-                        scraper_sources.add(source)
-
                 self._last_search_metadata = {
                     "original_query": query,
                     "used_query": partial_query,
@@ -525,68 +419,37 @@ class SearchRepository:
                     "source": "scraper",
                     "cache_hit": False,
                     "cache_age_seconds": None,
-                    "scraper_sources": sorted(list(scraper_sources)),
-                    "cache_check_time_ms": cache_check_time_ms,
-                    "scraper_execution_time_ms": scraper_execution_time_ms,
-                    "total_execution_time_ms": total_time_ms,
+                    "scraper_sources": self._collect_scraper_sources(),
+                    "cache_check_time_ms": cache_check_ms,
+                    "scraper_execution_time_ms": int((time.time() - scraper_start) * 1000),
+                    "total_execution_time_ms": int((time.time() - search_start) * 1000),
                 }
                 break
             elif verbose and num_words < len(words):
-                # No results with this word count, will try fewer words
                 logger.info(
                     f"ℹ️  0 resultados com '{partial_query}' ({num_words} palavras) → tentando com menos..."
                 )
 
-        # CACHE SAVE: Save search results to cache
         if len(self.anime_to_urls) > 0:
-            try:
-                from utils.cache_manager import get_cache as get_dc
+            self._save_cache(query, verbose)
 
-                dc = get_dc()
-                cache_key = normalize_search_cache_key(query)
-                # Convert anime_to_urls to dict format for caching
-                cache_data = dict(self.anime_to_urls)
-                # Use configurable search cache TTL from settings
-                ttl_seconds = settings.cache.search_cache_ttl_seconds
-                dc.set(cache_key, cache_data, ttl=ttl_seconds)
-            except Exception as e:
-                if verbose:
-                    logger.info(f"⚠️  Erro ao salvar cache: {e}")
-
-        # Return immutable SearchResults
         return self._build_search_results(query)
 
     def search_anime_with_word_limit(
         self, query: str, word_limit: int, verbose: bool = True
     ) -> SearchResults:
-        """Search anime with a word limit.
+        """Search anime using only the first `word_limit` words of query.
 
-        Searches using only the first `word_limit` words of the query.
         Useful for progressive search where user wants to continue with fewer words.
-
-        Args:
-            query: Original query (may have more words than word_limit)
-            word_limit: Number of words to use from the start of query
-            verbose: Show progress messages
-
-        Returns:
-            Immutable SearchResults with search results
         """
-        if not self.sources:
-            logger.info("\n❌ Erro: Nenhum plugin carregado!")
-            logger.info("Verifique se os plugins estão instalados em plugins/")
-            return SearchResults(query=query, results=(), metadata={})
+        if guard := self._guard_sources(query):
+            return guard
 
         words = query.split()
         min_words = settings.search.progressive_search_min_words
-
-        # Ensure word_limit is within valid range
         word_limit = max(min_words, min(word_limit, len(words)))
-
-        # Create limited query
         limited_query = " ".join(words[:word_limit])
 
-        # Store metadata
         self._last_search_metadata = {
             "original_query": query,
             "used_query": limited_query,
@@ -595,22 +458,12 @@ class SearchRepository:
             "min_words": min_words,
         }
 
-        # Clear previous results
         self.clear_search_results()
-
-        # Execute search
         self._search_with_incremental_results(limited_query, verbose)
-
-        # Return immutable SearchResults
         return self._build_search_results(query)
 
     def get_search_metadata(self) -> SearchMetadata:
-        """Get metadata about the last search performed.
-
-        Returns:
-            SearchMetadata with search information.
-            Returns empty SearchMetadata if no search has been performed yet.
-        """
+        """Get metadata about the last search performed."""
         if not self._last_search_metadata:
             return SearchMetadata(
                 original_query=None,
@@ -631,21 +484,13 @@ class SearchRepository:
         """Get anime titles, optionally filtered by exact match to query.
 
         Args:
-            filter_by_query: If provided, only return titles matching query.
             min_score: Ignored (kept for API compatibility)
-
-        Returns:
-            Sorted list of anime titles, filtered if query provided.
         """
         titles = list(self.anime_to_urls.keys())
-
         if not filter_by_query:
             return sorted(titles)
-
-        # Simple case-insensitive substring matching
         query_lower = filter_by_query.lower()
-        filtered = [title for title in titles if query_lower in title.lower()]
-        return sorted(filtered)
+        return sorted(title for title in titles if query_lower in title.lower())
 
     def get_anime_titles_with_sources(
         self,
@@ -655,36 +500,21 @@ class SearchRepository:
     ) -> list[str]:
         """Get anime titles with source indicators, ranked by relevance.
 
-        Shows which sources have each anime, helpful for multi-source scenarios.
         Format: "Anime Title [source1, source2]"
-
-        Args:
-            filter_by_query: If provided, only return titles matching query.
-            original_query: If provided, rank results by fuzzy matching score.
-            anilist_results: Optional list of AniListSearchResult for score-based sorting.
-
-        Returns:
-            List of anime titles with source indicators, ranked by relevance
         """
         titles = list(self.anime_to_urls.keys())
 
         if filter_by_query:
             titles = [
-                title
-                for title in titles
-                if SearchRepository._matches_filter_query(title, filter_by_query)
+                t for t in titles if SearchRepository._matches_filter_query(t, filter_by_query)
             ]
 
-        # Build titles with sources
         result = []
         for title in titles:
-            urls_and_sources = self.anime_to_urls[title]
-            # Filter out "cache" marker - only show real scraper sources
-            sources = set(source for _url, source, _params in urls_and_sources if source != "cache")
+            sources = {src for _, src, _ in self.anime_to_urls[title] if src != "cache"}
             sources_str = ", ".join(sorted(sources)) if sources else "cached"
             result.append((f"{title} [{sources_str}]", title))
 
-        # Rank by relevance if original_query provided
         if anilist_results:
             result = [
                 item[0]
@@ -699,7 +529,6 @@ class SearchRepository:
         elif original_query:
             result = [item[0] for item in self._rank_search_results(result, original_query)]
         else:
-            # Default: sort alphabetically by title
             result = [item[0] for item in sorted(result, key=lambda x: x[1])]
 
         return result
