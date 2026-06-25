@@ -320,6 +320,10 @@ def anime(args) -> None:
                 episode_list = rep.get_episode_list(ctx.anime_title)
                 total_episodes = len(episode_list)
 
+                if total_episodes == 0:
+                    logger.error("❌ Nao foi possivel carregar episodios para este anime.")
+                    return
+
                 # Validate episode number is within bounds
                 if args.episode < 1 or args.episode > total_episodes:
                     logger.error(
@@ -358,6 +362,10 @@ def anime(args) -> None:
         if hasattr(args, "episode") and args.episode is not None:
             episode_list = rep.get_episode_list(selected_anime)
             total_episodes = len(episode_list)
+
+            if total_episodes == 0:
+                logger.error("❌ Nao foi possivel carregar episodios para este anime.")
+                return
 
             # Validate episode number is within bounds
             if args.episode < 1 or args.episode > total_episodes:
@@ -401,7 +409,7 @@ def anime(args) -> None:
             logger.info("❌ Nenhuma fonte conseguiu extrair o video.")
             logger.info("   💡 O episódio pode estar indisponível em todas as fontes.")
             logger.info("   💡 Tente outro episódio ou espere e tente novamente mais tarde.\n")
-            continue
+            break
 
         # Use first source for initial display
         initial_source = sources[0][1]
@@ -463,7 +471,7 @@ def anime(args) -> None:
             logger.info("⏸️  Reprodução interrompida pelo usuário")
         elif all_failed:
             logger.info("❌ Nenhuma fonte conseguiu reproduzir o episódio")
-            sources_tried = ", ".join(f"{source}" for _, source in fallback_result.sources_tried)
+            sources_tried = ", ".join(f"{source}" for source, _ in fallback_result.sources_tried)
             logger.info(f"   Fontes tentadas: {sources_tried}")
             logger.info("   💡 Tente trocar de fonte manualmente ou verifique sua conexão.")
         else:
@@ -573,6 +581,8 @@ def anime(args) -> None:
                     if new_ctx:
                         ctx = navigate_episodes(new_ctx, "choose", new_episode_idx)
                         break
+                else:
+                    logger.info("⚠️  Troca de fonte cancelada ou não foi possível trocar de fonte.")
 
 
 def handle_random_anime(args) -> None:
