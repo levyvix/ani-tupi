@@ -165,7 +165,7 @@ def switch_anime_source(
             if selected_anime in history_data:
                 # history stores episode_idx (0-based), progress is 1-based
                 local_progress = history_data[selected_anime][1] + 1
-    except (FileNotFoundError, KeyError, IndexError):
+    except (OSError, KeyError, IndexError):
         pass  # No local history
 
     # 8. If have anilist_id, always check AniList (source of truth)
