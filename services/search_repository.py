@@ -169,9 +169,10 @@ class SearchRepository:
                 score = min(100, score + 10)
 
             score = SearchRepository._apply_word_count_adjustment(score, title_words, query_words)
-            scored.append((result, score, len(title_words), title))
+            is_prefix = int(bool(query_words and title_words[: len(query_words)] == query_words))
+            scored.append((result, score, is_prefix, len(title_words), title))
 
-        scored.sort(key=lambda x: (-x[1], x[2], x[3]))
+        scored.sort(key=lambda x: (-x[1], -x[2], x[3], x[4]))
         return [x[0] for x in scored]
 
     @staticmethod
