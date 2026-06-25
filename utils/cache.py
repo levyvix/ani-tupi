@@ -331,9 +331,13 @@ class _CacheItem:
     def size_bytes(self) -> int:
         """Estimate size of cached item."""
         try:
-            return len(str(self.value).encode("utf-8"))
+            import json
+
+            return len(json.dumps(self.value, default=str).encode("utf-8"))
         except Exception:
-            return 1024  # Fallback estimate
+            import sys
+
+            return sys.getsizeof(self.value)
 
 
 def create_cache(cache_type: Union[CacheType, str]) -> Cache:

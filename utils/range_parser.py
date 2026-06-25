@@ -12,6 +12,14 @@ Supported patterns:
 from typing import Optional
 
 
+def _safe_float(value: str) -> float | None:
+    """Convert string to float, returning None for non-numeric values like 'extra', 'bonus'."""
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
+
 def parse_range_input(
     user_input: str,
     last_chapter: Optional[str] = None,
@@ -44,8 +52,15 @@ def parse_range_input(
     if user_input.lower() == "all":
         if last_chapter:
             # Return chapters after last_chapter
-            last_num = float(last_chapter)
-            return [ch for ch in available_chapters if float(ch) > last_num]
+            try:
+                last_num = float(last_chapter)
+            except (ValueError, TypeError):
+                return available_chapters
+            return [
+                ch
+                for ch in available_chapters
+                if (v := _safe_float(ch)) is not None and v > last_num
+            ]
         else:
             # Return all available
             return available_chapters
@@ -90,8 +105,13 @@ def _get_default_range(
 
     if last_chapter:
         # Return next N chapters after last_chapter
-        last_num = float(last_chapter)
-        chapters_after = [ch for ch in available_chapters if float(ch) > last_num]
+        try:
+            last_num = float(last_chapter)
+        except (ValueError, TypeError):
+            return available_chapters[:default_count]
+        chapters_after = [
+            ch for ch in available_chapters if (v := _safe_float(ch)) is not None and v > last_num
+        ]
         return chapters_after[:default_count]
     else:
         # Return first N chapters
@@ -121,8 +141,13 @@ def _get_offset_range(
         return available_chapters[:count]
 
     # Find chapters after last_chapter
-    last_num = float(last_chapter)
-    chapters_after = [ch for ch in available_chapters if float(ch) > last_num]
+    try:
+        last_num = float(last_chapter)
+    except (ValueError, TypeError):
+        return available_chapters[:count]
+    chapters_after = [
+        ch for ch in available_chapters if (v := _safe_float(ch)) is not None and v > last_num
+    ]
 
     if not chapters_after:
         raise ValueError(f"No chapters available after chapter {last_chapter}")
@@ -160,7 +185,11 @@ def _parse_range_format(user_input: str, available_chapters: list[str]) -> list[
         raise ValueError(f"Range values must be non-negative: '{user_input}'")
 
     # Find chapters within range
-    result = [ch for ch in available_chapters if start <= float(ch) <= end]
+    result = []
+    for ch in available_chapters:
+        v = _safe_float(ch)
+        if v is not None and start <= v <= end:
+            result.append(ch)
 
     if not result:
         raise ValueError(f"No chapters found in range {start}-{end}")

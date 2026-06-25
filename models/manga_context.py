@@ -6,9 +6,11 @@ Enables cleaner function signatures and better type safety.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
+
+from models.models import ChapterData
 
 
 class ChapterContext(BaseModel):
@@ -25,7 +27,9 @@ class ChapterContext(BaseModel):
     manga_url: Optional[str] = Field(None, description="Base manga URL for scrapers")
 
     # Navigation context (optional, for chapter navigation)
-    all_chapters: Optional[list[Any]] = Field(None, description="All chapters for navigation")
+    all_chapters: Optional[list[ChapterData]] = Field(
+        None, description="All chapters for navigation"
+    )
     chapter_labels: Optional[list[str]] = Field(None, description="Formatted chapter labels")
     current_index: int = Field(0, ge=0, description="Current chapter index in list")
 
@@ -76,7 +80,7 @@ class ReadingSession(BaseModel):
 
     # Progress
     current_chapter: Optional[str] = None
-    chapters: list[Any] = Field(default_factory=list)
+    chapters: list[ChapterData] = Field(default_factory=list)
     chapter_index: int = 0
 
     # History/sync
