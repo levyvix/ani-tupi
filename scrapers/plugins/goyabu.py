@@ -71,27 +71,30 @@ class Goyabu:
             pass
 
     def search_player_src(self, url: str, container: list, event) -> None:
-        response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
+        try:
+            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
 
-        # Extract playersData JSON from script
-        match = re.search(r"var\s+playersData\s*=\s*(\[.*?\])\s*;", response.text, re.DOTALL)
-        if not match:
-            raise ValueError("No playersData found in Goyabu episode page")
+            # Extract playersData JSON from script
+            match = re.search(r"var\s+playersData\s*=\s*(\[.*?\])\s*;", response.text, re.DOTALL)
+            if not match:
+                raise ValueError("No playersData found in Goyabu episode page")
 
-        players = json.loads(match.group(1))
-        for player in players:
-            # Extract token from the direct blogger URL (blogger_token is base64-encoded)
-            player_url = player.get("url", "")
-            m = re.search(r"token=([^&\s]+)", player_url)
-            token = m.group(1) if m else ""
+            players = json.loads(match.group(1))
+            for player in players:
+                # Extract token from the direct blogger URL (blogger_token is base64-encoded)
+                player_url = player.get("url", "")
+                m = re.search(r"token=([^&\s]+)", player_url)
+                token = m.group(1) if m else ""
 
-            if token:
-                video_url = resolve_blogger_token(token)
-                if store_player_source(container, event, video_url):
-                    return
+                if token:
+                    video_url = resolve_blogger_token(token)
+                    if store_player_source(container, event, video_url):
+                        return
 
-        raise ValueError("No playable video source found in Goyabu episode")
+            raise ValueError("No playable video source found in Goyabu episode")
+        except Exception as e:
+            raise type(e)(f"Goyabu: {e}") from e
 
 
 def load() -> None:

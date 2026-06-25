@@ -1,10 +1,14 @@
+import logging
 import urllib.parse
 
 import requests
 from bs4 import BeautifulSoup
+from requests import RequestException
 
 from scrapers.plugins.utils import load_plugin, store_player_source
 from services.repository import rep
+
+logger = logging.getLogger(__name__)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
@@ -18,9 +22,14 @@ class AniTube:
 
     def search_anime(self, query: str) -> None:
         def _do_search(q: str) -> None:
-            url = f"{self.base_url}/wp-json/wp/v2/posts?search={urllib.parse.quote(q)}&per_page=20"
-            response = requests.get(url, headers=HEADERS, timeout=30)
-            results = response.json()
+            try:
+                url = f"{self.base_url}/wp-json/wp/v2/posts?search={urllib.parse.quote(q)}&per_page=20"
+                response = requests.get(url, headers=HEADERS, timeout=30)
+                response.raise_for_status()
+                results = response.json()
+            except RequestException as e:
+                logger.debug(f"AniTube search request failed for '{q}': {e}")
+                return
             for post in results:
                 title = post.get("title", {}).get("rendered", "")
                 link = post.get("link", "")
@@ -42,24 +51,28 @@ class AniTube:
         _do_search(f"{query} todos os episodios")
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
-        separator = "&" if "?" in url else "?"
-        episodes_url = f"{url}{separator}ord=1"
+        try:
+            separator = "&" if "?" in url else "?"
+            episodes_url = f"{url}{separator}ord=1"
 
-        response = requests.get(episodes_url, headers=HEADERS, timeout=30)
-        response.raise_for_status()
-        page = BeautifulSoup(response.text, "html.parser")
+            response = requests.get(episodes_url, headers=HEADERS, timeout=30)
+            response.raise_for_status()
+            page = BeautifulSoup(response.text, "html.parser")
 
-        episode_links = page.select("a[title*='Episódio']")
-        titles = []
-        urls = []
-        for a in episode_links:
-            href = a.get("href")
-            title = a.get("title")
-            if href and title and "anitube" in href:
-                titles.append(title.strip())
-                urls.append(href)
+            episode_links = page.select("a[title*='Episódio']")
+            titles = []
+            urls = []
+            for a in episode_links:
+                href = a.get("href")
+                title = a.get("title")
+                if href and title and href.startswith("http"):
+                    titles.append(title.strip())
+                    urls.append(href)
 
-        rep.add_episode_list(anime, titles, urls, self.name)
+            rep.add_episode_list(anime, titles, urls, self.name)
+        except RequestException as e:
+            logger.debug(f"AniTube episode fetch failed for '{anime}': {e}")
+            return
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
