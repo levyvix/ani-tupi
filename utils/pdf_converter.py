@@ -4,6 +4,7 @@ Converts directories of images (PNG, JPG, JPEG, WebP) into multi-page PDF files
 with optional compression for efficient storage.
 """
 
+import warnings
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
@@ -50,36 +51,47 @@ def create_pdf_from_images(
             # Skip invalid files (HTML errors, corrupted files, etc.)
             continue
 
-    # Sort by filename
-    images = sorted(valid_images)
+    # Sort by numeric stem so mixed-extension chapters order correctly
+    images = sorted(valid_images, key=lambda p: int(p.stem) if p.stem.isdigit() else p.name)
 
     if not images:
         msg = f"No valid images found in {image_dir}"
         raise ValueError(msg)
 
-    # Open first image (cover) and convert to RGB
     try:
-        first_image = Image.open(images[0]).convert("RGB")
-    except Exception as e:
-        raise ValueError(f"Failed to process image {images[0]}: {e}")
-
-    # Open remaining images and convert to RGB
-    other_images = []
-    for img_path in images[1:]:
+        # Open first image (cover) and convert to RGB
+        first_image = None
         try:
-            img = Image.open(img_path).convert("RGB")
-            other_images.append(img)
+            first_image = Image.open(images[0]).convert("RGB")
         except Exception as e:
-            raise ValueError(f"Failed to process image {img_path}: {e}")
+            warnings.warn(f"Skipping bad page {images[0]}: {e}", stacklevel=2)
 
-    # Save as multi-page PDF with compression
-    first_image.save(
-        output_pdf,
-        "PDF",
-        save_all=True,
-        append_images=other_images,
-        quality=quality,
-        optimize=True,
-    )
+        if first_image is None:
+            msg = f"No valid images could be processed in {image_dir}"
+            raise ValueError(msg)
+
+        # Open remaining images and convert to RGB, skipping bad pages
+        other_images = []
+        for img_path in images[1:]:
+            try:
+                img = Image.open(img_path).convert("RGB")
+                other_images.append(img)
+            except Exception as e:
+                warnings.warn(f"Skipping bad page {img_path}: {e}", stacklevel=2)
+                continue
+
+        # Save as multi-page PDF with compression
+        first_image.save(
+            output_pdf,
+            "PDF",
+            save_all=True,
+            append_images=other_images,
+            quality=quality,
+            optimize=True,
+        )
+    except Exception:
+        if output_pdf.exists():
+            output_pdf.unlink(missing_ok=True)
+        raise
 
     return output_pdf
