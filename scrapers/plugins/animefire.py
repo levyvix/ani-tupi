@@ -1,4 +1,5 @@
 import json
+import logging
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
@@ -6,6 +7,8 @@ import requests
 from scrapers.core.selenium_driver import SeleniumWebDriver
 from scrapers.plugins.utils import load_plugin, store_player_source
 from services.repository import rep
+
+logger = logging.getLogger(__name__)
 
 
 class AnimeFire:
@@ -59,9 +62,8 @@ class AnimeFire:
             episode_links = [a.get("href") for a in links if a.get("href") is not None]
             opts = [str(a.text) for a in links]
             rep.add_episode_list(anime, opts, episode_links, self.name)
-        except Exception:
-            # Silently fail - let other sources provide fallback data
-            # (No logging/printing - just graceful degradation)
+        except Exception as e:
+            logger.debug(f"AnimeFire episode fetch failed for '{anime}': {e}")
             pass
 
     def search_player_src(self, url: str, container: list, event) -> None:
@@ -103,8 +105,8 @@ class AnimeFire:
                                 if best_video:
                                     if store_player_source(container, event, best_video):
                                         return
-                    except Exception:
-                        # API fetch failed, try fallback methods
+                    except Exception as e:
+                        logger.debug(f"AnimeFire API fetch failed for '{url}': {e}")
                         pass
 
                 # Fallback: try standard src attribute

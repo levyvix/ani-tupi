@@ -1,3 +1,4 @@
+import logging
 import re
 import urllib.parse
 
@@ -7,6 +8,8 @@ from bs4 import BeautifulSoup
 from scrapers.core.blogger_resolver import resolve_blogger_token
 from scrapers.plugins.utils import load_plugin, store_player_source
 from services.repository import rep
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://animesonlinecc.to"
 HEADERS = {
@@ -36,8 +39,8 @@ class AnimesOnlineCC:
                 link = a.get("href", "")
                 if title and link:
                     rep.add_anime(title, link, self.name)
-        except requests.RequestException:
-            pass
+        except requests.RequestException as e:
+            logger.debug(f"AnimesOnlineCC search request failed for '{query}': {e}")
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
         try:
@@ -49,7 +52,9 @@ class AnimesOnlineCC:
             titles = []
             urls = []
             for a in soup.find_all("a", href=re.compile(r"/episodio/")):
-                ep_url = a.get("href", "")
+                ep_url = str(a.get("href", ""))
+                if ep_url.startswith("//"):
+                    ep_url = "https:" + ep_url
                 num_match = re.search(r"-episodio-(\d+)/?$", ep_url)
                 # Skip nav links (no episode number) and relative URLs
                 if not ep_url.startswith("http") or not num_match or ep_url in seen:
@@ -61,25 +66,28 @@ class AnimesOnlineCC:
 
             if titles and urls:
                 rep.add_episode_list(anime, titles, urls, self.name)
-        except requests.RequestException:
-            pass
+        except requests.RequestException as e:
+            logger.debug(f"AnimesOnlineCC episode fetch failed for '{anime}': {e}")
 
     def search_player_src(self, url: str, container: list, event) -> None:
-        r = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "html.parser")
 
-        for iframe in soup.find_all("iframe", src=re.compile(r"blogger\.com/video\.g")):
-            src = iframe.get("src", "")
-            m = re.search(r"token=([^&\s\"']+)", src)
-            if not m:
-                continue
-            token = m.group(1)
-            video_url = resolve_blogger_token(token)
-            if store_player_source(container, event, video_url):
-                return
+            for iframe in soup.find_all("iframe", src=re.compile(r"blogger\.com/video\.g")):
+                src = iframe.get("src", "")
+                m = re.search(r"token=([^&\s\"']+)", src)
+                if not m:
+                    continue
+                token = m.group(1)
+                video_url = resolve_blogger_token(token)
+                if store_player_source(container, event, video_url):
+                    return
 
-        raise ValueError("No blogger iframe found in AnimesOnlineCC episode page")
+            raise ValueError("No blogger iframe found in AnimesOnlineCC episode page")
+        except Exception as e:
+            raise type(e)(f"AnimesOnlineCC: {e}") from e
 
 
 def load() -> None:

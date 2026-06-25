@@ -86,7 +86,7 @@ def _extract_season_number(text: str) -> int:
     match = re.search(r"(?:^|\D)(\d+)(?:º|ª)?\s*(?:temporada|season)", text.lower())
     if match:
         return int(match.group(1))
-    match = re.search(r"(?:^|\D)(\d+)(?:º|ª)?", text.lower())
+    match = re.search(r"(?:^|\D)([1-9]\d?)(?:º|ª)?", text.lower())
     if match:
         return int(match.group(1))
     return 1
@@ -206,7 +206,7 @@ class SushiAnimes:
 
             embed_id = _extract_embed_id(soup)
             if not embed_id:
-                return
+                raise ValueError(f"No embed ID found in SushiAnimes episode page: {url}")
 
             ajax_headers = {
                 **HEADERS,
@@ -225,7 +225,7 @@ class SushiAnimes:
 
             player_url = _extract_player_url(embed_response.text)
             if not player_url:
-                return
+                raise ValueError(f"No player URL found in SushiAnimes embed response for: {url}")
             store_player_source(container, event, player_url)
         except requests.RequestException:
             pass

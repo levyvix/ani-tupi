@@ -9,12 +9,12 @@ The parameter enables proper episode ordering from 1 to end.
 
 import asyncio
 import base64
-import html as html_module
 import json
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict
+from urllib.parse import unquote
 
 import requests
 from bs4 import BeautifulSoup
@@ -237,16 +237,15 @@ class AnimesDigital:
                 try:
                     loop = asyncio.get_running_loop()
                     with ThreadPoolExecutor(max_workers=1) as executor:
-                        tree = loop.run_until_complete(
-                            loop.run_in_executor(
-                                executor,
-                                lambda: SeleniumWebDriver().fetch(url),
-                            )
-                        )
+
+                        def _fetch_url(u: str = url) -> object:
+                            with SeleniumWebDriver() as driver:
+                                return driver.fetch(u)
+
+                        tree = loop.run_until_complete(loop.run_in_executor(executor, _fetch_url))
                 except RuntimeError:
-                    tree = SeleniumWebDriver().fetch(
-                        url.replace("?odr=1", "").replace("&odr=1", "")
-                    )
+                    with SeleniumWebDriver() as driver:
+                        tree = driver.fetch(url)
 
                 if tree.select("div.item_ep"):
                     self._merge_into(all_anime, query, audio_type, url)
@@ -428,7 +427,7 @@ class AnimesDigital:
                 r'https://api\.anivideo\.net/videohls\.php\?d=([^"<>&\s]+)', html_content
             )
             if hls_match:
-                hls_url = html_module.unescape(hls_match.group(1))
+                hls_url = unquote(hls_match.group(1))
 
             mp4_decoded = None
             mp4_encoded = None

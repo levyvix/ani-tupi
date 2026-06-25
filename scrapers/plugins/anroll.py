@@ -48,10 +48,12 @@ class AnRoll:
             titles = []
             urls = []
             for a in soup.find_all("a", href=True):
-                href = a.get("href", "")
+                href = str(a.get("href", ""))
                 m = re.search(r"/temporada-(\d+)/episodio-(\d+)$", href)
                 if not m:
                     continue
+                if href and not href.startswith("http"):
+                    href = BASE_URL + href
                 t = int(m.group(1))
                 ep = int(m.group(2))
                 label = f"T{t:02d} Ep.{ep:03d}"
@@ -63,33 +65,36 @@ class AnRoll:
             pass
 
     def search_player_src(self, url: str, container: list, event) -> None:
-        response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        text = response.text
+        try:
+            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            text = response.text
 
-        slug_m = re.search(r'slug:\s*"([^"]+)"', text)
-        temp_m = re.search(r"temporada:\s*(\d+)", text)
-        ep_m = re.search(r"episodio:\s*(\d+)", text)
-        fallback_m = re.search(r'FALLBACK_URL\s*=\s*"(https?://[^"]+)"', text)
+            slug_m = re.search(r'slug:\s*"([^"]+)"', text)
+            temp_m = re.search(r"temporada:\s*(\d+)", text)
+            ep_m = re.search(r"episodio:\s*(\d+)", text)
+            fallback_m = re.search(r'FALLBACK_URL\s*=\s*"(https?://[^"]+)"', text)
 
-        if not (slug_m and temp_m and ep_m):
-            raise ValueError("urlConfig not found in anroll.info episode page")
+            if not (slug_m and temp_m and ep_m):
+                raise ValueError("urlConfig not found in anroll.info episode page")
 
-        slug = slug_m.group(1)
-        temporada = int(temp_m.group(1))
-        episodio = int(ep_m.group(1))
-        cdn_base = fallback_m.group(1) if fallback_m else "https://forks-animes.telabrasil.shop"
+            slug = slug_m.group(1)
+            temporada = int(temp_m.group(1))
+            episodio = int(ep_m.group(1))
+            cdn_base = fallback_m.group(1) if fallback_m else "https://forks-animes.telabrasil.shop"
 
-        pt = slug[0].upper()
-        temp_num = f"{temporada:02d}"
-        ep_num = f"{episodio:02d}"
+            pt = slug[0].upper()
+            temp_num = f"{temporada:02d}"
+            ep_num = f"{episodio:02d}"
 
-        stream_url = f"{cdn_base}/{pt}/{slug}/{temp_num}-temporada/{ep_num}/stream.m3u8"
+            stream_url = f"{cdn_base}/{pt}/{slug}/{temp_num}-temporada/{ep_num}/stream.m3u8"
 
-        if store_player_source(container, event, stream_url):
-            return
+            if store_player_source(container, event, stream_url):
+                return
 
-        raise ValueError("Failed to store video source for anroll.info")
+            raise ValueError("Failed to store video source for anroll.info")
+        except Exception as e:
+            raise type(e)(f"Anroll: {e}") from e
 
 
 def load() -> None:
