@@ -600,6 +600,10 @@ def anilist_anime_flow(
 
             break  # Exit while loop
 
+    # Clear any stale awaiting episode URLs from previous sessions for this anime
+    if hasattr(anilist_anime_flow, "_awaiting_episode_urls"):
+        anilist_anime_flow._awaiting_episode_urls.pop(selected_anime, None)
+
     # Save the choice for next time (with original search title for "Trocar fonte")
     if anilist_id:
         # Get anime URLs from repository IMMEDIATELY after user selects
@@ -697,7 +701,7 @@ def anilist_anime_flow(
             if selected_anime in history_data:
                 # history stores episode_idx (0-based), progress is 1-based
                 local_progress = history_data[selected_anime][1] + 1
-    except (FileNotFoundError, KeyError, IndexError):
+    except (OSError, KeyError, IndexError):
         pass  # No local history
 
     # Use maximum of AniList and local progress (never go backwards)
@@ -961,7 +965,7 @@ def anilist_anime_flow(
         if not all_sources:
             logger.info("❌ Nenhuma fonte conseguiu extrair o vídeo.")
             logger.info("   💡 O episódio está indisponível em todas as fontes.")
-            continue
+            break
 
         # Show episode progress
         progress_str = _format_episode_progress(episode, num_episodes, total_episodes)
@@ -1177,6 +1181,9 @@ def anilist_anime_flow(
 
             # Only save history and update AniList if user confirmed
             if confirm == "✅ Sim, assisti até o final":
+                # Re-sync episode (1-based) from current_episode_idx in case IPC navigation
+                # updated current_episode_idx without refreshing the local `episode` variable.
+                episode = current_episode_idx + 1
                 save_history(selected_anime, episode_idx, anilist_id, source)
 
                 # Update AniList if authenticated

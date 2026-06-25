@@ -9,7 +9,6 @@ Used by: ui/anime_menus.py, core/anime_service.py
 """
 
 import time
-from sys import exit
 
 from models.config import get_data_path
 from services.repository import rep
@@ -415,8 +414,8 @@ def load_history() -> tuple[str, int, int | None, str | None] | None:
 
         return anime, episode_idx, anilist_id, anilist_title
     except FileNotFoundError:
-        logger.error("History file not found, exiting")
-        exit()
+        logger.warning("History file not found")
+        return None
     except PersistenceError as e:
         logger.error(f"Permission error accessing history: {e}")
         return None
@@ -528,13 +527,18 @@ def save_history_from_event(
                         # If user is rewatching, check if they want to move back to CURRENT
                         # For now, just change to REPEATING as it's the most logical
                         logger.info(f"Changing '{anime_title}' to REPEATING")
-                        anilist_client.change_status(anilist_id, Status.REPEATING)
+                        status_changed = anilist_client.change_status(anilist_id, Status.REPEATING)
+                        if not status_changed:
+                            # AniList rejects progress updates for COMPLETED entries;
+                            # skip update_progress if status change failed.
+                            logger.warning(
+                                f"Failed to change '{anime_title}' to REPEATING; skipping progress update"
+                            )
+                            return
 
                 # Update progress (episode_idx is 0-based, convert to 1-based)
                 episode_number = episode_idx + 1
 
-                # IMPORTANT: If already COMPLETED and not REPEATING, progress update might fail
-                # or not reflect on AniList until status is changed.
                 success = anilist_client.update_progress(anilist_id, episode_number)
 
                 if success:
