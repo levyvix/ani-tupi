@@ -204,7 +204,7 @@ def handle_local_library_playback(args) -> None:
                 url=file_url,
                 anime_title=selected_title,
                 episode_number=selected_ep_num,
-                total_episodes=len(episodes),
+                total_episodes=None,
                 source="local",
                 use_ipc=True,
             )
@@ -230,7 +230,7 @@ def handle_local_library_playback(args) -> None:
             handle_post_playback_confirmation(
                 anime_title=selected_title,
                 episode_number=final_episode,
-                num_episodes=len(episodes),
+                num_episodes=None,
                 anilist_id=anilist_id,
                 source="local",
                 is_local=True,

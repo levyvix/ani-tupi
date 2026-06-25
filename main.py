@@ -41,9 +41,6 @@ def show_main_menu() -> str | None:
 
 def main_menu_flow(args) -> None:
     """Show main menu and route to appropriate command handler."""
-    # Clean up any zombie browser processes from previous runs
-    cleanup_zombie_browsers()
-
     while True:
         choice = show_main_menu()
 
@@ -52,8 +49,10 @@ def main_menu_flow(args) -> None:
         elif choice == "▶️  Continuar Assistindo":
             # Set continue_watching flag only for this invocation.
             args.continue_watching = True
-            anime_cmd(args)
-            args.continue_watching = False
+            try:
+                anime_cmd(args)
+            finally:
+                args.continue_watching = False
         elif choice == "📂 Biblioteca Local":
             handle_local_library(args)
         elif choice == "📺 AniList":
@@ -62,28 +61,6 @@ def main_menu_flow(args) -> None:
             manga_cmd(args)
         elif choice == "⚙️  Gerenciar Fontes":
             manage_sources_cmd(args)
-
-
-def cleanup_zombie_browsers() -> None:
-    """Clean up any zombie browser processes from previous runs."""
-    try:
-        import subprocess
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        # Clean up Firefox zombies
-        result = subprocess.run(["pkill", "-f", "firefox"], capture_output=True, timeout=5)
-        if result.returncode == 0:
-            logger.info("Cleaned up zombie Firefox processes")
-
-        # Clean up Chrome/Chromium zombies
-        for browser in ["chrome", "chromium"]:
-            subprocess.run(["pkill", "-f", browser], capture_output=True, timeout=5)
-
-    except (subprocess.TimeoutExpired, FileNotFoundError, ImportError):
-        # Silently ignore cleanup failures
-        pass
 
 
 def run_startup_update_check() -> None:

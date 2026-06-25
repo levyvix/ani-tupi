@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 
 from models.config import settings
@@ -31,7 +32,8 @@ def update(args) -> int:
     logger.info("⏳ Executando comando de atualização...")
 
     try:
-        completed = subprocess.run(settings.updates.update_command, shell=True)
+        cmd = shlex.split(settings.updates.update_command)
+        completed = subprocess.run(cmd)
     except OSError as exc:
         logger.error(f"❌ Falha ao iniciar atualização: {exc}")
         return 1
