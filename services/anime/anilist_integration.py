@@ -610,7 +610,7 @@ def anilist_anime_flow(
         repo_title = selected_anime
         if selected_anime not in rep.anime_to_urls:
             # If no exact match, find best fuzzy match
-            from fuzzywuzzy import fuzz
+            from thefuzz import fuzz
 
             repo_titles = list(rep.anime_to_urls.keys())
             if repo_titles:

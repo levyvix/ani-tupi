@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from typing import Protocol
 
-from fuzzywuzzy import fuzz
+from thefuzz import fuzz
 
 from models.config import settings
 from models.models import AniListAnime, AnimeTitleResolution, JikanAnimeEntry

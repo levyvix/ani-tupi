@@ -18,7 +18,7 @@ from typing import TypedDict
 
 import requests
 from bs4 import BeautifulSoup
-from fuzzywuzzy import fuzz
+from thefuzz import fuzz
 
 from scrapers.core.selenium_driver import SeleniumWebDriver
 from scrapers.plugins.utils import load_plugin, store_player_source

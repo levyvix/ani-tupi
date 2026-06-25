@@ -114,7 +114,7 @@ def _filter_anime_results(titles: list[str], query: str) -> list[str]:
 
 def _rank_anime_results_by_reference(titles: list[str], reference_title: str) -> list[str]:
     """Rank title strings using the canonical AniList reference title."""
-    from fuzzywuzzy import fuzz
+    from thefuzz import fuzz
     from services.search_repository import SearchRepository
 
     reference_title = reference_title.split(" / ")[0]
@@ -171,7 +171,7 @@ def _rank_anime_results_by_reference(titles: list[str], reference_title: str) ->
 
 def _best_similarity_score_for_reference(titles: list[str], reference_title: str) -> int:
     """Return the best similarity score between results and a reference title."""
-    from fuzzywuzzy import fuzz
+    from thefuzz import fuzz
     from services.search_repository import SearchRepository
 
     if not titles or not reference_title:

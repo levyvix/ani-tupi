@@ -5,7 +5,7 @@ against AniList API to get anilist_id. This enables better caching and
 metadata enrichment.
 """
 
-from fuzzywuzzy import fuzz
+from thefuzz import fuzz
 
 from models.models import AniListAnime, AniListSearchResult
 from models.config import settings

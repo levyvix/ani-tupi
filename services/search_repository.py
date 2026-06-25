@@ -122,7 +122,7 @@ class SearchRepository:
 
     @staticmethod
     def _fuzz_score(norm_a: str, compact_a: str, norm_b: str, compact_b: str) -> int:
-        from fuzzywuzzy import fuzz
+        from thefuzz import fuzz
 
         return max(
             fuzz.ratio(norm_a, norm_b),

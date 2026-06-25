@@ -26,7 +26,6 @@ dependencies = [
     "inquirerpy>=0.3.4",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
-    "fuzzywuzzy>=0.18.0",
     "python-levenshtein>=0.27.3",
     "diskcache>=5.6.3",
     "python-mpv>=1.0.8",
@@ -37,6 +36,7 @@ dependencies = [
     "requests>=2.32.5",
     "selenium>=4.0.0",
     "bs4>=0.0.2",
+    "thefuzz>=0.22.1",
 ]
 
 [project.scripts]
