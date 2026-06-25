@@ -4,7 +4,6 @@ Refactored from the original manga_service.py to fit the plugin architecture.
 Uses requests for API communication.
 """
 
-import json
 from typing import Any
 
 import requests
@@ -36,9 +35,11 @@ class MangaDex:
         """
         try:
             resp = requests.get(
-                f"{self.base_url}/manga?title={query}&limit=100",
+                f"{self.base_url}/manga",
+                params={"title": query, "limit": 100},
                 timeout=10,
             )
+            resp.raise_for_status()
             data = resp.json()
         except Exception:
             return []
@@ -89,16 +90,29 @@ class MangaDex:
         try:
             chapters = []
             offset = 0
+            limit = 96
 
             while True:
-                # Build query string with language parameters
-                lang_params = "&".join(
-                    [f"translatedLanguage[]={lang}" for lang in self.preferred_languages]
-                )
-                url = f"{self.base_url}/manga/{manga_id}/feed?limit=500&offset={offset}&{lang_params}&order[chapter]=asc&includeEmptyPages=0&includeFuturePublishAt=0"
+                # Build params with language parameters
+                params: dict = {
+                    "limit": limit,
+                    "offset": offset,
+                    "order[chapter]": "asc",
+                    "includeEmptyPages": "0",
+                    "includeFuturePublishAt": "0",
+                }
+                for lang in self.preferred_languages:
+                    params.setdefault("translatedLanguage[]", [])
+                    if isinstance(params["translatedLanguage[]"], list):
+                        params["translatedLanguage[]"].append(lang)
 
-                resp = requests.get(url, timeout=10)
-                data = resp.json() if hasattr(resp, "json") else json.loads(resp.text)
+                resp = requests.get(
+                    f"{self.base_url}/manga/{manga_id}/feed",
+                    params=params,
+                    timeout=10,
+                )
+                resp.raise_for_status()
+                data = resp.json()
 
                 if not data.get("data"):
                     break
@@ -124,8 +138,9 @@ class MangaDex:
                     except (KeyError, ValueError):
                         continue
 
-                offset += 500
-                if len(data["data"]) < 500:
+                total = data.get("total", 0)
+                offset += limit
+                if offset >= total or len(data["data"]) < limit:
                     break
 
             # Sort by chapter number (descending - latest first)
@@ -154,7 +169,8 @@ class MangaDex:
                 f"{self.base_url}/at-home/server/{chapter_id}",
                 timeout=10,
             )
-            data = resp.json() if hasattr(resp, "json") else json.loads(resp.text)
+            resp.raise_for_status()
+            data = resp.json()
 
             base_url = data["baseUrl"]
             hash_code = data["chapter"]["hash"]

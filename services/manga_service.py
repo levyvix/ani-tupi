@@ -13,6 +13,7 @@ and the new multi-source unified service into a single source of truth.
 
 import itertools
 import json
+import threading
 from datetime import datetime
 from typing import Any
 from collections import OrderedDict
@@ -66,6 +67,7 @@ class MangaHistory:
     """Reading progress tracker with JSON persistence."""
 
     _history_file = get_data_path() / "manga_history.json"
+    _lock = threading.Lock()
 
     @classmethod
     def _ensure_dir(cls) -> None:
@@ -117,20 +119,21 @@ class MangaHistory:
         anilist_id: int | None = None,
     ) -> None:
         """Update reading progress."""
-        history = cls.load()
-        entry = history.get(manga_title)
+        with cls._lock:
+            history = cls.load()
+            entry = history.get(manga_title)
 
-        # Preserve existing AniList data if not provided
-        if entry and not anilist_id:
-            anilist_id = entry.anilist_id
+            # Preserve existing AniList data if not provided
+            if entry and not anilist_id:
+                anilist_id = entry.anilist_id
 
-        history[manga_title] = MangaHistoryEntry(
-            last_chapter=chapter_number,
-            last_chapter_id=chapter_id,
-            manga_id=manga_id,
-            anilist_id=anilist_id,
-        )
-        cls.save(history)
+            history[manga_title] = MangaHistoryEntry(
+                last_chapter=chapter_number,
+                last_chapter_id=chapter_id,
+                manga_id=manga_id,
+                anilist_id=anilist_id,
+            )
+            cls.save(history)
 
 
 class DownloadedChaptersTracker:
@@ -141,6 +144,7 @@ class DownloadedChaptersTracker:
     """
 
     _downloads_file = get_data_path() / "manga_downloads.json"
+    _lock = threading.Lock()
 
     @classmethod
     def _ensure_dir(cls) -> None:
@@ -191,24 +195,25 @@ class DownloadedChaptersTracker:
         source: str = "mangadex",
     ) -> None:
         """Mark a chapter as downloaded and persist metadata."""
-        data = cls._load_raw()
+        with cls._lock:
+            data = cls._load_raw()
 
-        if manga_id not in data:
-            data[manga_id] = {
-                "manga_title": manga_title,
-                "source": source,
-                "downloaded_chapters": {},
-                "last_download_at": None,
+            if manga_id not in data:
+                data[manga_id] = {
+                    "manga_title": manga_title,
+                    "source": source,
+                    "downloaded_chapters": {},
+                    "last_download_at": None,
+                }
+
+            data[manga_id]["downloaded_chapters"][chapter_number] = {
+                "file_path": file_path,
+                "file_size_mb": file_size_mb,
+                "downloaded_at": str(datetime.now()),
             }
+            data[manga_id]["last_download_at"] = str(datetime.now())
 
-        data[manga_id]["downloaded_chapters"][chapter_number] = {
-            "file_path": file_path,
-            "file_size_mb": file_size_mb,
-            "downloaded_at": str(datetime.now()),
-        }
-        data[manga_id]["last_download_at"] = str(datetime.now())
-
-        cls._save_raw(data)
+            cls._save_raw(data)
 
     @classmethod
     def get_downloaded_chapters(cls, manga_id: str) -> dict[str, Any]:

@@ -93,7 +93,10 @@ def _handle_recent_history(service: UnifiedMangaService) -> None:
             if isinstance(data, dict) and "last_chapter" in data:
                 chapter = data["last_chapter"]
             elif isinstance(data, list) and len(data) > 1:
-                chapter = data[1] + 1  # Convert from 0-indexed
+                try:
+                    chapter = int(float(data[1])) + 1  # Convert from 0-indexed
+                except (IndexError, TypeError, ValueError):
+                    chapter = "Desconhecido"
             else:
                 chapter = "Desconhecido"
 
@@ -493,7 +496,11 @@ def _continue_manga_flow(
         return
 
     # Sort chapters in ascending order (1 → 2 → 3 → ...)
-    chapters.reverse()
+    chapters.sort(
+        key=lambda c: float(str(c.number).replace(",", "."))
+        if str(c.number).replace(",", ".").replace("-", "").replace(".", "").isdigit()
+        else 0.0
+    )
 
     # Handle immediate resume if user chose to resume
     if resume_immediately and recommended_chapter_num:
@@ -1176,8 +1183,10 @@ def _process_chapter(
                 ext = UrlPath(url.split("?")[0]).suffix or ".png"
                 img_path = output_path / f"{i:03d}{ext}"
                 if not img_path.exists():
-                    img_data = requests.get(url, timeout=10).content
-                    img_path.write_bytes(img_data)
+                    response = requests.get(url, timeout=10)
+                    response.raise_for_status()
+                    content = response.content
+                    img_path.write_bytes(content)
 
             if not config.auto_create_pdf:
                 logger.info(f"✓ Capítulo salvo em: {output_path}")
@@ -1202,6 +1211,9 @@ def _process_chapter(
 
         except Exception as e:
             logger.info(f"❌ Erro ao processar capítulo: {e}")
+            if output_path.exists():
+                for f in output_path.glob("*"):
+                    f.unlink(missing_ok=True)
             return
 
     # Open PDF reader
