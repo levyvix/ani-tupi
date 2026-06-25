@@ -77,8 +77,21 @@ def resolve_blogger_token(token: str) -> str:
         raise ValueError("No JSON data in batchexecute response")
 
     outer = json.loads(json_line)
+    if not (isinstance(outer, list) and len(outer) >= 1):
+        raise ValueError(f"batchexecute outer response is not a list or is empty: {outer!r}")
+    if not (isinstance(outer[0], list) and len(outer[0]) >= 3):
+        raise ValueError(
+            f"batchexecute outer[0] is not a list with at least 3 elements: {outer[0]!r}"
+        )
+    if not isinstance(outer[0][2], str) or not outer[0][2]:
+        raise ValueError(f"batchexecute outer[0][2] is not a non-empty string: {outer[0][2]!r}")
     inner = json.loads(outer[0][2])
-    url = inner[2][0][0]
+    try:
+        url = inner[2][0][0]
+    except (IndexError, TypeError, KeyError) as e:
+        raise ValueError(
+            f"Could not extract video URL from batchexecute inner response: {e}"
+        ) from e
     if not url or "googlevideo.com" not in url:
         raise ValueError(f"Unexpected video URL: {url!r}")
     return url

@@ -147,7 +147,10 @@ class SeleniumWebDriver:
         """
         import json
 
-        self.driver.get(url)
+        try:
+            self.driver.get(url)
+        except Exception as e:
+            raise Exception(f"Failed to load URL '{url}': {e}") from e
         time.sleep(random.uniform(0.5, 1.5))
 
         try:
