@@ -222,7 +222,7 @@ def retry_offline_syncs() -> dict[str, int]:
             success = sync_progress_to_anilist(
                 entry.anilist_id,
                 entry.episode_number,
-                entry.episode_number,  # num_episodes (for completion check)
+                0,  # num_episodes: 0 prevents false completion triggers
                 entry.anime_title,
             )
 

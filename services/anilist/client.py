@@ -41,7 +41,8 @@ class AniListClient(AnimeOperationsMixin, MangaOperationsMixin):
         try:
             with token_file.open() as f:
                 data = json.load(f)
-                self.user_id = data.get("user_id")  # Load user_id if exists
+                raw_user_id = data.get("user_id")
+                self.user_id = int(raw_user_id) if raw_user_id else None  # Load user_id if exists
                 return data.get("access_token")
         except Exception:
             return None

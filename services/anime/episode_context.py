@@ -38,7 +38,8 @@ def get_next_episode_context(
     try:
         next_episode_title = episode_list[next_idx]
         # Get URL from repository if available
-        next_url = rep.get_episode_url(anime_title, next_idx)
+        url_and_source = rep.get_episode_url_and_source(anime_title, next_idx + 1)
+        next_url = url_and_source[0] if url_and_source else None
         if not next_url:
             logger.info("Nao foi possivel encontrar a url do proximo episodio")
             return None
