@@ -2,6 +2,7 @@
 
 import time
 import re
+import threading
 from typing import Optional
 from collections import defaultdict
 from os import cpu_count
@@ -48,6 +49,7 @@ class SearchRepository:
         self.anime_to_urls = defaultdict(list)
         self.norm_titles = {}
         self._last_search_metadata = {}
+        self._add_lock = threading.Lock()
 
         SearchRepository._initialized = True
 
@@ -328,30 +330,31 @@ class SearchRepository:
 
     def add_anime(self, title: str, url: str, source: str, params: dict | None = None) -> None:
         """Add anime with multi-source deduplication via title normalization."""
-        params = params or {}
-        normalized_new = normalize_title_for_dedup(title)
-        compact_new = get_compact_normalized_title_key(normalized_new)
-        self.norm_titles[title] = normalized_new
+        with self._add_lock:
+            params = params or {}
+            normalized_new = normalize_title_for_dedup(title)
+            compact_new = get_compact_normalized_title_key(normalized_new)
+            self.norm_titles[title] = normalized_new
 
-        for existing_title in self.anime_to_urls:
-            existing_norm = self.norm_titles.get(existing_title)
-            if existing_norm is None:
-                existing_norm = normalize_title_for_dedup(existing_title)
-                self.norm_titles[existing_title] = existing_norm
+            for existing_title in list(self.anime_to_urls):
+                existing_norm = self.norm_titles.get(existing_title)
+                if existing_norm is None:
+                    existing_norm = normalize_title_for_dedup(existing_title)
+                    self.norm_titles[existing_title] = existing_norm
 
-            if normalized_new == existing_norm:
-                self.anime_to_urls[existing_title].append((url, source, params))
-                return
+                if normalized_new == existing_norm:
+                    self.anime_to_urls[existing_title].append((url, source, params))
+                    return
 
-            if (
-                compact_new == get_compact_normalized_title_key(existing_norm)
-                and are_language_version_markers_compatible(normalized_new, existing_norm)
-                and are_season_markers_compatible(normalized_new, existing_norm)
-            ):
-                self.anime_to_urls[existing_title].append((url, source, params))
-                return
+                if (
+                    compact_new == get_compact_normalized_title_key(existing_norm)
+                    and are_language_version_markers_compatible(normalized_new, existing_norm)
+                    and are_season_markers_compatible(normalized_new, existing_norm)
+                ):
+                    self.anime_to_urls[existing_title].append((url, source, params))
+                    return
 
-        self.anime_to_urls[title].append((url, source, params))
+            self.anime_to_urls[title].append((url, source, params))
 
     def _guard_sources(self, query: str) -> SearchResults | None:
         if not self.sources:
@@ -376,6 +379,7 @@ class SearchRepository:
         if cached_data and isinstance(cached_data, dict):
             if verbose:
                 logger.info(f"ℹ️  Usando cache para '{query}' ({len(cached_data)} animes)")
+            self.clear_search_results()
             for anime_title, sources_list in cached_data.items():
                 for url, source, params in sources_list:
                     self.add_anime(anime_title, url, source, params)
