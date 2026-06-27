@@ -51,7 +51,7 @@ def test_select_episode_from_menu_returns_none_on_back():
     anime_cmd = importlib.import_module("commands.anime")
     ctx = _make_ctx()
 
-    with patch.object(anime_cmd, "menu_navigate", return_value=None):
+    with patch.object(anime_cmd, "menu_navigate_episodes", return_value=None):
         selected_ctx = anime_cmd.select_episode_from_menu(ctx)
 
     assert selected_ctx is None
@@ -61,9 +61,8 @@ def test_select_episode_from_menu_returns_updated_context():
     """Selecting an episode should navigate to chosen index."""
     anime_cmd = importlib.import_module("commands.anime")
     ctx = _make_ctx(episode_idx=0, total=3)
-    target = ctx.episode_list[2]
 
-    with patch.object(anime_cmd, "menu_navigate", return_value=target):
+    with patch.object(anime_cmd, "menu_navigate_episodes", return_value=2):
         with patch.object(anime_cmd, "navigate_episodes", return_value="new_ctx") as mock_nav:
             selected_ctx = anime_cmd.select_episode_from_menu(ctx)
 

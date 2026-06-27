@@ -171,7 +171,7 @@ class Repository:
 
         return None  # Default to season 1
 
-    def get_episode_list(self, anime: str, season: int | None = None) -> list[str]:
+    def get_episode_list(self, anime: str, season: int | None = None) -> list[int]:
         """Get episode list for anime, optionally filtered by season.
 
         Args:
@@ -179,7 +179,7 @@ class Repository:
             season: Optional season number to filter by
 
         Returns:
-            List of episode titles
+            List of episode numbers
         """
         return self._episode_repo.get_episode_list(anime, season)
 
@@ -194,7 +194,7 @@ class Repository:
         """
         return self._episode_repo.get_available_seasons(anime)
 
-    def get_episode_list_for_season(self, anime: str, season: int) -> list[str]:
+    def get_episode_list_for_season(self, anime: str, season: int) -> list[int]:
         """Get episode list for a specific season.
 
         Args:
@@ -202,7 +202,7 @@ class Repository:
             season: Season number
 
         Returns:
-            List of episode titles for that season
+            List of episode numbers for that season
         """
         return self._episode_repo.get_episode_list_for_season(anime, season)
 
@@ -266,9 +266,9 @@ class Repository:
         return self._search_repo.anime_to_urls
 
     @property
-    def anime_episodes_titles(self):
-        """Episode repo anime_episodes_titles."""
-        return self._episode_repo.anime_episodes_titles
+    def anime_episodes_numbers(self):
+        """Episode repo anime_episodes_numbers."""
+        return self._episode_repo.anime_episodes_numbers
 
     @property
     def anime_episodes_urls(self):

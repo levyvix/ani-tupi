@@ -12,7 +12,7 @@ import time
 
 from models.config import get_data_path
 from services.repository import rep
-from ui.components import loading, menu_navigate
+from ui.components import loading, menu_navigate, menu_navigate_episodes
 from utils.persistence import JSONStore
 from utils.title_utils import clean_title_for_display
 from utils.exceptions import PersistenceError
@@ -391,10 +391,9 @@ def load_history(depth: int = 0) -> tuple[str, int, int | None, str | None] | No
 
         if choice == "📋 Escolher outro episódio":
             # Let user choose from full episode list
-            selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
-            if not selected_episode:
+            episode_idx = menu_navigate_episodes(episode_list)
+            if episode_idx is None:
                 return load_history()
-            episode_idx = episode_list.index(selected_episode)
         elif choice == "🔄 Começar do zero":
             # Confirm before resetting
             confirm_reset = menu_navigate(

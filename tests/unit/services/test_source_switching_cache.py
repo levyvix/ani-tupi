@@ -24,7 +24,7 @@ def setup_mocks():
     mock_rep.save_episode_state.return_value = {"urls": [], "titles": []}
     mock_rep.clear_search_results = Mock()
     mock_rep.search_episodes = Mock()
-    mock_rep.get_episode_list.return_value = ["Episódio 1"]
+    mock_rep.get_episode_list.return_value = [1]
 
     # Patch title normalization
     mock_norm_patch = patch("services.anime.source_management.normalize_anime_title")
@@ -45,12 +45,17 @@ def setup_mocks():
     mock_loading.return_value.__exit__ = Mock(return_value=None)
     patches.append(mock_loading_patch)
 
-    # Patch menu_navigate
+    # Patch menu_navigate (anime selection)
     mock_menu_patch = patch("services.anime.source_management.menu_navigate")
     mock_menu = mock_menu_patch.start()
-    # First call: anime selection, Second call: episode selection
-    mock_menu.side_effect = ["Test Anime [animefire]", "Episódio 1"]
+    mock_menu.side_effect = ["Test Anime [animefire]"]
     patches.append(mock_menu_patch)
+
+    # Patch menu_navigate_episodes (episode selection returns 0-based index)
+    mock_menu_eps_patch = patch("services.anime.source_management.menu_navigate_episodes")
+    mock_menu_eps = mock_menu_eps_patch.start()
+    mock_menu_eps.return_value = 0
+    patches.append(mock_menu_eps_patch)
 
     # Patch incremental_search_anime
     mock_incremental_patch = patch("services.anime.source_management.incremental_search_anime")

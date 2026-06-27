@@ -26,7 +26,7 @@ from services.anime.playback_service import (
 from utils.logging import get_logger
 from services.anime.download_service import AnimeDownloadService
 from services.anime.playback_fallback import play_episode_with_fallback
-from ui.components import loading, menu_navigate
+from ui.components import loading, menu_navigate, menu_navigate_episodes
 from utils.video_player import VideoPlayer
 from utils.episode_range_parser import parse_episode_range, RangeParseError
 
@@ -60,12 +60,10 @@ def select_episode_from_menu(ctx: "PlaybackContext") -> "PlaybackContext | None"
         Updated PlaybackContext when episode is selected.
         None when user chooses to go back from episode selection.
     """
-    episode_options = list(ctx.episode_list)
-    selected_episode = menu_navigate(episode_options, msg="Escolha o episódio.")
-    if not selected_episode:
+    episode_idx = menu_navigate_episodes(list(ctx.episode_list))
+    if episode_idx is None:
         return None
 
-    episode_idx = episode_options.index(selected_episode)
     return navigate_episodes(ctx, "choose", episode_idx)
 
 

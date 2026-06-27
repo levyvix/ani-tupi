@@ -8,7 +8,7 @@ import json
 
 from models.config import get_data_path
 from services.repository import rep
-from ui.components import loading, menu_navigate
+from ui.components import loading, menu_navigate, menu_navigate_episodes
 from services.anime.title_normalization import (
     normalize_anime_title,
     normalize_title_for_dedup,
@@ -224,20 +224,17 @@ def switch_anime_source(
 
         if choice == "📋 Escolher outro episódio":
             # Let user choose from full episode list
-            selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
-            if not selected_episode:
+            episode_idx = menu_navigate_episodes(episode_list)
+            if episode_idx is None:
                 return None, None
-            episode_idx = episode_list.index(selected_episode)
         else:
             episode_idx = option_to_idx[choice]
     else:
         # No progress - show full episode list
-        selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+        episode_idx = menu_navigate_episodes(episode_list)
 
-        if not selected_episode:
+        if episode_idx is None:
             return None, None  # User cancelled
-
-        episode_idx = episode_list.index(selected_episode)
 
     return selected_anime, episode_idx
 

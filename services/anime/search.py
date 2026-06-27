@@ -13,7 +13,7 @@ from models.config import settings
 from models.models import AnimeTitleResolution
 from services.anime.title_resolution import AnimeTitleResolver
 from services.repository import rep
-from ui.components import loading, menu_navigate
+from ui.components import loading, menu_navigate, menu_navigate_episodes
 from utils.scraper_cache import get_cache
 from services.anime.title_normalization import normalize_anime_title
 from utils.logging import get_logger
@@ -1187,14 +1187,11 @@ def search_anime_flow(args):
 
         # Use episode directly (0-indexed for episode_idx)
         episode_idx = args.episode - 1
-        selected_episode = episode_list[episode_idx]
     else:
         # No -e flag: show menu for user to select
-        selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+        episode_idx = menu_navigate_episodes(episode_list)
 
-        if not selected_episode:
+        if episode_idx is None:
             return None, None, None  # User cancelled
-
-        episode_idx = episode_list.index(selected_episode)
 
     return selected_anime, episode_idx, source

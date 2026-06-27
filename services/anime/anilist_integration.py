@@ -11,7 +11,7 @@ from typing import Any
 from models.config import get_data_path
 from services.anilist_service import anilist_client
 from services.repository import rep
-from ui.components import loading, menu_navigate
+from ui.components import loading, menu_navigate, menu_navigate_episodes
 from utils.scraper_cache import get_cache, set_cache
 from scrapers import loader
 from models.models import Status
@@ -785,11 +785,9 @@ def anilist_anime_flow(
             return
 
         if choice == "📋 Escolher outro episódio":
-            formatted_episode_list = list(episode_list)
-            selected_episode = menu_navigate(formatted_episode_list, msg="Escolha o episódio.")
-            if not selected_episode:
+            episode_idx = menu_navigate_episodes(episode_list)
+            if episode_idx is None:
                 return
-            episode_idx = formatted_episode_list.index(selected_episode)
         elif choice == "🔄 Começar do zero":
             confirm_reset = menu_navigate(
                 ["✅ Sim, resetar", "❌ Cancelar"],
@@ -858,12 +856,10 @@ def anilist_anime_flow(
                     input("\nPressione Enter para voltar...")
                     return
     else:
-        selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
+        episode_idx = menu_navigate_episodes(episode_list)
 
-        if not selected_episode:
+        if episode_idx is None:
             return
-
-        episode_idx = episode_list.index(selected_episode)
 
     if not isinstance(episode_idx, int):
         raise ValueError(f"episode_idx should be int, got {type(episode_idx)}")
@@ -884,11 +880,10 @@ def anilist_anime_flow(
         )
 
         if action == "🔙 Voltar":
-            formatted_episode_list = list(episode_list)
-            selected_episode = menu_navigate(formatted_episode_list, msg="Escolha o episódio.")
-            if not selected_episode:
+            new_idx = menu_navigate_episodes(episode_list)
+            if new_idx is None:
                 return
-            current_episode_idx = formatted_episode_list.index(selected_episode)
+            current_episode_idx = new_idx
             continue
 
         if action == "📥 Baixar para assistir depois":
@@ -1139,11 +1134,11 @@ def anilist_anime_flow(
             pass
         elif selected_opt == "📋 Escolher outro episódio":
             episode_list = rep.get_episode_list(selected_anime)
-            selected_episode = menu_navigate(episode_list, msg="Escolha o episódio.")
-            if not selected_episode:
+            new_idx = menu_navigate_episodes(episode_list)
+            if new_idx is None:
                 return
-            episode_idx = episode_list.index(selected_episode)
-            current_episode_idx = episode_list.index(selected_episode)
+            episode_idx = new_idx
+            current_episode_idx = new_idx
         elif selected_opt == "🔄 Trocar fonte":
             new_anime, new_episode_idx = switch_anime_source(
                 selected_anime, args, anilist_id, display_title

@@ -50,19 +50,19 @@ class EpisodeData(BaseModel):
 
     Attributes:
         anime_title: Title of the anime
-        episode_titles: List of episode titles
+        episode_numbers: List of episode numbers (normalized to int)
         episode_urls: List of episode URLs (must be http/https)
         source: Plugin source name
         season: Season number (1-indexed). Optional: defaults to 1.
 
     Validation:
-        - episode_titles and episode_urls must have same length
+        - episode_numbers and episode_urls must have same length
         - All episode URLs must be valid http(s) URLs
         - season must be positive integer
     """
 
     anime_title: str = Field(..., min_length=1, description="Anime title")
-    episode_titles: list[str] = Field(..., description="Episode titles")
+    episode_numbers: list[int] = Field(..., description="Episode numbers (normalized)")
     episode_urls: list[str] = Field(..., description="Episode URLs (must be http/https)")
     source: str = Field(..., min_length=1, description="Plugin source name")
     season: int = Field(default=1, ge=1, description="Season number (1-indexed)")
@@ -79,9 +79,9 @@ class EpisodeData(BaseModel):
     @model_validator(mode="after")
     def validate_lengths(self) -> "EpisodeData":
         """Validate episode lists have matching lengths."""
-        if len(self.episode_titles) != len(self.episode_urls):
+        if len(self.episode_numbers) != len(self.episode_urls):
             raise ValueError(
-                f"Mismatched episodes: {len(self.episode_titles)} titles "
+                f"Mismatched episodes: {len(self.episode_numbers)} numbers "
                 f"vs {len(self.episode_urls)} URLs"
             )
         return self

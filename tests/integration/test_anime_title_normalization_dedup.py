@@ -215,7 +215,7 @@ class TestBackwardCompatibility:
 
         # Associate episodes
         title = titles[0]
-        clean_repository.anime_episodes_titles[title] = ["Ep 1", "Ep 2"]
+        clean_repository.anime_episodes_numbers[title] = [1, 2]
         clean_repository.anime_episodes_urls[title] = ["ep1_url", "ep2_url"]
 
-        assert len(clean_repository.anime_episodes_titles[title]) == 2
+        assert len(clean_repository.anime_episodes_numbers[title]) == 2

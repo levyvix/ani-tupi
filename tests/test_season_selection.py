@@ -26,14 +26,14 @@ class TestSeasonService:
         return [
             EpisodeData(
                 anime_title="Test Anime",
-                episode_titles=["Ep 1", "Ep 2"],
+                episode_numbers=[1, 2],
                 episode_urls=["http://ex.com/1", "http://ex.com/2"],
                 source="source1",
                 season=1,
             ),
             EpisodeData(
                 anime_title="Test Anime",
-                episode_titles=["Ep 3", "Ep 4"],
+                episode_numbers=[3, 4],
                 episode_urls=["http://ex.com/3", "http://ex.com/4"],
                 source="source1",
                 season=2,
@@ -58,7 +58,7 @@ class TestSeasonService:
         episodes = [
             EpisodeData(
                 anime_title="Test",
-                episode_titles=["Ep 1"],
+                episode_numbers=[1],
                 episode_urls=["http://ex.com/1"],
                 source="source1",
                 season=1,
@@ -106,7 +106,7 @@ class TestEpisodeDataSeasonField:
         """Test that season defaults to 1."""
         ep = EpisodeData(
             anime_title="Test",
-            episode_titles=["Ep 1"],
+            episode_numbers=[1],
             episode_urls=["http://ex.com/1"],
             source="test",
         )
@@ -116,7 +116,7 @@ class TestEpisodeDataSeasonField:
         """Test setting custom season number."""
         ep = EpisodeData(
             anime_title="Test",
-            episode_titles=["Ep 1"],
+            episode_numbers=[1],
             episode_urls=["http://ex.com/1"],
             source="test",
             season=2,
@@ -128,7 +128,7 @@ class TestEpisodeDataSeasonField:
         with pytest.raises(ValueError):
             EpisodeData(
                 anime_title="Test",
-                episode_titles=["Ep 1"],
+                episode_numbers=[1],
                 episode_urls=["http://ex.com/1"],
                 source="test",
                 season=0,  # Invalid: must be positive
@@ -139,7 +139,7 @@ class TestEpisodeDataSeasonField:
         # Season 1 should work
         ep = EpisodeData(
             anime_title="Test",
-            episode_titles=["Ep 1"],
+            episode_numbers=[1],
             episode_urls=["http://ex.com/1"],
             source="test",
             season=1,
@@ -149,7 +149,7 @@ class TestEpisodeDataSeasonField:
         # Large season number should work
         ep = EpisodeData(
             anime_title="Test",
-            episode_titles=["Ep 1"],
+            episode_numbers=[1],
             episode_urls=["http://ex.com/1"],
             source="test",
             season=10,
@@ -165,7 +165,7 @@ class TestSeasonIntegration:
         episodes = [
             EpisodeData(
                 anime_title="Test",
-                episode_titles=[f"Ep {i}" for i in range(1, 13)],
+                episode_numbers=list(range(1, 13)),
                 episode_urls=[f"http://ex.com/{i}" for i in range(1, 13)],
                 source="source1",
                 season=1,
@@ -179,14 +179,14 @@ class TestSeasonIntegration:
         episodes = [
             EpisodeData(
                 anime_title="Test",
-                episode_titles=[f"Ep {i}" for i in range(1, 13)],
+                episode_numbers=list(range(1, 13)),
                 episode_urls=[f"http://ex.com/s1/{i}" for i in range(1, 13)],
                 source="source1",
                 season=1,
             ),
             EpisodeData(
                 anime_title="Test",
-                episode_titles=[f"Ep {i}" for i in range(1, 14)],
+                episode_numbers=list(range(1, 14)),
                 episode_urls=[f"http://ex.com/s2/{i}" for i in range(1, 14)],
                 source="source1",
                 season=2,
@@ -231,12 +231,12 @@ class TestRepositorySeasonFiltering:
         # Get season 1 episodes only
         season_1_episodes = rep.get_episode_list("Test Anime", season=1)
         assert len(season_1_episodes) == 12
-        assert all("S1Ep" in ep for ep in season_1_episodes)
+        assert season_1_episodes == list(range(1, 13))
 
         # Get season 2 episodes only
         season_2_episodes = rep.get_episode_list("Test Anime", season=2)
         assert len(season_2_episodes) == 13
-        assert all("S2Ep" in ep for ep in season_2_episodes)
+        assert season_2_episodes == list(range(1, 14))
 
         # Get non-existent season
         season_3_episodes = rep.get_episode_list("Test Anime", season=3)

@@ -29,8 +29,8 @@ class TestEpisodeRepository:
 
         episode_repo.add_episode_list("Naruto", titles, urls, "animefire")
 
-        # Should store without raising error
-        assert episode_repo.get_episode_list("Naruto") == titles
+        # Should store without raising error (normalized to episode numbers)
+        assert episode_repo.get_episode_list("Naruto") == [1, 2, 3]
 
     def test_add_episode_list_validation(self, episode_repo):
         """Should validate that titles and urls have same length."""
@@ -56,7 +56,7 @@ class TestEpisodeRepository:
         episode_repo.add_episode_list("Naruto", titles2, urls2, "source2")
 
         result = episode_repo.get_episode_list("Naruto")
-        assert result == titles2  # Returns longest list
+        assert result == [1, 2, 3, 4]  # Returns longest list
 
     def test_get_episode_url_by_index(self, episode_repo):
         """Should get episode URL by 0-indexed position."""
@@ -111,8 +111,8 @@ class TestEpisodeRepository:
         state = episode_repo.save_episode_state("Naruto")
 
         assert "urls" in state
-        assert "titles" in state
-        assert state["titles"] == [titles]
+        assert "numbers" in state
+        assert state["numbers"] == [[1, 2]]
         assert len(state["urls"]) == 1
 
     def test_restore_episode_state(self, episode_repo):
@@ -128,7 +128,7 @@ class TestEpisodeRepository:
         assert episode_repo.get_episode_list("Naruto") == []
 
         episode_repo.restore_episode_state("Naruto", state)
-        assert episode_repo.get_episode_list("Naruto") == titles
+        assert episode_repo.get_episode_list("Naruto") == [1, 2]
 
     def test_load_from_cache(self, episode_repo):
         """Should load episode data from cache."""
@@ -140,9 +140,9 @@ class TestEpisodeRepository:
         episode_repo.load_from_cache("Naruto", cache_data)
 
         episode_list = episode_repo.get_episode_list("Naruto")
-        # Should generate titles like "Episódio 1", "Episódio 2", etc.
+        # Should generate sequential episode numbers (1-indexed)
         assert len(episode_list) == 3
-        assert episode_list[0] == "Episódio 1"
+        assert episode_list[0] == 1
 
     def test_load_from_cache_pydantic_model(self, episode_repo):
         """Should handle Pydantic model cache data."""
@@ -248,7 +248,7 @@ class TestEpisodeRepository:
             },
         )
 
-        assert episode_repo.get_episode_list("Naruto") == ["Episode 1"]
+        assert episode_repo.get_episode_list("Naruto") == [1]
         assert episode_repo.get_last_search_failures("Naruto") == [("failing", "renderer timeout")]
 
     def test_search_episodes_records_all_failures_without_raising(self, episode_repo):
@@ -314,4 +314,4 @@ class TestEpisodeRepository:
         )
 
         assert slow_ran, "slow source must complete before search_episodes returns"
-        assert episode_repo.get_episode_list("One Piece") == ["Ep1", "Ep2"]
+        assert episode_repo.get_episode_list("One Piece") == [1, 2]

@@ -1,5 +1,6 @@
 """Episode repository for managing episode data and caching."""
 
+import re
 from collections import defaultdict
 from threading import Lock, Thread
 
@@ -9,6 +10,24 @@ from services.priority_utils import sort_by_priority
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def parse_episode_number(title: str, fallback: int) -> int:
+    """Normalize a scraper episode title to its episode number.
+
+    Scrapers expose inconsistent labels ("Episódio 1", "Episodio - Legendado - 1",
+    "Ep 1"). The episode number is the last integer in the label; if none is
+    present, fall back to the positional index.
+
+    Args:
+        title: Raw episode label from a scraper
+        fallback: Positional number to use when no digit is found (1-indexed)
+
+    Returns:
+        Episode number as int
+    """
+    numbers = re.findall(r"\d+", title)
+    return int(numbers[-1]) if numbers else fallback
 
 
 class EpisodeRepository:
@@ -34,7 +53,7 @@ class EpisodeRepository:
             return
 
         self.sources = {}  # Will be injected when needed
-        self.anime_episodes_titles = defaultdict(list)
+        self.anime_episodes_numbers = defaultdict(list)
         self.anime_episodes_urls = defaultdict(list)
         self.anime_episodes_seasons = defaultdict(list)  # Season info for each episode
         self.last_search_failures = defaultdict(list)
@@ -51,9 +70,12 @@ class EpisodeRepository:
     ) -> None:
         """Add episode list with validation.
 
+        Episode labels are normalized to plain episode numbers (int) so that all
+        sources expose a consistent list regardless of their labelling style.
+
         Args:
             anime: Anime title
-            title_list: List of episode titles
+            title_list: List of raw episode labels from the scraper
             url_list: List of episode URLs
             source: Plugin source name
             season: Season number (default: 1)
@@ -61,10 +83,15 @@ class EpisodeRepository:
         Raises:
             ValueError: If title_list and url_list have different lengths.
         """
+        # Normalize raw labels ("Episódio 1", "Episodio - Legendado - 1") to ints
+        episode_numbers = [
+            parse_episode_number(title, fallback=i + 1) for i, title in enumerate(title_list)
+        ]
+
         # Validate using EpisodeData model
         episode_data = EpisodeData(
             anime_title=anime,
-            episode_titles=title_list,
+            episode_numbers=episode_numbers,
             episode_urls=url_list,
             source=source,
             season=season,
@@ -79,7 +106,7 @@ class EpisodeRepository:
 
         if existing_index is not None:
             # Replace existing entry
-            self.anime_episodes_titles[anime][existing_index] = episode_data.episode_titles
+            self.anime_episodes_numbers[anime][existing_index] = episode_data.episode_numbers
             self.anime_episodes_urls[anime][existing_index] = (
                 episode_data.episode_urls,
                 source,
@@ -87,11 +114,11 @@ class EpisodeRepository:
             self.anime_episodes_seasons[anime][existing_index] = season
         else:
             # Add new entry
-            self.anime_episodes_titles[anime].append(episode_data.episode_titles)
+            self.anime_episodes_numbers[anime].append(episode_data.episode_numbers)
             self.anime_episodes_urls[anime].append((episode_data.episode_urls, source))
             self.anime_episodes_seasons[anime].append(season)
 
-    def get_episode_list(self, anime: str, season: int | None = None) -> list[str]:
+    def get_episode_list(self, anime: str, season: int | None = None) -> list[int]:
         """Get episode list for anime (returns longest list if multiple sources).
 
         Args:
@@ -99,9 +126,9 @@ class EpisodeRepository:
             season: Optional season number to filter by (default: None = all seasons)
 
         Returns:
-            List of episode titles from source with most episodes (optionally filtered by season)
+            List of episode numbers from source with most episodes (optionally filtered by season)
         """
-        episodes = self.anime_episodes_titles[anime]
+        episodes = self.anime_episodes_numbers[anime]
         if not episodes:
             return []
 
@@ -121,7 +148,7 @@ class EpisodeRepository:
             return episode_list
         else:
             # No season filter: return longest from all sources
-            episode_list = sorted(episodes, key=lambda title_list: len(title_list))[-1]
+            episode_list = sorted(episodes, key=lambda number_list: len(number_list))[-1]
             return episode_list
 
     def get_episode_url_and_source(self, anime: str, episode_num: int) -> tuple[str, str] | None:
@@ -195,11 +222,11 @@ class EpisodeRepository:
             anime: Anime title
 
         Returns:
-            Dict with keys 'urls' and 'titles' containing episode data
+            Dict with keys 'urls' and 'numbers' containing episode data
         """
         return {
             "urls": list(self.anime_episodes_urls[anime]),
-            "titles": list(self.anime_episodes_titles[anime]),
+            "numbers": list(self.anime_episodes_numbers[anime]),
         }
 
     def restore_episode_state(self, anime: str, state: dict) -> None:
@@ -209,10 +236,10 @@ class EpisodeRepository:
 
         Args:
             anime: Anime title
-            state: Dict with 'urls' and 'titles' keys
+            state: Dict with 'urls' and 'numbers' keys
         """
         self.anime_episodes_urls[anime] = state["urls"]
-        self.anime_episodes_titles[anime] = state["titles"]
+        self.anime_episodes_numbers[anime] = state["numbers"]
 
     def load_from_cache(self, anime: str, cache_data) -> None:
         """Populate repository from cached data.
@@ -238,11 +265,11 @@ class EpisodeRepository:
         if not episode_urls:
             return
 
-        # Generate episode titles from URLs (format: "Episódio 1", "Episódio 2", etc)
-        episode_titles = [f"Episódio {i + 1}" for i in range(len(episode_urls))]
+        # Generate sequential episode numbers from URL count (1-indexed)
+        episode_numbers = list(range(1, len(episode_urls) + 1))
 
         # Add to repository as if it came from a "cache" source
-        self.anime_episodes_titles[anime].append(episode_titles)
+        self.anime_episodes_numbers[anime].append(episode_numbers)
         self.anime_episodes_urls[anime].append((episode_urls, "cache"))
 
         # Note: We don't add a "dummy" entry to anime_to_urls here because:
@@ -296,7 +323,7 @@ class EpisodeRepository:
         Args:
             anime: Anime title
         """
-        self.anime_episodes_titles[anime] = []
+        self.anime_episodes_numbers[anime] = []
         self.anime_episodes_urls[anime] = []
         self.anime_episodes_seasons[anime] = []
         self.last_search_failures[anime] = []
@@ -404,13 +431,13 @@ class EpisodeRepository:
             return [1]  # Default to season 1 if no info
 
         # Get the season from the source with most episodes
-        episodes_titles = self.anime_episodes_titles[anime]
-        longest_idx = max(range(len(episodes_titles)), key=lambda i: len(episodes_titles[i]))
+        episodes_numbers = self.anime_episodes_numbers[anime]
+        longest_idx = max(range(len(episodes_numbers)), key=lambda i: len(episodes_numbers[i]))
         season = episodes_by_source[longest_idx] if longest_idx < len(episodes_by_source) else 1
 
         return [season]  # For now, return single season per source
 
-    def get_episode_list_for_season(self, anime: str, season: int) -> list[str]:
+    def get_episode_list_for_season(self, anime: str, season: int) -> list[int]:
         """Get episode list for a specific season.
 
         For now, since episodes are organized by source and each source
@@ -421,10 +448,10 @@ class EpisodeRepository:
             season: Season number
 
         Returns:
-            List of episode titles for that season, or empty list if not found
+            List of episode numbers for that season, or empty list if not found
         """
         # Get the longest episode list
-        episodes = self.anime_episodes_titles[anime]
+        episodes = self.anime_episodes_numbers[anime]
         if not episodes:
             return []
         longest_idx = max(range(len(episodes)), key=lambda i: len(episodes[i]))

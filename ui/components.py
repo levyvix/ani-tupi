@@ -279,6 +279,28 @@ def menu_navigate(
     return answer
 
 
+def menu_navigate_episodes(
+    episode_numbers: list[int], msg: str = "Escolha o episódio."
+) -> int | None:
+    """Show an episode menu from a list of episode numbers.
+
+    Episode lists are stored as plain ints; this renders them as "Episódio N"
+    labels for selection and maps the choice back to its 0-based index.
+
+    Args:
+        episode_numbers: Episode numbers to display
+        msg: Title message for the menu
+
+    Returns:
+        0-based index of the selected episode, or None if the user goes back/cancels.
+    """
+    labels = [f"Episódio {n}" for n in episode_numbers]
+    selected = menu_navigate(labels, msg=msg)
+    if not selected:
+        return None
+    return labels.index(selected)
+
+
 @contextmanager
 def loading(msg: str = "Carregando..."):
     """Context manager for displaying loading indicators during operations.
