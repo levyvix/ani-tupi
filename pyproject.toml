@@ -1,6 +1,6 @@
 [project]
 name = "ani-tupi"
-version = "1.4.3"
+version = "1.4.4"
 description = "Assista anime e leia mangá direto do terminal sem anúncios"
 readme = "README.md"
 requires-python = ">=3.12"
