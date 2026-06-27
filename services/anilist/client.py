@@ -184,6 +184,7 @@ class AniListClient(AnimeOperationsMixin, MangaOperationsMixin):
                 settings.anilist.api_url,
                 json={"query": query, "variables": variables or {}},
                 headers=headers,
+                timeout=settings.anilist.request_timeout_seconds,
             )
 
             # Handle rate limiting with exponential backoff

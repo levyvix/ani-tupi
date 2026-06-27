@@ -2,7 +2,6 @@
 
 from collections import defaultdict
 from threading import Lock, Thread
-import time
 
 from models.config import settings
 from models.models import EpisodeData
@@ -10,9 +9,6 @@ from services.priority_utils import sort_by_priority
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-EARLY_RETURN_POLL_INTERVAL_SECONDS = 0.05
-EARLY_RETURN_GRACE_PERIOD_SECONDS = 0.75
 
 
 class EpisodeRepository:
@@ -386,23 +382,8 @@ class EpisodeRepository:
         if not threads:
             return
 
-        first_results_at: float | None = None
-
-        while True:
-            alive_threads = [th for th in threads if th.is_alive()]
-            if not alive_threads:
-                break
-
-            has_results = bool(self.get_episode_list(anime))
-            if has_results and first_results_at is None:
-                first_results_at = time.perf_counter()
-
-            if first_results_at is not None:
-                elapsed_since_first_results = time.perf_counter() - first_results_at
-                if elapsed_since_first_results >= EARLY_RETURN_GRACE_PERIOD_SECONDS:
-                    return
-
-            time.sleep(EARLY_RETURN_POLL_INTERVAL_SECONDS)
+        for th in threads:
+            th.join()
 
     def get_last_search_failures(self, anime: str) -> list[tuple[str, str]]:
         """Return scraper failures from the most recent episode search for an anime."""

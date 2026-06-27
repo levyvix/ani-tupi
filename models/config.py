@@ -105,6 +105,12 @@ class AniListSettings(BaseModel):
         True,
         description="Ask for chapter completion confirmation after reading",
     )
+    request_timeout_seconds: float = Field(
+        30.0,
+        gt=0,
+        le=120,
+        description="HTTP timeout for AniList API requests in seconds",
+    )
 
 
 class CacheSettings(BaseModel):

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shlex
 import subprocess
 
 from models.config import settings
@@ -32,8 +31,7 @@ def update(args) -> int:
 
     completed = None
     try:
-        cmd = shlex.split(settings.updates.update_command)
-        completed = subprocess.run(cmd)
+        completed = subprocess.run(settings.updates.update_command, shell=True)
     except OSError as exc:
         logger.error(f"❌ Falha ao iniciar atualização: {exc}")
         return 1

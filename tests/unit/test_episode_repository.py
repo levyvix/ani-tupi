@@ -1,7 +1,6 @@
 """Tests for EpisodeRepository class."""
 
 import time
-from threading import Event
 
 import pytest
 from services.episode_repository import EpisodeRepository
@@ -285,24 +284,25 @@ class TestEpisodeRepository:
             ("source2", "network error"),
         ]
 
-    def test_search_episodes_returns_early_when_slow_source_lags(self, episode_repo):
-        """Should not block on slow sources after useful episode data is available."""
+    def test_search_episodes_waits_for_all_sources_before_returning(self, episode_repo):
+        """Should block until all sources complete so caller sees complete state."""
 
-        slow_finished = Event()
+        slow_ran = []
 
         class FastScraper:
             def search_episodes(self, anime: str, url: str, params):
-                episode_repo.add_episode_list(anime, ["Episode 1"], ["http://fast-ep1.com"], "fast")
+                episode_repo.add_episode_list(
+                    anime, ["Ep1", "Ep2"], ["http://u1.com", "http://u2.com"], "fast"
+                )
 
         class SlowScraper:
             def search_episodes(self, anime: str, url: str, params):
-                time.sleep(1.2)
-                episode_repo.add_episode_list(anime, ["Episode 1"], ["http://slow-ep1.com"], "slow")
-                slow_finished.set()
+                time.sleep(0.1)
+                slow_ran.append(True)
+                episode_repo.add_episode_list(anime, ["Ep1"], ["http://slow-ep1.com"], "slow")
 
         episode_repo.set_sources({"fast": FastScraper(), "slow": SlowScraper()})
 
-        start = time.perf_counter()
         episode_repo.search_episodes(
             "One Piece",
             {
@@ -312,8 +312,6 @@ class TestEpisodeRepository:
                 ]
             },
         )
-        elapsed = time.perf_counter() - start
 
-        assert episode_repo.get_episode_list("One Piece") == ["Episode 1"]
-        assert elapsed < 1.1
-        slow_finished.wait(2)
+        assert slow_ran, "slow source must complete before search_episodes returns"
+        assert episode_repo.get_episode_list("One Piece") == ["Ep1", "Ep2"]

@@ -15,9 +15,13 @@ from typing import Any
 from pathlib import Path
 from enum import Enum
 
+import logging
+
 from diskcache import FanoutCache
 from models.config import settings
 from models.models import CacheStats
+
+logger = logging.getLogger(__name__)
 
 
 class CacheType(str, Enum):
@@ -205,7 +209,8 @@ class DiskCache(Cache):
         """Get value from disk cache."""
         try:
             return self._cache.get(key)
-        except Exception:
+        except Exception as e:
+            logger.debug("Cache get failed for key %r: %s", key, e)
             return None
 
     def set(self, key: str, value: Any, ttl: int | None = None) -> None:
@@ -215,22 +220,23 @@ class DiskCache(Cache):
 
         try:
             self._cache.set(key, value, expire=ttl)
-        except Exception:
-            pass  # Cache failures are non-critical
+        except Exception as e:
+            logger.debug("Cache set failed for key %r: %s", key, e)
 
     def delete(self, key: str) -> bool:
         """Delete key from disk cache."""
         try:
             return self._cache.delete(key)
-        except Exception:
+        except Exception as e:
+            logger.debug("Cache delete failed for key %r: %s", key, e)
             return False
 
     def clear(self) -> None:
         """Clear all cached items."""
         try:
             self._cache.clear()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Cache clear failed: %s", e)
 
     def get_stats(self) -> CacheStats:
         """Get cache statistics."""

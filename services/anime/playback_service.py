@@ -557,3 +557,53 @@ def navigate_episodes(
         num_episodes=ctx.num_episodes,
         episode_list=ctx.episode_list,
     )
+
+
+def build_episode_sources(
+    anime_title: str,
+    episode: int,
+    url_result: "EpisodePlaybackResult",
+) -> list[tuple[str, str, str | None]]:
+    """Build ordered playback sources for an episode.
+
+    Keeps any direct/fast-path URL as the first candidate, but still collects
+    all remaining repository-backed sources so playback fallback can continue
+    when the first source fails.
+    """
+    sources: list[tuple[str, str, str | None]] = []
+    seen_sources: set[str] = set()
+
+    if url_result.success and url_result.player_url:
+        direct_source = url_result.source or "unknown"
+        sources.append((url_result.player_url, direct_source, None))
+        seen_sources.add(direct_source)
+        logger.debug(
+            "Using direct URL from get_episode_url_and_source: %s...", url_result.player_url[:80]
+        )
+    else:
+        logger.debug(
+            "get_episode_url_and_source failed (success=%s), using fallback", url_result.success
+        )
+
+    page_sources = rep.get_all_episode_sources(anime_title, episode)
+    logger.debug("Found %d page sources", len(page_sources))
+
+    for page_url, source_name in page_sources:
+        if source_name in seen_sources:
+            logger.debug("Skipping duplicate source already queued: %s", source_name)
+            continue
+
+        logger.debug("Extracting video URL from %s page: %s...", source_name, page_url[:80])
+        try:
+            video_url = rep.search_player_from_page(page_url, source_name)
+            if video_url:
+                logger.debug("Got video URL from %s: %s...", source_name, video_url[:80])
+                sources.append((video_url, source_name, page_url))
+                seen_sources.add(source_name)
+            else:
+                logger.debug("search_player_from_page returned None for %s", source_name)
+        except Exception as e:
+            logger.debug("Exception extracting from %s: %s", source_name, e)
+            continue
+
+    return [(url, source, referrer) for url, source, referrer in sources if url and source]

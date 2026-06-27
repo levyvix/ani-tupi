@@ -8,7 +8,7 @@ import json
 import logging
 from pathlib import Path
 
-from models.config import settings
+from models.config import get_data_path, settings
 from models.models import (
     AnimeDownloadDatabase,
 )
@@ -26,7 +26,7 @@ class LocalAnimeService:
     def __init__(self):
         """Initialize local anime service."""
         self.download_dir = settings.anime_download.download_directory
-        self.db_path = Path.home() / ".local" / "state" / "ani-tupi" / "anime_downloads.json"
+        self.db_path = get_data_path() / "anime_downloads.json"
 
     def get_downloaded_anime_list(self) -> list[str]:
         """Get list of all downloaded anime titles.

@@ -20,6 +20,7 @@ from services.anime.playback_service import (
     get_episode_url_and_source,
     sync_progress_to_anilist,
     navigate_episodes,
+    build_episode_sources,
     PlaybackContext,
 )
 from utils.logging import get_logger
@@ -30,60 +31,6 @@ from utils.video_player import VideoPlayer
 from utils.episode_range_parser import parse_episode_range, RangeParseError
 
 logger = get_logger(__name__)
-
-
-def build_episode_sources(
-    anime_title: str,
-    episode: int,
-    url_result,
-) -> list[tuple[str, str, str | None]]:
-    """Build ordered playback sources for an episode.
-
-    Keeps any direct/fast-path URL as the first candidate, but still collects
-    all remaining repository-backed sources so playback fallback can continue
-    when the first source fails.
-    """
-    sources: list[tuple[str, str, str | None]] = []
-    seen_sources: set[str] = set()
-
-    if url_result.success and url_result.player_url:
-        direct_source = url_result.source or "unknown"
-        sources.append((url_result.player_url, direct_source, None))
-        seen_sources.add(direct_source)
-        logger.info(
-            f"[DEBUG] Using direct URL from get_episode_url_and_source: {url_result.player_url[:80]}..."
-        )
-    else:
-        logger.info(
-            f"[DEBUG] get_episode_url_and_source failed (success={url_result.success}), using fallback"
-        )
-
-    page_sources = rep.get_all_episode_sources(anime_title, episode)
-    logger.info(f"[DEBUG] Found {len(page_sources)} page sources")
-
-    for page_url, source_name in page_sources:
-        if source_name in seen_sources:
-            logger.info(f"[DEBUG] Skipping duplicate source already queued: {source_name}")
-            continue
-
-        logger.info(f"[DEBUG] Extracting video URL from {source_name} page: {page_url[:80]}...")
-        try:
-            video_url = rep.search_player_from_page(page_url, source_name)
-            if video_url:
-                logger.info(
-                    f"[DEBUG] SUCCESS: Got video URL from {source_name}: {video_url[:80]}..."
-                )
-                sources.append((video_url, source_name, page_url))
-                seen_sources.add(source_name)
-            else:
-                logger.info(
-                    f"[DEBUG] FAILED: search_player_from_page returned None for {source_name}"
-                )
-        except Exception as e:
-            logger.info(f"[DEBUG] EXCEPTION extracting from {source_name}: {e}")
-            continue
-
-    return [(url, source, referrer) for url, source, referrer in sources if url and source]
 
 
 def build_post_playback_options(ctx: "PlaybackContext") -> list[str]:

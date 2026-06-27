@@ -12,7 +12,7 @@ Architecture:
 import logging
 from pathlib import Path
 
-from models.config import settings
+from models.config import get_data_path, settings
 from models.models import OfflineSyncQueue, OfflineSyncQueueEntry
 from services.anime.playback_service import sync_progress_to_anilist
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def _get_queue_path() -> Path:
     """Get path to offline sync queue JSON file."""
-    queue_dir = Path.home() / ".local" / "state" / "ani-tupi"
+    queue_dir = get_data_path()
     queue_dir.mkdir(parents=True, exist_ok=True)
     return queue_dir / "offline_sync_queue.json"
 

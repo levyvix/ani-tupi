@@ -52,7 +52,7 @@ def test_update_command_runs_configured_update_when_new_version_exists(monkeypat
                 result = update(None)
 
     assert result == 0
-    mock_run.assert_called_once_with(["echo", "upgrade"])
+    mock_run.assert_called_once_with("echo upgrade", shell=True)
 
 
 def test_update_command_handles_release_lookup_failure(monkeypatch):

@@ -19,7 +19,7 @@ from collections.abc import Callable
 
 from tqdm import tqdm
 
-from models.config import settings
+from models.config import get_data_path, settings
 from models.models import (
     AnimeDownloadDatabase,
     AnimeDownloadHistory,
@@ -62,7 +62,7 @@ class AnimeDownloadService:
         """Initialize download service."""
         self.download_dir = settings.anime_download.download_directory
         self.max_parallel = settings.anime_download.max_parallel_downloads
-        self.db_path = Path.home() / ".local" / "state" / "ani-tupi" / "anime_downloads.json"
+        self.db_path = get_data_path() / "anime_downloads.json"
         self._ensure_directories()
 
     def _ensure_directories(self) -> None:
@@ -419,6 +419,7 @@ class AnimeDownloadService:
                     "no_warnings": True,
                     "outtmpl": str(temp_path / "download.%(ext)s"),
                     "force_generic_extractor": True,
+                    "merge_output_format": settings.anime_download.video_format,
                 }
 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
