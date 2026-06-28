@@ -7,6 +7,9 @@ Uses Selenium for dynamic content rendering and chapter extraction.
 import re
 import time
 from typing import Any
+from urllib.parse import parse_qs, urlparse
+
+import httpx
 
 from scrapers.core.selenium_driver import SeleniumWebDriver
 from utils.logging import get_logger
@@ -152,7 +155,7 @@ class MugiwarasOficial:
                             continue
 
                         link = links[0]
-                        chapter_url = link.attrib.get("href", "")
+                        chapter_url = link.get("href", "")
                         chapter_title = str(link.text).strip()
 
                         if not chapter_url:
@@ -211,8 +214,18 @@ class MugiwarasOficial:
 
         return []
 
+    # CDN page filename pattern: ".../<dir>/01.webp"
+    _PAGE_RE = re.compile(r"^(.*/)(\d+)\.([a-zA-Z]+)$")
+    _MAX_PAGES = 300
+
     def get_chapter_pages(self, chapter_id: str, chapter_url: str) -> list[str]:
         """Fetch image URLs for a chapter.
+
+        MugiwarasOficial embeds only the first page in the DOM, wrapped in an
+        ad-redirect ``<a href="https://.../jump/...?a=<real_cdn_url>">``. The
+        remaining pages live in the same CDN directory with sequential,
+        zero-padded filenames (``01.webp``, ``02.webp``, ...). We extract the
+        first page's real URL, then enumerate the directory until a gap (404).
 
         Args:
             chapter_id: Chapter ID
@@ -226,101 +239,23 @@ class MugiwarasOficial:
 
         while retry_count < max_retries:
             try:
-                # Use DynamicFetcher to handle AJAX-loaded images and JavaScript rendering
-                # Increase timeout significantly to allow JavaScript to execute fully
-                # MugiwarasOficial loads chapter images via AJAX, requiring longer wait time
                 if retry_count > 0:
                     time.sleep(2)  # Wait before retrying
 
                 with SeleniumWebDriver() as driver:
                     tree = driver.fetch(chapter_url)
 
-                page_urls = []
+                first_url = self._extract_first_page_url(tree)
 
-                # Try multiple selectors for finding images
-                # MugiwarasOficial may load images via AJAX in different containers
-                selectors = [
-                    "img[class*='manga']",  # Manga-specific images
-                    "img[src*='/manga/']",  # Images with /manga/ in URL
-                    "div.reading-content img",  # Reading content container
-                    "div.post-content img",  # Post content container
-                    "div.entry-content img",  # Entry content container
-                ]
-
-                for selector in selectors:
-                    images = tree.select(selector)
-                    if images:
-                        break
-                else:
-                    # Fallback to all images if no specific selector worked
-                    images = tree.select("img")
-
-                for img in images:
-                    # Try multiple attributes where image URL might be
-                    # MugiwarasOficial uses data-src for lazy loading
-                    img_url = (
-                        img.attrib.get("data-src")
-                        or img.attrib.get("data-lazy-src")
-                        or img.attrib.get("src")
-                        or img.attrib.get("data-original")
-                    )
-
-                    # Skip if no URL
-                    if not img_url:
-                        continue
-
-                    # Strip whitespace (MugiwarasOficial has leading spaces in URLs!)
-                    img_url = img_url.strip()
-
-                    # Normalize URL - handle relative URLs
-                    if not img_url.startswith("http"):
-                        if img_url.startswith("//"):
-                            img_url = "https:" + img_url
-                        elif img_url.startswith("/"):
-                            img_url = self.base_url + img_url
-                        else:
-                            continue
-
-                    # Skip logos, banners, ads, and invalid formats
-                    is_noise = any(
-                        skip in img_url.lower()
-                        for skip in [
-                            "logo",
-                            "banner",
-                            "/ad/",
-                            "/ads/",
-                            "sidebar",
-                            "amazon",
-                            "cropped-",
-                            ".gif",
-                            "mugiwaras-removebg",
-                            "icon",
-                            "thumb",
-                        ]
-                    )
-
-                    # Ensure it's an actual image file
-                    is_image = any(
-                        img_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]
-                    )
-
-                    # Accept any non-noise image from CDN or site
-                    if not is_noise and is_image and img_url not in page_urls:
-                        # Additional filter: exclude known UI images
-                        if (
-                            "uploads" not in img_url
-                            or "manga" in img_url.lower()
-                            or "chapter" in img_url.lower()
-                        ):
-                            page_urls.append(img_url)
-
-                # If no pages found and we can retry, do so
-                if not page_urls and retry_count < max_retries - 1:
+                if not first_url and retry_count < max_retries - 1:
                     retry_count += 1
                     logger.info(f"⚠️  Nenhuma página encontrada, tentativa {retry_count + 1}...")
                     continue
 
-                return page_urls
+                if not first_url:
+                    return []
+
+                return self._enumerate_pages(first_url)
 
             except Exception as e:
                 retry_count += 1
@@ -332,6 +267,67 @@ class MugiwarasOficial:
                 logger.info(f"⚠️  Erro ao buscar páginas do capítulo (tentativa {retry_count}): {e}")
 
         return []
+
+    def _extract_first_page_url(self, tree) -> str | None:
+        """Find the first chapter page URL embedded in the chapter HTML.
+
+        Looks for the CDN page path (``/manga_.../<hash>/NN.ext``) inside the
+        ad-redirect anchor's ``a`` query param, falling back to a direct match
+        on any attribute that already points at the CDN page directory.
+        """
+        for tag in tree.find_all("a"):
+            href = tag.get("href", "")
+            if "/manga_" not in href:
+                continue
+            real = parse_qs(urlparse(href).query).get("a", [None])[0]
+            if real and "/manga_" in real and self._PAGE_RE.match(real):
+                return real.strip()
+
+        # Fallback: a tag attribute may already hold the bare CDN page URL
+        for tag in tree.find_all(True):
+            for value in tag.attrs.values():
+                if (
+                    isinstance(value, str)
+                    and "/manga_" in value
+                    and value.strip().startswith("http")
+                    and self._PAGE_RE.match(value.strip())
+                ):
+                    return value.strip()
+        return None
+
+    def _enumerate_pages(self, first_url: str) -> list[str]:
+        """Enumerate sequential CDN page URLs starting from the first page.
+
+        Derives the directory, numeric width and extension from ``first_url``,
+        then probes incrementing page numbers until the first missing page.
+        """
+        match = self._PAGE_RE.match(first_url)
+        if not match:
+            return [first_url]
+
+        prefix, num, ext = match.groups()
+        width = len(num)
+        start = int(num)
+
+        pages: list[str] = []
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Referer": f"{self.base_url}/",
+        }
+        with httpx.Client(headers=headers, timeout=15, follow_redirects=True) as client:
+            for n in range(start, start + self._MAX_PAGES):
+                url = f"{prefix}{n:0{width}d}.{ext}"
+                try:
+                    resp = client.head(url)
+                except httpx.HTTPError:
+                    break
+                if resp.status_code != 200:
+                    break
+                pages.append(url)
+        return pages
 
 
 def load():

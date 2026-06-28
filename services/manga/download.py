@@ -321,9 +321,15 @@ def _download_images(pages: list, output_path: Path, config) -> int:
                 response = httpx.get(url, timeout=15, follow_redirects=True)
                 response.raise_for_status()
 
-                # Validate content is actually an image
+                # Validate content is actually an image. Some CDNs (e.g.
+                # mugiwaras) serve images as application/octet-stream, so also
+                # accept generic binary payloads with an image file extension.
                 content_type = response.headers.get("content-type", "").lower()
-                if not content_type.startswith("image/"):
+                is_image_ext = ext.lower() in (".jpg", ".jpeg", ".png", ".webp", ".gif")
+                if not content_type.startswith("image/") and not (
+                    content_type in ("application/octet-stream", "binary/octet-stream", "")
+                    and is_image_ext
+                ):
                     failed_pages.append(f"Page {i}: Invalid content-type '{content_type}'")
                     continue
 
