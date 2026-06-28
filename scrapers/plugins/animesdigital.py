@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict
 from urllib.parse import unquote
 
-import requests
+import httpx
 from bs4 import BeautifulSoup
 from thefuzz import fuzz
 
@@ -105,8 +105,12 @@ class AnimesDigital:
             "filters": json.dumps(filters),
         }
         try:
-            response = requests.post(
-                API_URL, data=payload, headers=API_HEADERS, timeout=REQUEST_TIMEOUT
+            response = httpx.post(
+                API_URL,
+                data=payload,
+                headers=API_HEADERS,
+                timeout=REQUEST_TIMEOUT,
+                follow_redirects=True,
             )
             response.raise_for_status()
             data = response.json()
@@ -117,7 +121,7 @@ class AnimesDigital:
                 "total_page": data.get("total_page"),
             }
             return results, metadata
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"❌ AnimesDigital API request failed for '{query}': {e}")
             return [], {}
         except json.JSONDecodeError as e:
@@ -152,7 +156,9 @@ class AnimesDigital:
 
     def _extract_series_url(self, episode_url: str) -> str | None:
         try:
-            resp = requests.get(episode_url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT)
+            resp = httpx.get(
+                episode_url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
             link = soup.select_one("div.epsL a[href*='/anime/a/']")
@@ -307,8 +313,12 @@ class AnimesDigital:
             "limit": "200",
         }
         try:
-            response = requests.post(
-                API_URL, data=payload, headers=API_HEADERS, timeout=REQUEST_TIMEOUT
+            response = httpx.post(
+                API_URL,
+                data=payload,
+                headers=API_HEADERS,
+                timeout=REQUEST_TIMEOUT,
+                follow_redirects=True,
             )
             response.raise_for_status()
             data = response.json()
@@ -398,7 +408,9 @@ class AnimesDigital:
 
     def _scrape_series_page(self, anime: str, url: str) -> None:
         url = _ensure_odr_param(url)
-        response = requests.get(url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT)
+        response = httpx.get(
+            url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+        )
         response.raise_for_status()
         tree = BeautifulSoup(response.text, "html.parser")
 
@@ -428,8 +440,11 @@ class AnimesDigital:
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            response = requests.get(
-                url, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT
+            response = httpx.get(
+                url,
+                headers={"User-Agent": USER_AGENT},
+                timeout=REQUEST_TIMEOUT,
+                follow_redirects=True,
             )
             response.raise_for_status()
             html_content = response.text
@@ -477,10 +492,11 @@ class AnimesDigital:
             logger.debug(f"Could not extract iframe src: {e}")
 
     def _fetch_homepage_episodes(self) -> list[dict]:
-        response = requests.get(
+        response = httpx.get(
             "https://animesdigital.org/home",
             headers={"User-Agent": USER_AGENT},
             timeout=10,
+            follow_redirects=True,
         )
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
@@ -605,7 +621,7 @@ class AnimesDigital:
             )
             return result
 
-        except requests.exceptions.Timeout:
+        except httpx.TimeoutException:
             logger.debug("AnimesDigital homepage fetch timed out")
             return []
         except Exception as e:

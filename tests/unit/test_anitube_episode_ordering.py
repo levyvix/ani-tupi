@@ -21,7 +21,7 @@ class TestAnitubeEpisodeOrdering:
         scraper = AniTube()
 
         with (
-            patch("scrapers.plugins.anitube.requests.get") as mock_get,
+            patch("scrapers.plugins.anitube.httpx.get") as mock_get,
             patch("scrapers.plugins.anitube.rep"),
         ):
             mock_get.return_value = _response("<html></html>")
@@ -40,7 +40,7 @@ class TestAnitubeEpisodeOrdering:
         scraper = AniTube()
 
         with (
-            patch("scrapers.plugins.anitube.requests.get") as mock_get,
+            patch("scrapers.plugins.anitube.httpx.get") as mock_get,
             patch("scrapers.plugins.anitube.rep"),
         ):
             mock_get.return_value = _response("<html></html>")
@@ -59,7 +59,7 @@ class TestAnitubeEpisodeOrdering:
         scraper = AniTube()
 
         with (
-            patch("scrapers.plugins.anitube.requests.get") as mock_get,
+            patch("scrapers.plugins.anitube.httpx.get") as mock_get,
             patch("scrapers.plugins.anitube.rep") as mock_rep,
         ):
             mock_get.return_value = _response(
@@ -91,7 +91,7 @@ class TestAnitubeEpisodeOrdering:
         scraper = AniTube()
 
         with (
-            patch("scrapers.plugins.anitube.requests.get") as mock_get,
+            patch("scrapers.plugins.anitube.httpx.get") as mock_get,
             patch("scrapers.plugins.anitube.rep") as mock_rep,
         ):
             mock_get.return_value = _response(

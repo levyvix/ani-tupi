@@ -7,7 +7,7 @@ and all anime/manga operations via mixins.
 import json
 import time
 
-import requests
+import httpx
 
 from models.config import settings
 from models.models import AniListViewerInfo, AniListTitle
@@ -180,11 +180,12 @@ class AniListClient(AnimeOperationsMixin, MangaOperationsMixin):
         base_wait = 1
 
         for attempt in range(max_retries):
-            response = requests.post(
+            response = httpx.post(
                 settings.anilist.api_url,
                 json={"query": query, "variables": variables or {}},
                 headers=headers,
                 timeout=settings.anilist.request_timeout_seconds,
+                follow_redirects=True,
             )
 
             # Handle rate limiting with exponential backoff

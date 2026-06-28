@@ -3,14 +3,14 @@
 import logging
 from unittest.mock import MagicMock, patch
 
-import requests
+import httpx
 
 from scrapers.plugins.animesdigital import AnimesDigital
 
 
 def _http_error_response() -> MagicMock:
     response = MagicMock()
-    response.raise_for_status.side_effect = requests.HTTPError(
+    response.raise_for_status.side_effect = httpx.HTTPError(
         "500 Server Error: Internal Server Error for url: https://animesdigital.org/home"
     )
     return response
@@ -62,7 +62,7 @@ class TestAnimesDigitalFallbackLogging:
     def setup_method(self):
         self.scraper = AnimesDigital()
 
-    @patch("scrapers.plugins.animesdigital.requests.get")
+    @patch("scrapers.plugins.animesdigital.httpx.get")
     def test_homepage_http_error_returns_empty_without_warning(self, mock_get, caplog):
         mock_get.return_value = _http_error_response()
 
@@ -93,7 +93,7 @@ class TestAnimesDigitalFallbackLogging:
         mock_homepage_search.assert_called_once_with("Liar Game", audio_type="legendado")
 
     @patch("scrapers.plugins.animesdigital.rep")
-    @patch("scrapers.plugins.animesdigital.requests.get")
+    @patch("scrapers.plugins.animesdigital.httpx.get")
     def test_scrape_series_page_uses_static_html_and_appends_odr(self, mock_get, mock_rep):
         mock_get.return_value = _html_response(SERIES_PAGE_HTML)
 
@@ -121,7 +121,7 @@ class TestAnimesDigitalFallbackLogging:
         )
 
     @patch("scrapers.plugins.animesdigital.rep")
-    @patch("scrapers.plugins.animesdigital.requests.get")
+    @patch("scrapers.plugins.animesdigital.httpx.get")
     def test_scrape_series_page_preserves_existing_query_string(self, mock_get, mock_rep):
         mock_get.return_value = _html_response("<html></html>")
 

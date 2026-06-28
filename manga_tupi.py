@@ -834,7 +834,7 @@ def _download_single_chapter(
         # Download pages
         if config.debug_download_failures:
             logger.info(f"Baixando {len(pages)} páginas...")
-        import requests
+        import httpx
 
         valid_downloads = 0
         failed_pages = []
@@ -851,7 +851,7 @@ def _download_single_chapter(
             if not img_path.exists():
                 response = None
                 try:
-                    response = requests.get(url, timeout=15)  # Increased timeout
+                    response = httpx.get(url, timeout=15, follow_redirects=True)
                     response.raise_for_status()
 
                     # Validate content is actually an image
@@ -867,13 +867,13 @@ def _download_single_chapter(
 
                     img_path.write_bytes(img_data)
                     valid_downloads += 1
-                except requests.exceptions.Timeout:
+                except httpx.TimeoutException:
                     failed_pages.append(f"Page {i}: Timeout")
                     continue
-                except requests.exceptions.ConnectionError:
+                except httpx.ConnectError:
                     failed_pages.append(f"Page {i}: Connection error")
                     continue
-                except requests.exceptions.HTTPError:
+                except httpx.HTTPStatusError:
                     status_code = (
                         getattr(response, "status_code", "unknown") if response else "unknown"
                     )
@@ -1184,7 +1184,7 @@ def _process_chapter(
         # Download pages
         logger.info(f"Baixando {len(pages)} páginas...")
         try:
-            import requests
+            import httpx
             from tqdm import tqdm
 
             for i, url in enumerate(tqdm(pages, desc="Download")):
@@ -1194,7 +1194,7 @@ def _process_chapter(
                 ext = UrlPath(url.split("?")[0]).suffix or ".png"
                 img_path = output_path / f"{i:03d}{ext}"
                 if not img_path.exists():
-                    response = requests.get(url, timeout=10)
+                    response = httpx.get(url, timeout=10, follow_redirects=True)
                     response.raise_for_status()
                     content = response.content
                     img_path.write_bytes(content)

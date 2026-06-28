@@ -1,9 +1,8 @@
 import logging
 import urllib.parse
 
-import requests
+import httpx
 from bs4 import BeautifulSoup
-from requests import RequestException
 
 from scrapers.plugins.utils import load_plugin, store_player_source
 from models.models import AnimeMetadata
@@ -26,10 +25,10 @@ class AniTube:
         def _do_search(q: str) -> None:
             try:
                 url = f"{self.base_url}/wp-json/wp/v2/posts?search={urllib.parse.quote(q)}&per_page=20"
-                response = requests.get(url, headers=HEADERS, timeout=30)
+                response = httpx.get(url, headers=HEADERS, timeout=30, follow_redirects=True)
                 response.raise_for_status()
                 posts = response.json()
-            except RequestException as e:
+            except httpx.HTTPError as e:
                 logger.debug(f"AniTube search request failed for '{q}': {e}")
                 return
             for post in posts:
@@ -58,7 +57,7 @@ class AniTube:
             separator = "&" if "?" in url else "?"
             episodes_url = f"{url}{separator}ord=1"
 
-            response = requests.get(episodes_url, headers=HEADERS, timeout=30)
+            response = httpx.get(episodes_url, headers=HEADERS, timeout=30, follow_redirects=True)
             response.raise_for_status()
             page = BeautifulSoup(response.text, "html.parser")
 
@@ -73,13 +72,13 @@ class AniTube:
                     urls.append(href)
 
             rep.add_episode_list(anime, titles, urls, self.name)
-        except RequestException as e:
+        except httpx.HTTPError as e:
             logger.debug(f"AniTube episode fetch failed for '{anime}': {e}")
             return
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            response = requests.get(url, headers=HEADERS, timeout=30)
+            response = httpx.get(url, headers=HEADERS, timeout=30, follow_redirects=True)
             response.raise_for_status()
             page = BeautifulSoup(response.text, "html.parser")
 

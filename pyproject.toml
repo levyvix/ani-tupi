@@ -26,14 +26,12 @@ dependencies = [
     "inquirerpy>=0.3.4",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
-    "python-levenshtein>=0.27.3",
     "diskcache>=5.6.3",
     "python-mpv>=1.0.8",
     "loguru>=0.7.3",
     "httpx>=0.28.1",
     "pillow>=12.1.0",
     "yt-dlp>=2026.1.31",
-    "requests>=2.32.5",
     "selenium>=4.0.0",
     "bs4>=0.0.2",
     "thefuzz>=0.22.1",
@@ -80,7 +78,6 @@ ignore = [
     "TRY300",    # Consider moving to else block
     "EM101",     # Exception must not use string literal
     "S105",      # Possible hardcoded password (false positive for URLs)
-    "S113",      # Missing timeout in requests (can be added later)
     "S603",      # subprocess call - needed for mpv
     "S607",      # Starting process with partial path - needed for mpv
     "PLR0911",   # Too many return statements

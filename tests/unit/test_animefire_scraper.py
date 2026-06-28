@@ -46,7 +46,7 @@ class TestAnimeFireScraper:
     def setup_method(self):
         self.scraper = AnimeFire()
 
-    @patch("scrapers.plugins.animefire.requests.get")
+    @patch("scrapers.plugins.animefire.httpx.get")
     @patch("scrapers.plugins.animefire.SeleniumWebDriver")
     def test_search_player_src_uses_json_endpoint(self, mock_driver, mock_get):
         driver = mock_driver.return_value.__enter__.return_value
@@ -68,5 +68,7 @@ class TestAnimeFireScraper:
 
         assert container == ["https://lightspeedst.net/s8/mp4/mao/hd/9.mp4?token=hd&expires=1"]
         mock_get.assert_called_once_with(
-            "https://animefire.io/video/mao/9?tempsubs=0&1780178669", timeout=20
+            "https://animefire.io/video/mao/9?tempsubs=0&1780178669",
+            timeout=20,
+            follow_redirects=True,
         )

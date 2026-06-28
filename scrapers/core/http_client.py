@@ -8,10 +8,13 @@ Optimized for scraper operations:
 """
 
 import threading
+import time
 
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+import httpx
+
+_RETRY_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+_RETRY_TOTAL = 3
+_RETRY_BACKOFF = 1  # seconds — multiplied by 2**attempt
 
 
 class PooledHTTPClient:
@@ -37,77 +40,45 @@ class PooledHTTPClient:
         if hasattr(self, "_initialized"):
             return
 
-        self.session = requests.Session()
-
-        # Configure retry strategy with exponential backoff
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,  # 1 second, will be multiplied by (2 ** (retry - 1))
-            status_forcelist=[408, 429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "OPTIONS"],
-        )
-
-        # Mount HTTP and HTTPS adapters with connection pooling
-        adapter = HTTPAdapter(
-            pool_connections=10,  # Connection pools to cache
-            pool_maxsize=20,  # Max connections per pool
-            max_retries=retry_strategy,
-        )
-
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
-
-        # Set consistent timeout (will be used as default)
         self.timeout = 15
-
+        limits = httpx.Limits(max_connections=20, max_keepalive_connections=10)
+        # HTTPTransport retries cover connection errors only; status-based retry
+        # is handled in _request_with_retry below.
+        transport = httpx.HTTPTransport(retries=3)
+        self.client = httpx.Client(
+            limits=limits,
+            timeout=self.timeout,
+            follow_redirects=True,
+            transport=transport,
+        )
         self._initialized = True
 
-    def get(self, url: str, **kwargs) -> requests.Response:
-        """Perform GET request with connection pooling and retry logic.
-
-        Args:
-            url: Target URL
-            **kwargs: Additional requests.get() parameters
-
-        Returns:
-            requests.Response: HTTP response object
-        """
-        # Use default timeout unless overridden
+    def _request_with_retry(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """Execute GET/HEAD with status-based exponential-backoff retry."""
         kwargs.setdefault("timeout", self.timeout)
-        return self.session.get(url, **kwargs)
+        response = None
+        for attempt in range(_RETRY_TOTAL):
+            response = self.client.request(method, url, **kwargs)
+            if response.status_code not in _RETRY_STATUS_CODES:
+                return response
+            if attempt < _RETRY_TOTAL - 1:
+                time.sleep(_RETRY_BACKOFF * (2**attempt))
+        return response  # type: ignore[return-value]
 
-    def head(self, url: str, **kwargs) -> requests.Response:
-        """Perform HEAD request with connection pooling and retry logic.
+    def get(self, url: str, **kwargs) -> httpx.Response:
+        return self._request_with_retry("GET", url, **kwargs)
 
-        Args:
-            url: Target URL
-            **kwargs: Additional requests.head() parameters
+    def head(self, url: str, **kwargs) -> httpx.Response:
+        return self._request_with_retry("HEAD", url, **kwargs)
 
-        Returns:
-            requests.Response: HTTP response object
-        """
-        # Use default timeout unless overridden
+    def post(self, url: str, **kwargs) -> httpx.Response:
         kwargs.setdefault("timeout", self.timeout)
-        return self.session.head(url, **kwargs)
-
-    def post(self, url: str, **kwargs) -> requests.Response:
-        """Perform POST request with connection pooling and retry logic.
-
-        Args:
-            url: Target URL
-            **kwargs: Additional requests.post() parameters
-
-        Returns:
-            requests.Response: HTTP response object
-        """
-        # Use default timeout unless overridden
-        kwargs.setdefault("timeout", self.timeout)
-        return self.session.post(url, **kwargs)
+        return self.client.post(url, **kwargs)
 
     def close(self):
-        """Close the session and cleanup connections."""
-        if hasattr(self, "session"):
-            self.session.close()
+        """Close the client and cleanup connections."""
+        if hasattr(self, "client"):
+            self.client.close()
 
     def __del__(self):
         """Ensure cleanup on object destruction."""

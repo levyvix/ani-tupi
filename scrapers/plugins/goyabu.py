@@ -2,7 +2,7 @@ import json
 import re
 import urllib.parse
 
-import requests
+import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.core.blogger_resolver import resolve_blogger_token
@@ -26,7 +26,9 @@ class Goyabu:
         results = []
         try:
             url = f"{BASE_URL}/?s={urllib.parse.quote(query)}"
-            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            response = httpx.get(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
             for article in soup.select("article.boxAN"):
@@ -38,13 +40,15 @@ class Goyabu:
                 link = a.get("href", "").strip()
                 if title and link:
                     results.append(AnimeMetadata(title=title, url=link, source=self.name))
-        except requests.RequestException:
+        except httpx.HTTPError:
             pass
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
         try:
-            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            response = httpx.get(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             response.raise_for_status()
 
             match = re.search(r"allEpisodes\s*=\s*(\[.*?\])\s*;", response.text, re.DOTALL)
@@ -69,12 +73,14 @@ class Goyabu:
 
             if titles and urls:
                 rep.add_episode_list(anime, titles, urls, self.name)
-        except (requests.RequestException, json.JSONDecodeError, ValueError):
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
             pass
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            response = httpx.get(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             response.raise_for_status()
 
             # Extract playersData JSON from script

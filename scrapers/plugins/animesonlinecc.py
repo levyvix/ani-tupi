@@ -2,7 +2,7 @@ import logging
 import re
 import urllib.parse
 
-import requests
+import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.core.blogger_resolver import resolve_blogger_token
@@ -28,7 +28,7 @@ class AnimesOnlineCC:
         results = []
         try:
             url = f"{BASE_URL}/search/{urllib.parse.quote(query)}"
-            r = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "html.parser")
             for article in soup.select("article"):
@@ -40,13 +40,13 @@ class AnimesOnlineCC:
                 link = a.get("href", "")
                 if title and link:
                     results.append(AnimeMetadata(title=title, url=link, source=self.name))
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             logger.debug(f"AnimesOnlineCC search request failed for '{query}': {e}")
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
         try:
-            r = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "html.parser")
 
@@ -68,12 +68,12 @@ class AnimesOnlineCC:
 
             if titles and urls:
                 rep.add_episode_list(anime, titles, urls, self.name)
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             logger.debug(f"AnimesOnlineCC episode fetch failed for '{anime}': {e}")
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            r = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "html.parser")
 

@@ -2,7 +2,7 @@ import json
 import logging
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-import requests
+import httpx
 
 from scrapers.core.selenium_driver import SeleniumWebDriver
 from scrapers.plugins.utils import load_plugin, store_player_source
@@ -80,7 +80,7 @@ class AnimeFire:
                 if api_url:
                     try:
                         # Fetch the API endpoint directly; AnimeFire returns JSON here.
-                        response = requests.get(api_url, timeout=20)
+                        response = httpx.get(api_url, timeout=20, follow_redirects=True)
                         response.raise_for_status()
                         video_data = json.loads(response.text)
 

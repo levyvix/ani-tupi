@@ -5,7 +5,7 @@ Extracted from manga_tupi.py to improve maintainability and enable unit testing.
 """
 
 from pathlib import Path
-import requests
+import httpx
 
 from services.manga_service import DownloadedChaptersTracker
 from ui.components import menu_navigate
@@ -312,7 +312,7 @@ def _download_images(pages: list, output_path: Path, config) -> int:
         if not img_path.exists():
             response = None
             try:
-                response = requests.get(url, timeout=15)
+                response = httpx.get(url, timeout=15, follow_redirects=True)
                 response.raise_for_status()
 
                 # Validate content is actually an image
@@ -328,13 +328,13 @@ def _download_images(pages: list, output_path: Path, config) -> int:
 
                 img_path.write_bytes(img_data)
                 valid_downloads += 1
-            except requests.exceptions.Timeout:
+            except httpx.TimeoutException:
                 failed_pages.append(f"Page {i}: Timeout")
                 continue
-            except requests.exceptions.ConnectionError:
+            except httpx.ConnectError:
                 failed_pages.append(f"Page {i}: Connection error")
                 continue
-            except requests.exceptions.HTTPError:
+            except httpx.HTTPStatusError:
                 status_code = getattr(response, "status_code", "unknown") if response else "unknown"
                 failed_pages.append(f"Page {i}: HTTP {status_code}")
                 continue

@@ -1,7 +1,7 @@
 import re
 import urllib.parse
 
-import requests
+import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.plugins.utils import load_plugin, store_player_source
@@ -24,7 +24,9 @@ class AnRoll:
         results = []
         try:
             url = f"{BASE_URL}/search/?q={urllib.parse.quote(query)}"
-            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            response = httpx.get(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
             for a in soup.select("a.relative.cursor-pointer.group"):
@@ -37,13 +39,15 @@ class AnRoll:
                 title = re.sub(r"\s*\(?Legendado\)?\s*$", "", title, flags=re.IGNORECASE).strip()
                 if title and href:
                     results.append(AnimeMetadata(title=title, url=href, source=self.name))
-        except requests.RequestException:
+        except httpx.HTTPError:
             pass
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
         try:
-            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            response = httpx.get(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
             titles = []
@@ -62,12 +66,14 @@ class AnRoll:
                 urls.append(href)
             if titles and urls:
                 rep.add_episode_list(anime, titles, urls, self.name)
-        except requests.RequestException:
+        except httpx.HTTPError:
             pass
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            response = httpx.get(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             response.raise_for_status()
             text = response.text
 

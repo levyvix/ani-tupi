@@ -6,7 +6,7 @@ Uses requests for API communication.
 
 from typing import Any
 
-import requests
+import httpx
 
 
 class MangaDex:
@@ -29,10 +29,11 @@ class MangaDex:
             List of manga results
         """
         try:
-            resp = requests.get(
+            resp = httpx.get(
                 f"{self.base_url}/manga",
                 params={"title": query, "limit": 100},
                 timeout=10,
+                follow_redirects=True,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -98,7 +99,7 @@ class MangaDex:
                     "translatedLanguage[]": ["pt-br"],
                 }
 
-                resp = requests.get(
+                resp = httpx.get(
                     f"{self.base_url}/manga/{manga_id}/feed",
                     params=params,
                     timeout=10,
@@ -157,9 +158,10 @@ class MangaDex:
             List of image URLs
         """
         try:
-            resp = requests.get(
+            resp = httpx.get(
                 f"{self.base_url}/at-home/server/{chapter_id}",
                 timeout=10,
+                follow_redirects=True,
             )
             resp.raise_for_status()
             data = resp.json()

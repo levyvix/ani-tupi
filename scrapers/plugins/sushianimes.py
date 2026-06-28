@@ -2,7 +2,7 @@ import re
 import urllib.parse
 import html
 
-import requests
+import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.plugins.utils import load_plugin, store_player_source
@@ -116,12 +116,12 @@ class SushiAnimes:
 
     def _search_page(self, query: str) -> BeautifulSoup:
         url = f"{BASE_URL}/search/{urllib.parse.quote(query)}"
-        response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        response = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
         response.raise_for_status()
         return BeautifulSoup(response.text, "html.parser")
 
     def _fetch_anime_page(self, url: str) -> BeautifulSoup:
-        response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        response = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
         response.raise_for_status()
         return BeautifulSoup(response.text, "html.parser")
 
@@ -167,13 +167,15 @@ class SushiAnimes:
                             params={"season": season},
                         )
                     )
-        except requests.RequestException:
+        except httpx.HTTPError:
             pass
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
         try:
-            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            response = httpx.get(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
 
@@ -206,13 +208,15 @@ class SushiAnimes:
 
             if titles and urls:
                 rep.add_episode_list(anime, titles, urls, self.name, season=season)
-        except requests.RequestException:
+        except httpx.HTTPError:
             # Avoid leaking thread tracebacks when the site blocks direct requests.
             pass
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            response = httpx.get(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
 
@@ -227,11 +231,12 @@ class SushiAnimes:
                 "Referer": url,
             }
 
-            embed_response = requests.post(
+            embed_response = httpx.post(
                 f"{BASE_URL}/ajax/embed",
                 data={"id": embed_id},
                 headers=ajax_headers,
                 timeout=REQUEST_TIMEOUT,
+                follow_redirects=True,
             )
             embed_response.raise_for_status()
 
@@ -239,7 +244,7 @@ class SushiAnimes:
             if not player_url:
                 raise ValueError(f"No player URL found in SushiAnimes embed response for: {url}")
             store_player_source(container, event, player_url)
-        except requests.RequestException:
+        except httpx.HTTPError:
             pass
 
 

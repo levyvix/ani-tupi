@@ -7,7 +7,7 @@ is fetched through the BloggerVideoPlayerUi batchexecute API.
 import json
 import re
 
-import requests
+import httpx
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
@@ -29,10 +29,11 @@ def resolve_blogger_token(token: str) -> str:
         ValueError: If the token cannot be resolved
     """
     # Step 1: GET the player page to extract session parameters
-    r = requests.get(
+    r = httpx.get(
         f"https://www.blogger.com/video.g?token={token}",
         headers=_HEADERS,
         timeout=_TIMEOUT,
+        follow_redirects=True,
     )
     r.raise_for_status()
 
@@ -46,7 +47,7 @@ def resolve_blogger_token(token: str) -> str:
 
     # Step 2: POST to batchexecute API to get the video URL
     f_req = json.dumps([[["WcwnYd", json.dumps([token, None, 0]), None, "generic"]]])
-    r2 = requests.post(
+    r2 = httpx.post(
         "https://www.blogger.com/_/BloggerVideoPlayerUi/data/batchexecute",
         params={
             "rpcids": "WcwnYd",
