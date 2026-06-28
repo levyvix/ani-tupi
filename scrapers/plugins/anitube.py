@@ -17,7 +17,6 @@ HEADERS = {
 
 
 class AniTube:
-    languages = ["pt-br"]
     name = "anitube"
     base_url = "https://www.anitube.zip"
 

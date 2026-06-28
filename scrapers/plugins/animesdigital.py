@@ -86,7 +86,6 @@ class AnimeResult(TypedDict):
 
 
 class AnimesDigital:
-    languages = ["pt-br"]
     name = "animesdigital"
 
     def _search_api(

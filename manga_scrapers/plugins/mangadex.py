@@ -13,16 +13,11 @@ class MangaDex:
     """MangaDex API scraper plugin."""
 
     name = "mangadex"
-    languages = ["pt-br", "en", "ja", "es", "fr"]  # Supports multiple languages
     base_url = "https://api.mangadex.org"
 
-    def __init__(self, preferred_languages: list[str] | None = None):
-        """Initialize MangaDex scraper.
-
-        Args:
-            preferred_languages: List of preferred language codes (default: ["pt-br", "en"])
-        """
-        self.preferred_languages = preferred_languages or ["pt-br", "en"]
+    def __init__(self):
+        """Initialize MangaDex scraper."""
+        pass
 
     def search_manga(self, query: str) -> list[dict[str, Any]]:
         """Search for manga by title.
@@ -93,18 +88,15 @@ class MangaDex:
             limit = 96
 
             while True:
-                # Build params with language parameters
+                # Build params with pt-br language filter
                 params: dict = {
                     "limit": limit,
                     "offset": offset,
                     "order[chapter]": "asc",
                     "includeEmptyPages": "0",
                     "includeFuturePublishAt": "0",
+                    "translatedLanguage[]": ["pt-br"],
                 }
-                for lang in self.preferred_languages:
-                    params.setdefault("translatedLanguage[]", [])
-                    if isinstance(params["translatedLanguage[]"], list):
-                        params["translatedLanguage[]"].append(lang)
 
                 resp = requests.get(
                     f"{self.base_url}/manga/{manga_id}/feed",
@@ -226,15 +218,10 @@ class MangaDex:
         return "Unknown"
 
 
-def load(languages: set[str]):
+def load():
     """Load MangaDex plugin.
 
-    Args:
-        languages: Set of supported languages
-
     Returns:
-        Plugin instance (MangaDex supports many languages so always loads)
+        Plugin instance
     """
-    # Convert set to list for preferred_languages
-    preferred_langs = list(languages) if languages else ["pt-br", "en"]
-    return MangaDex(preferred_languages=preferred_langs)
+    return MangaDex()

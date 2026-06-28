@@ -102,7 +102,12 @@ class Repository:
 
     # Episode Methods
     def add_episode_list(
-        self, anime: str, title_list: list[str], url_list: list[str], source: str, season: int = 1
+        self,
+        anime: str,
+        title_list: list[str],
+        url_list: list[str],
+        source: str,
+        season: int = 1,
     ) -> None:
         """Add episode list.
 
@@ -320,7 +325,3 @@ class Repository:
 
 # Global singleton instance
 rep = Repository()
-
-# Test instances (keep for compatibility with existing code)
-if __name__ == "__main__":
-    rep3, rep2 = Repository(), Repository()

@@ -19,7 +19,6 @@ class MangaLivre:
     """MangaLivre.blog scraper plugin."""
 
     name = "mangalivre"
-    languages = ["pt-br"]
     base_url = "https://mangalivre.blog"
 
     def __init__(self):
@@ -362,15 +361,10 @@ class MangaLivre:
         return []
 
 
-def load(languages: set[str]):
-    """Load MangaLivre plugin if pt-br is in languages.
-
-    Args:
-        languages: Set of supported languages
+def load():
+    """Load MangaLivre plugin.
 
     Returns:
-        Plugin instance or None
+        Plugin instance
     """
-    if "pt-br" in languages:
-        return MangaLivre()
-    return None
+    return MangaLivre()

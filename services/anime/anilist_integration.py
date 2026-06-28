@@ -116,7 +116,7 @@ def resolve_preferred_title(
         return english_title if cached_language == "english" else romaji_title
 
     language_options = [
-        f"🇯🇵 Romanji: {romaji_title}",
+        f"🇯🇵 Romaji: {romaji_title}",
         f"🇬🇧 Inglês: {english_title}",
     ]
     language_choice = menu_navigate(language_options, msg="Escolha o idioma para buscar:")
@@ -850,7 +850,8 @@ def anilist_anime_flow(
                     return
                 except Exception as e:
                     logger.warning(
-                        f"⚠️  Erro inesperado ao buscar no AnimesDigital: {e!r}", exc_info=True
+                        f"⚠️  Erro inesperado ao buscar no AnimesDigital: {e!r}",
+                        exc_info=True,
                     )
                     logger.info(f"Episódio {max_progress + 1} ainda não disponível nos scrapers.")
                     input("\nPressione Enter para voltar...")
@@ -975,7 +976,8 @@ def anilist_anime_flow(
                 continue
             except Exception as e:
                 logger.warning(
-                    f"   ❌ [{source_name}] Erro inesperado ao extrair vídeo: {e!r}", exc_info=True
+                    f"   ❌ [{source_name}] Erro inesperado ao extrair vídeo: {e!r}",
+                    exc_info=True,
                 )
                 continue
 
@@ -1122,7 +1124,10 @@ def anilist_anime_flow(
             msg="O que quer fazer agora?",
         )
 
-        if not selected_opt or selected_opt in {"🔙 Voltar", "↩️  Voltar ao menu anterior"}:
+        if not selected_opt or selected_opt in {
+            "🔙 Voltar",
+            "↩️  Voltar ao menu anterior",
+        }:
             return
         if selected_opt == "▶️  Próximo":
             current_episode_idx += 1

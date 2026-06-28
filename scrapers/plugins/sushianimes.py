@@ -111,7 +111,6 @@ def _build_result_title(title: str, season: int) -> str:
 
 
 class SushiAnimes:
-    languages = ["pt-br"]
     name = "sushianimes"
     base_url = BASE_URL
 

@@ -9,7 +9,6 @@ class MockPlugin:
 
     def __init__(self, name: str):
         self.name = name
-        self.languages = ["pt-br"]
 
     def search_anime(self, query: str):
         pass

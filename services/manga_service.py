@@ -253,10 +253,9 @@ class UnifiedMangaService:
     def __init__(self, config: MangaSettings):
         """Initialize service with config and load plugins."""
         self.config = config
-        self.languages = set(config.languages)
 
         # Load all available manga scraper plugins
-        self.plugins = load_manga_plugins(self.languages)
+        self.plugins = load_manga_plugins()
 
         if not self.plugins:
             raise RuntimeError("Nenhum plugin de mangá disponível")

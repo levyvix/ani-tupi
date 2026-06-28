@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class AnimeFire:
-    languages = ["pt-br"]
     name = "animefire"
 
     @staticmethod

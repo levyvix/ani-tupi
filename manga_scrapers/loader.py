@@ -22,7 +22,6 @@ class MangaScraperProtocol(Protocol):
     """
 
     name: str  # Plugin identifier (e.g., "mugiwaras", "mangadex")
-    languages: list[str]  # Supported languages (e.g., ["pt-br"])
 
     def search_manga(self, query: str) -> list[dict]:
         """Search for manga by title.
@@ -87,11 +86,8 @@ def get_resource_path(relative_path):
     return join(dirname(abspath(__file__)), relative_path)
 
 
-def load_manga_plugins(languages: set[str]) -> dict[str, MangaScraperProtocol]:
-    """Load manga scraper plugins based on language filters.
-
-    Args:
-        languages: Set of supported languages (e.g., {"pt-br"})
+def load_manga_plugins() -> dict[str, MangaScraperProtocol]:
+    """Load all manga scraper plugins.
 
     Returns:
         Dictionary mapping plugin names to plugin instances
@@ -115,7 +111,7 @@ def load_manga_plugins(languages: set[str]) -> dict[str, MangaScraperProtocol]:
         try:
             plugin_module = importlib.import_module(f"manga_scrapers.plugins.{plugin}")
             # Call plugin's load function which returns plugin instance or None
-            plugin_instance = plugin_module.load(languages)
+            plugin_instance = plugin_module.load()
             if plugin_instance is not None:
                 plugins[plugin_instance.name] = plugin_instance
         except Exception as e:

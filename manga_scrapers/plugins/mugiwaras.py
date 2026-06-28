@@ -18,7 +18,6 @@ class MugiwarasOficial:
     """MugiwarasOficial.com scraper plugin."""
 
     name = "mugiwaras"
-    languages = ["pt-br"]
     base_url = "https://mugiwarasoficial.com"
 
     def __init__(self):
@@ -317,15 +316,10 @@ class MugiwarasOficial:
         return []
 
 
-def load(languages: set[str]):
-    """Load MugiwarasOficial plugin if pt-br is in languages.
-
-    Args:
-        languages: Set of supported languages
+def load():
+    """Load MugiwarasOficial plugin.
 
     Returns:
-        Plugin instance or None
+        Plugin instance
     """
-    if "pt-br" in languages:
-        return MugiwarasOficial()
-    return None
+    return MugiwarasOficial()

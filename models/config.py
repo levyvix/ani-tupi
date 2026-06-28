@@ -383,10 +383,6 @@ class MangaSettings(BaseModel):
         default_factory=lambda: Path.home() / ".manga_tupi",
         description="Where to save downloaded manga chapters",
     )
-    languages: list[str] = Field(
-        default_factory=lambda: ["pt-br", "en"],
-        description="Preferred languages in order (pt-br, en, ja, etc)",
-    )
     preferred_sources: list[str] = Field(
         default_factory=lambda: ["mangalivre", "mugiwaras", "mangadex"],
         description="Preferred manga sources in priority order",

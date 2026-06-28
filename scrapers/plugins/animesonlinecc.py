@@ -21,7 +21,6 @@ REQUEST_TIMEOUT = 15
 
 
 class AnimesOnlineCC:
-    languages = ["pt-br"]
     name = "animesonlinecc"
     base_url = BASE_URL
 

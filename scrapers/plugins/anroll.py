@@ -17,7 +17,6 @@ REQUEST_TIMEOUT = 15
 
 
 class AnRoll:
-    languages = ["pt-br"]
     name = "anroll"
     base_url = BASE_URL
 

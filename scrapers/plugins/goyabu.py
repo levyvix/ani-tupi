@@ -19,7 +19,6 @@ REQUEST_TIMEOUT = 15
 
 
 class Goyabu:
-    languages = ["pt-br"]
     name = "goyabu"
     base_url = BASE_URL
 
