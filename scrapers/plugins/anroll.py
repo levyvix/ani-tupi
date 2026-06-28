@@ -72,10 +72,34 @@ class AnRoll:
                 label = f"Ep.{int(ep_num):03d}"
                 titles.append(label)
                 urls.append(href)
+            if not titles:
+                titles, urls = self._episodes_from_range(soup)
             if titles and urls:
                 rep.add_episode_list(anime, titles, urls, self.name)
         except httpx.HTTPError as e:
             logger.debug("anroll search_episodes falhou: %s", e)
+
+    def _episodes_from_range(self, soup: BeautifulSoup) -> tuple[list[str], list[str]]:
+        """Fallback: episode list is JS-rendered. Derive count from the static
+        "Primeiro Episódio" / "Último Episódio" links, whose URLs carry sequential
+        numeric ids (e.g. /56004/ .. /56015/ → episodes 1..12)."""
+        first_id = last_id = None
+        for a in soup.find_all("a", href=True):
+            label = a.get_text(strip=True)
+            m = re.search(r"/(\d+)/?$", str(a["href"]))
+            if not m:
+                continue
+            if "Primeiro" in label:
+                first_id = int(m.group(1))
+            elif "Último" in label or "Ultimo" in label:
+                last_id = int(m.group(1))
+        if first_id is None or last_id is None or last_id < first_id:
+            return [], []
+        titles, urls = [], []
+        for n, ep_id in enumerate(range(first_id, last_id + 1), start=1):
+            titles.append(f"Ep.{n:03d}")
+            urls.append(f"{BASE_URL}/{ep_id}/")
+        return titles, urls
 
     def search_player_src(self, url: str, container: list, event) -> None:
         # The anidrive player serves a "Bot Detected" placeholder (pro.mp4) unless
