@@ -169,6 +169,10 @@ class MangaMetadata(BaseModel):
     tags: list[str] = Field(default_factory=list, description="Tags/genres")
     anilist_id: int | None = Field(None, description="AniList manga ID")
     anilist_data: "AniListManga | None" = Field(None, description="AniList manga data")
+    sources: dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of source name -> manga id in that source (multi-source results)",
+    )
 
 
 class ChapterData(BaseModel):

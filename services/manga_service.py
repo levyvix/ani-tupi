@@ -21,6 +21,7 @@ from collections import OrderedDict
 
 from manga_scrapers.loader import load_manga_plugins
 from models.config import MangaSettings, get_data_path
+from services.anime.title_normalization import normalize_title_for_dedup
 from models.models import ChapterData, MangaHistoryEntry, MangaMetadata, MangaStatus
 from utils.logging import get_logger
 
@@ -377,62 +378,56 @@ class UnifiedMangaService:
         return results
 
     def search_manga(self, query: str, source: str | None = None) -> list[MangaMetadata]:
-        """Search for manga by title, falling back to all sources if primary yields nothing."""
+        """Search for manga by title.
+
+        When a specific ``source`` is requested, only that source is queried.
+        Otherwise every available source is searched and results are merged by
+        normalized title — each merged manga keeps a ``sources`` map of
+        source -> id, so the UI can show "Title [source1, source2]".
+        """
         source_name = source or self.current_source
 
         if source_name not in self.plugins:
             raise ValueError(f"Fonte '{source_name}' não disponível")
 
-        # Try primary source
-        try:
-            results = self._search_manga_from_source(query, source_name)
-            # If we got results, return them
-            if results:
-                return self._record_and_return(results, source_name)
-            # If no results and specific source requested, return empty (don't try others)
-            if source is not None:
-                return []
-            # Otherwise, fall through to try other sources
-        except Exception as e:
-            # If specific source requested, don't try others
-            if source is not None:
-                raise ValueError(f"Falha ao buscar em {source_name}: {e}")
-            # Fall through to try other sources
-            logger.info(f"⚠️  Falha na fonte {source_name}: {e}")
-
-        # Try fallback sources if no results or error
-        logger.info("🔄 Tentando outras fontes...")
-
-        all_sources = [s for s in self.config.preferred_sources if s in self.plugins]
-        if source_name in all_sources:
-            all_sources.remove(source_name)
-
-        # Try each source in order
-        for try_source in all_sources:
+        # Specific source requested: query only that one (no merging).
+        if source is not None:
             try:
-                logger.info(f"  Tentando {try_source}...")
-                results = self._search_manga_from_source(query, try_source)
-                if results:
-                    logger.info(f"✓ Encontrados {len(results)} resultado(s) em {try_source}")
-                    return self._record_and_return(results, try_source)
-            except Exception:
+                results = self._search_manga_from_source(query, source_name)
+            except Exception as e:
+                raise ValueError(f"Falha ao buscar em {source_name}: {e}")
+            return self._record_and_return(results, source_name) if results else []
+
+        return self._search_all_sources(query, primary=source_name)
+
+    def _search_all_sources(self, query: str, primary: str) -> list[MangaMetadata]:
+        """Search every source and merge results by normalized title."""
+        # Search primary source first so its id/source wins ties.
+        search_order = [primary] + [s for s in self.plugins if s != primary]
+
+        merged: dict[str, MangaMetadata] = {}
+        for src in search_order:
+            try:
+                results = self._search_manga_from_source(query, src)
+            except Exception as e:
+                logger.info(f"⚠️  Falha na fonte {src}: {e}")
                 continue
+            if not results:
+                continue
+            logger.info(f"✓ Encontrados {len(results)} resultado(s) em {src}")
+            for manga in results:
+                self._record_manga_in_plugin(manga.id, src)
+                norm = normalize_title_for_dedup(manga.title) or manga.title.lower()
+                existing = merged.get(norm)
+                if existing is not None:
+                    existing.sources.setdefault(src, manga.id)
+                else:
+                    manga.sources = {src: manga.id}
+                    merged[norm] = manga
 
-        # If still no results, try any remaining sources not in preferred list
-        for plugin_name in self.plugins:
-            if plugin_name not in all_sources and plugin_name != source_name:
-                try:
-                    logger.info(f"  Tentando {plugin_name}...")
-                    results = self._search_manga_from_source(query, plugin_name)
-                    if results:
-                        logger.info(f"✓ Encontrados {len(results)} resultado(s) em {plugin_name}")
-                        return self._record_and_return(results, plugin_name)
-                except Exception:
-                    continue
-
-        # No results in any source
-        self.last_found_source = None
-        return []
+        results = list(merged.values())
+        self.last_found_source = primary if results else None
+        return results
 
     def _search_manga_from_source(self, query: str, source_name: str) -> list[MangaMetadata]:
         """Search for manga from a specific source."""

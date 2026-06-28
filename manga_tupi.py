@@ -159,7 +159,7 @@ def _start_manga_search(service: UnifiedMangaService, title: str) -> None:
 
     # Search with loading spinner
     try:
-        with loading(f"Buscando '{search_term}' em {service.current_source}..."):
+        with loading(f"Buscando '{search_term}'..."):
             results = service.search_manga(search_term)
     except MangaNotFoundError:
         logger.info("❌ Mangá não encontrado. Tente outra pesquisa.")
@@ -209,23 +209,26 @@ def _start_manga_search(service: UnifiedMangaService, title: str) -> None:
     # Select manga if not found in preferences or multiple results
     if not selected_manga:
         if len(results) > 1:
+            label_to_manga = {}
             manga_titles = []
             for manga in results:
+                sources_str = ", ".join(sorted(manga.sources)) if manga.sources else ""
+                suffix = f" [{sources_str}]" if sources_str else ""
                 # Check if this is the saved preference
                 if manga.id == preferred_manga_id:
-                    manga_titles.append(f"⭐ {manga.title} (salvo)")
+                    label = f"⭐ {manga.title}{suffix} (salvo)"
                 else:
-                    manga_titles.append(manga.title)
+                    label = f"{manga.title}{suffix}"
+                label_to_manga[label] = manga
+                manga_titles.append(label)
 
             try:
                 selected_title = menu_navigate(manga_titles, "Selecione mangá")
                 if selected_title is None:
                     return
-                # Remove star and (salvo) indicators if present
-                clean_title = selected_title.replace("⭐ ", "").replace(" (salvo)", "")
-                selected_manga = next((m for m in results if m.title == clean_title), None)
+                selected_manga = label_to_manga.get(selected_title)
                 if selected_manga is None:
-                    logger.error(f"Manga '{clean_title}' não encontrado nos resultados.")
+                    logger.error(f"Manga '{selected_title}' não encontrado nos resultados.")
                     return
             except KeyboardInterrupt:
                 return
@@ -257,6 +260,13 @@ def _research_manga_in_new_source(
         new_source: The new source to search in
     """
     try:
+        # If the merged search already discovered this manga's id in the new
+        # source, use it directly — no re-search needed.
+        known_id = (getattr(selected_manga, "sources", {}) or {}).get(new_source)
+        if known_id:
+            selected_manga.id = known_id
+            return
+
         # First try to fetch with the current ID (IDs may be shared across sources)
         try:
             chapters = service.get_chapters(selected_manga.id, source=new_source)
@@ -310,8 +320,12 @@ def _continue_manga_flow(
     service: UnifiedMangaService, selected_manga, allow_source_change: bool = True
 ) -> None:
     """Continue with chapter selection and reading for selected manga."""
-    # Use the source where manga was found, or fall back to current source
-    selected_source = service.last_found_source or service.current_source
+    # Prefer a source the manga was actually found in (multi-source search),
+    # falling back to the last-found/current source.
+    manga_sources = list(getattr(selected_manga, "sources", {}) or {})
+    selected_source = (
+        manga_sources[0] if manga_sources else (service.last_found_source or service.current_source)
+    )
 
     # Allow user to change source if requested
     if allow_source_change:
@@ -320,9 +334,11 @@ def _continue_manga_flow(
             # Check if user has a saved preference
             saved_source = manga_source_preferences.get_preferred_source(selected_manga.title)
 
-            # Get sources that actually have this manga (quick check)
-            logger.info("🔍 Verificando disponibilidade em outras fontes...")
-            sources_with_manga = service.get_available_sources_for_manga(selected_manga.title)
+            # Sources that have this manga are already known from the merged
+            # search result; only fall back to a live check if absent.
+            sources_with_manga = manga_sources or service.get_available_sources_for_manga(
+                selected_manga.title
+            )
 
             # Build menu options - only show sources that have the manga
             menu_options = [f"📖 Ler com {selected_source}"]
