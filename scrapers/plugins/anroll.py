@@ -73,32 +73,59 @@ class AnRoll:
                 titles.append(label)
                 urls.append(href)
             if not titles:
-                titles, urls = self._episodes_from_range(soup)
+                first_ep_url = self._find_first_episode_url(soup)
+                if first_ep_url:
+                    titles, urls = self._episodes_from_sidebar(first_ep_url)
             if titles and urls:
                 rep.add_episode_list(anime, titles, urls, self.name)
         except httpx.HTTPError as e:
             logger.debug("anroll search_episodes falhou: %s", e)
 
-    def _episodes_from_range(self, soup: BeautifulSoup) -> tuple[list[str], list[str]]:
-        """Fallback: episode list is JS-rendered. Derive count from the static
-        "Primeiro Episódio" / "Último Episódio" links, whose URLs carry sequential
-        numeric ids (e.g. /56004/ .. /56015/ → episodes 1..12)."""
-        first_id = last_id = None
-        for a in soup.find_all("a", href=True):
-            label = a.get_text(strip=True)
-            m = re.search(r"/(\d+)/?$", str(a["href"]))
-            if not m:
+    def _find_first_episode_url(self, soup: BeautifulSoup) -> str | None:
+        """Return the 'Primeiro Episódio' link from the anime page."""
+        for anchor in soup.find_all("a", href=True):
+            if "Primeiro" not in anchor.get_text(strip=True):
                 continue
-            if "Primeiro" in label:
-                first_id = int(m.group(1))
-            elif "Último" in label or "Ultimo" in label:
-                last_id = int(m.group(1))
-        if first_id is None or last_id is None or last_id < first_id:
+            href = str(anchor["href"])
+            if re.search(r"/\d+/?$", href):
+                return href if href.startswith("http") else f"{BASE_URL}{href}"
+        return None
+
+    def _episodes_from_sidebar(self, first_ep_url: str) -> tuple[list[str], list[str]]:
+        """Fallback: scrape the episode sidebar from the first episode page.
+
+        Anroll post IDs are global (not sequential per anime). The old range()
+        fallback treated last_id - first_id as episode count, inflating lists to
+        thousands. The sidebar on any episode page lists all episodes in order.
+        """
+        response = httpx.get(
+            first_ep_url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+        )
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        sidebar = soup.select_one(".ep-list-box")
+        if sidebar is None:
             return [], []
-        titles, urls = [], []
-        for n, ep_id in enumerate(range(first_id, last_id + 1), start=1):
-            titles.append(f"Ep.{n:03d}")
-            urls.append(f"{BASE_URL}/{ep_id}/")
+
+        titles: list[str] = []
+        urls: list[str] = []
+        seen: set[str] = set()
+        for anchor in sidebar.find_all("a", href=True):
+            href = str(anchor["href"])
+            if not re.match(rf"{re.escape(BASE_URL)}/\d+/?$", href):
+                continue
+            if href in seen:
+                continue
+            seen.add(href)
+            ep_num = anchor.get("data-ep") or len(urls) + 1
+            try:
+                label = f"Ep.{int(ep_num):03d}"
+            except ValueError:
+                label = f"Ep.{len(urls) + 1:03d}"
+            titles.append(label)
+            urls.append(href)
+
         return titles, urls
 
     def search_player_src(self, url: str, container: list, event) -> None:

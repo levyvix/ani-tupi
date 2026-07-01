@@ -147,8 +147,20 @@ class EpisodeRepository:
             episode_list = sorted(matching_episodes, key=len)[-1]
             return episode_list
         else:
-            # No season filter: return longest from all sources
-            episode_list = sorted(episodes, key=lambda number_list: len(number_list))[-1]
+            # No season filter: return longest list, but drop obvious outliers
+            # (e.g. mistaking global post IDs for sequential episode numbers).
+            if len(episodes) == 1:
+                return episodes[0]
+            lengths = sorted(len(episode_list) for episode_list in episodes)
+            second_largest = lengths[-2]
+            largest = lengths[-1]
+            outlier_threshold = max(second_largest * 3, second_largest + 50)
+            pool = (
+                [episode_list for episode_list in episodes if len(episode_list) < largest]
+                if largest > outlier_threshold
+                else episodes
+            )
+            episode_list = sorted(pool, key=lambda number_list: len(number_list))[-1]
             return episode_list
 
     def get_episode_url_and_source(self, anime: str, episode_num: int) -> tuple[str, str] | None:

@@ -315,3 +315,15 @@ class TestEpisodeRepository:
 
         assert slow_ran, "slow source must complete before search_episodes returns"
         assert episode_repo.get_episode_list("One Piece") == [1, 2]
+
+    def test_get_episode_list_ignores_outlier_source(self, episode_repo):
+        """Should drop absurdly long lists caused by scraper bugs."""
+        normal_titles = [f"Ep {i}" for i in range(1, 13)]
+        normal_urls = [f"http://example.com/{i}" for i in range(1, 13)]
+        outlier_titles = [f"Ep {i}" for i in range(1, 6811)]
+        outlier_urls = [f"http://bad.com/{i}" for i in range(1, 6811)]
+
+        episode_repo.add_episode_list("Anime", normal_titles, normal_urls, "animefire")
+        episode_repo.add_episode_list("Anime", outlier_titles, outlier_urls, "anroll")
+
+        assert episode_repo.get_episode_list("Anime") == list(range(1, 13))
