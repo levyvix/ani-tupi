@@ -1,5 +1,7 @@
 from utils.logging import get_logger
+import re
 import urllib.parse
+from urllib.parse import unquote
 
 import httpx
 from bs4 import BeautifulSoup
@@ -78,16 +80,29 @@ class AniTube:
         try:
             response = httpx.get(url, headers=HEADERS, timeout=30, follow_redirects=True)
             response.raise_for_status()
-            page = BeautifulSoup(response.text, "html.parser")
+            html_content = response.text
 
-            # Prefer the anivideo iframe which contains a direct m3u8 URL
+            # Preferred: the anivideo embed carries the direct CDN m3u8 in its
+            # `d=` parameter. The embed URL itself is an HTML player page that
+            # MPV cannot play, so extract the underlying stream instead.
+            hls_match = re.search(
+                r"https://api\.anivideo\.net/videohls\.php\?d=([^\"'<>&\s]+)", html_content
+            )
+            if hls_match:
+                hls_url = unquote(hls_match.group(1))
+                if store_player_source(container, event, hls_url):
+                    return
+
+            # Fallback: any anivideo iframe src (still an embed page, but let the
+            # downstream player attempt it before giving up).
+            page = BeautifulSoup(html_content, "html.parser")
             for iframe in page.select("iframe.metaframe"):
                 src = iframe.get("src") or ""
                 if "api." in src:
                     if store_player_source(container, event, src):
                         return
 
-            # Fallback: any iframe
+            # Last resort: first iframe on the page.
             iframe = page.select_one("iframe")
             if iframe:
                 src = iframe.get("src", "")
