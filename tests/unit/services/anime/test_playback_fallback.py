@@ -201,6 +201,89 @@ class TestPlayEpisodeWithFallback:
         assert call_args[1]["episode_number"] == 5
 
 
+class TestPlayEpisodeWithFallbackLazyExtraction:
+    """Test lazy extraction path (extractor callback)."""
+
+    def create_mock_player(self, exit_codes: list[int]):
+        player = Mock()
+        results = [
+            VideoPlaybackResult(exit_code=code, action="quit", data=None) for code in exit_codes
+        ]
+        player.play_episode.side_effect = results
+        return player
+
+    def test_stops_extracting_after_first_success(self):
+        """First source extracts + plays OK; lower sources never extracted."""
+        player = self.create_mock_player([0])
+        extractor = Mock(return_value="https://video1.mp4")
+        sources = [
+            ("https://page1", "anitube"),
+            ("https://page2", "animesdigital"),
+            ("https://page3", "animesonlinecc"),
+        ]
+
+        result = play_episode_with_fallback(
+            player=player,
+            sources=sources,
+            anime_title="Test Anime",
+            episode_number=1,
+            total_episodes=12,
+            extractor=extractor,
+        )
+
+        assert result.source_used == "anitube"
+        assert extractor.call_count == 1  # only priority source touched
+        assert extractor.call_args[0] == ("https://page1", "anitube")
+        # video URL and page-as-referrer forwarded to player
+        call_args = player.play_episode.call_args[1]
+        assert call_args["url"] == "https://video1.mp4"
+        assert call_args["referrer"] == "https://page1"
+
+    def test_skips_sources_that_fail_extraction(self):
+        """Sources returning None from extractor are skipped, not played."""
+        player = self.create_mock_player([0])
+
+        def extractor(page_url, source):
+            return None if source in ("anroll", "animesonlinecc") else "https://video.mp4"
+
+        sources = [
+            ("https://anroll", "anroll"),
+            ("https://onlinecc", "animesonlinecc"),
+            ("https://anitube", "anitube"),
+        ]
+
+        result = play_episode_with_fallback(
+            player=player,
+            sources=sources,
+            anime_title="Test Anime",
+            episode_number=1,
+            total_episodes=12,
+            extractor=extractor,
+        )
+
+        assert result.source_used == "anitube"
+        assert player.play_episode.call_count == 1
+        assert result.sources_tried == [("anitube", 0)]
+
+    def test_all_fail_extraction(self):
+        """When nothing extracts, result is all_failed and player never called."""
+        player = Mock()
+        sources = [("https://p1", "anroll"), ("https://p2", "animesonlinecc")]
+
+        result = play_episode_with_fallback(
+            player=player,
+            sources=sources,
+            anime_title="Test Anime",
+            episode_number=1,
+            total_episodes=12,
+            extractor=lambda page_url, source: None,
+        )
+
+        assert result.all_failed is True
+        assert result.source_used is None
+        assert player.play_episode.call_count == 0
+
+
 class TestPlayEpisodeWithFallbackIntegration:
     """Integration tests for fallback flow."""
 

@@ -961,32 +961,10 @@ def anilist_anime_flow(
         else:
             logger.info(f"   Fonte: {source_names[0]}")
 
-        video_sources = []
-        for page_url, source_name in all_sources:
-            try:
-                video_url = rep.search_player_from_page(page_url, source_name)
-                if video_url:
-                    video_sources.append((video_url, source_name, page_url))
-                else:
-                    logger.info(
-                        f"   ⚠️  [{source_name}] Não retornou URL de vídeo (page_url={page_url[:80]})"
-                    )
-            except (OSError, ConnectionError, TimeoutError) as e:
-                logger.warning(f"   ❌ [{source_name}] Erro de rede ao extrair vídeo: {e!r}")
-                continue
-            except Exception as e:
-                logger.warning(
-                    f"   ❌ [{source_name}] Erro inesperado ao extrair vídeo: {e!r}",
-                    exc_info=True,
-                )
-                continue
-
-        sources_for_playback = video_sources if video_sources else all_sources
-
         player = VideoPlayer()
         fallback_result = play_episode_with_fallback(
             player=player,
-            sources=sources_for_playback,
+            sources=all_sources,
             anime_title=selected_anime,
             episode_number=episode,
             total_episodes=num_episodes,
@@ -994,6 +972,7 @@ def anilist_anime_flow(
             debug=args.debug,
             anilist_id=anilist_id,
             anilist_episodes=total_episodes,
+            extractor=rep.search_player_from_page,
         )
 
         result = fallback_result.playback_result

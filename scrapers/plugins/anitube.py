@@ -80,39 +80,63 @@ class AniTube:
         try:
             response = httpx.get(url, headers=HEADERS, timeout=30, follow_redirects=True)
             response.raise_for_status()
-            html_content = response.text
+            page = BeautifulSoup(response.text, "html.parser")
 
-            # Preferred: the anivideo embed carries the direct CDN m3u8 in its
-            # `d=` parameter. The embed URL itself is an HTML player page that
-            # MPV cannot play, so extract the underlying stream instead.
-            hls_match = re.search(
-                r"https://api\.anivideo\.net/videohls\.php\?d=([^\"'<>&\s]+)", html_content
-            )
-            if hls_match:
-                hls_url = unquote(hls_match.group(1))
+            # anivideo HLS backend: the direct CDN stream lives in the
+            # videohls.php `d=` parameter, usually right on the episode page.
+            if hls_url := self._extract_hls(response.text):
                 if store_player_source(container, event, hls_url):
                     return
 
-            # Fallback: any anivideo iframe src (still an embed page, but let the
-            # downstream player attempt it before giving up).
-            page = BeautifulSoup(html_content, "html.parser")
-            for iframe in page.select("iframe.metaframe"):
-                src = iframe.get("src") or ""
-                if "api." in src:
-                    if store_player_source(container, event, src):
-                        return
+            # Otherwise the episode embeds a Referer-gated redirector (bg.mp4)
+            # that is not the real stream. Follow it to the provider page and
+            # re-check for the videohls source there.
+            meta = page.select_one("iframe.metaframe")
+            redirector = meta.get("src") if meta else None
+            if redirector:
+                hop = httpx.get(
+                    redirector,
+                    headers={**HEADERS, "Referer": url},
+                    timeout=30,
+                    follow_redirects=False,
+                )
+                location = hop.headers.get("location", "")
+                if location.startswith("http"):
+                    provider = httpx.get(
+                        location,
+                        headers={**HEADERS, "Referer": f"{self.base_url}/"},
+                        timeout=30,
+                        follow_redirects=True,
+                    )
+                    provider.raise_for_status()
+                    if hls_url := self._extract_hls(provider.text):
+                        if store_player_source(container, event, hls_url):
+                            return
 
-            # Last resort: first iframe on the page.
-            iframe = page.select_one("iframe")
-            if iframe:
-                src = iframe.get("src", "")
-                if src:
-                    if store_player_source(container, event, src):
-                        return
+                    # Blogger backend: the stream is a googlevideo URL bound to
+                    # the browser session (403s any external player), so give up
+                    # and let other sources handle this episode.
+                    if "blogger.com/video.g" in provider.text:
+                        raise Exception(
+                            "AniTube episode uses Blogger backend (not externally playable)"
+                        )
 
-            raise Exception("No video source found in AniTube episode page")
-        except Exception as e:
+            raise Exception("No playable video source found in AniTube episode page")
+        except httpx.HTTPError as e:
             raise Exception(f"Could not extract video from AniTube: {e}") from e
+
+    @staticmethod
+    def _extract_hls(html: str) -> str | None:
+        """Extract the direct HLS URL from an anivideo videohls.php `d=` param.
+
+        The `d=` value points at the CDN base (an .mp4 path); the actual
+        playlist is served at `<base>/index.m3u8`.
+        """
+        match = re.search(r"https://api\.anivideo\.net/videohls\.php\?d=([^\"'<>&\s]+)", html)
+        if not match:
+            return None
+        base = unquote(match.group(1))
+        return base if base.endswith(".m3u8") else f"{base}/index.m3u8"
 
 
 def load() -> None:

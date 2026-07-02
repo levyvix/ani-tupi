@@ -249,7 +249,7 @@ class PlaybackCoordinator:
             if success and container:
                 return container[0]
             if not success:
-                logger.warning(f"No video URL extracted for {source_name}")
+                logger.debug(f"No video URL extracted for {source_name}")
             return None
         except Exception as e:
             logger.warning(f"Exception extracting video from {source_name}: {e}")

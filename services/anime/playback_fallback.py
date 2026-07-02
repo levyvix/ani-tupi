@@ -5,7 +5,7 @@ tries the next available source automatically until one works
 or all sources are exhausted.
 """
 
-from typing import NamedTuple
+from typing import Callable, NamedTuple
 from utils.video_player import VideoPlayer, VideoPlaybackResult
 from utils.logging import get_logger
 
@@ -42,6 +42,7 @@ def play_episode_with_fallback(
     debug: bool = False,
     anilist_id: int | None = None,
     anilist_episodes: int | None = None,
+    extractor: Callable[[str, str], str | None] | None = None,
 ) -> PlaybackFallbackResult:
     """Play episode trying each source in order until one succeeds.
 
@@ -51,7 +52,9 @@ def play_episode_with_fallback(
 
     Args:
         player: VideoPlayer instance with session state (autoplay, etc.)
-    sources: List of (url, source_name) or (url, source_name, referrer) tuples sorted by priority
+    sources: List of (url, source_name) or (url, source_name, referrer) tuples sorted by priority.
+        When ``extractor`` is provided, the first tuple element is treated as a
+        page URL and resolved to a playable video URL lazily, on demand.
         anime_title: Anime title for display and IPC context
         episode_number: Current episode number (1-indexed)
         total_episodes: Total episodes in scraper
@@ -59,6 +62,10 @@ def play_episode_with_fallback(
         debug: Skip actual playback (testing mode)
         anilist_id: AniList ID for progress sync
         anilist_episodes: Total episodes from AniList
+        extractor: Optional ``(page_url, source_name) -> video_url | None`` callback.
+            When set, video URLs are extracted lazily just before each source is
+            played, so lower-priority sources are never touched once a higher
+            one works. When None, tuple elements are already-extracted video URLs.
 
     Returns:
         PlaybackFallbackResult with outcome details
@@ -75,8 +82,25 @@ def play_episode_with_fallback(
     sources_tried: list[tuple[str, int]] = []
 
     for source_entry in sources:
-        url, source = source_entry[0], source_entry[1]
-        referrer = source_entry[2] if len(source_entry) > 2 else None
+        first, source = source_entry[0], source_entry[1]
+
+        if extractor is not None:
+            # Lazy extraction: `first` is a page URL; resolve to a video URL
+            # only now, so lower-priority sources stay untouched on early success.
+            page_url = first
+            try:
+                url = extractor(page_url, source)
+            except Exception as e:
+                logger.debug(f"[{source}] erro ao extrair vídeo: {e!r}")
+                continue
+            if not url:
+                logger.debug(f"[{source}] não retornou URL de vídeo, pulando")
+                continue
+            referrer = source_entry[2] if len(source_entry) > 2 else page_url
+        else:
+            url = first
+            referrer = source_entry[2] if len(source_entry) > 2 else None
+
         # Show progress if multiple sources
         if len(sources) > 1:
             attempt_num = len(sources_tried) + 1
