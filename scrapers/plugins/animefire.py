@@ -1,4 +1,5 @@
 import json
+import re
 from utils.logging import get_logger
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -56,21 +57,25 @@ class AnimeFire:
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
         try:
-            # total_videos is in static HTML — no Selenium needed
             response = httpx.get(url, timeout=20, follow_redirects=True)
             response.raise_for_status()
             tree = BeautifulSoup(response.text, "html.parser")
 
-            total_input = tree.select_one("input#total_videos")
-            total = int(total_input.get("value", 0)) if total_input else 0
-
-            if total == 0:
+            ep_links = tree.select("a.lEp")
+            if not ep_links:
                 logger.debug(f"AnimeFire: no episodes found for '{anime}' at {url}")
                 return
 
-            base = url.rstrip("/")
-            episode_links = [f"{base}/{i}" for i in range(1, total + 1)]
-            opts = [str(i) for i in range(1, total + 1)]
+            episode_links = [a.get("href") for a in ep_links if a.get("href")]
+            if not episode_links:
+                logger.debug(f"AnimeFire: no valid hrefs for '{anime}' at {url}")
+                return
+
+            opts = []
+            for href in episode_links:
+                m = re.search(r"/(\d+(?:\.\d+)?)$", href)
+                opts.append(m.group(1) if m else href.split("/")[-1])
+
             rep.add_episode_list(anime, opts, episode_links, self.name)
         except Exception as e:
             logger.debug(f"AnimeFire episode fetch failed for '{anime}': {e}")
