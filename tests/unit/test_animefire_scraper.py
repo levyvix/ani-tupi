@@ -1,7 +1,7 @@
 """Tests for AnimeFire scraper player source extraction."""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from scrapers.plugins.animefire import AnimeFire
 
@@ -29,11 +29,14 @@ VIDEO_JSON = {
 
 
 class _Response:
-    def __init__(self, payload):
-        self.text = json.dumps(payload)
+    def __init__(self, text):
+        self.text = text
 
     def raise_for_status(self):
         return None
+
+    def json(self):
+        return json.loads(self.text)
 
 
 def _event():
@@ -47,19 +50,12 @@ class TestAnimeFireScraper:
         self.scraper = AnimeFire()
 
     @patch("scrapers.plugins.animefire.httpx.get")
-    @patch("scrapers.plugins.animefire.SeleniumWebDriver")
-    def test_search_player_src_uses_json_endpoint(self, mock_driver, mock_get):
-        driver = mock_driver.return_value.__enter__.return_value
-        driver.fetch.return_value = MagicMock(
-            select_one=lambda *_: MagicMock(
-                get=lambda k: (
-                    "https://animefire.io/video/mao/9?tempsubs=0&1780178669"
-                    if k == "data-video-src"
-                    else None
-                )
-            )
-        )
-        mock_get.return_value = _Response(VIDEO_JSON)
+    def test_search_player_src_uses_json_endpoint(self, mock_get):
+        # First call: episode page HTML; second call: video JSON API
+        mock_get.side_effect = [
+            _Response(EPISODE_PAGE_HTML),
+            _Response(json.dumps(VIDEO_JSON)),
+        ]
 
         container = []
         event = _event()
@@ -67,8 +63,11 @@ class TestAnimeFireScraper:
         self.scraper.search_player_src("https://animefire.io/animes/mao/9", container, event)
 
         assert container == ["https://lightspeedst.net/s8/mp4/mao/hd/9.mp4?token=hd&expires=1"]
-        mock_get.assert_called_once_with(
-            "https://animefire.io/video/mao/9?tempsubs=0&1780178669",
-            timeout=20,
-            follow_redirects=True,
-        )
+        assert mock_get.call_args_list == [
+            call("https://animefire.io/animes/mao/9", timeout=20, follow_redirects=True),
+            call(
+                "https://animefire.io/video/mao/9?tempsubs=0&1780178669",
+                timeout=20,
+                follow_redirects=True,
+            ),
+        ]
