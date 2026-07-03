@@ -3,6 +3,7 @@ from utils.logging import get_logger
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
+from bs4 import BeautifulSoup
 
 from scrapers.core.selenium_driver import SeleniumWebDriver
 from scrapers.plugins.utils import load_plugin, store_player_source
@@ -55,22 +56,31 @@ class AnimeFire:
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
         try:
-            # AnimeFire can be slow; use 60s timeout (3x default) with retries
-            with SeleniumWebDriver(timeout=60) as driver:
-                tree = driver.fetch(url, max_retries=2)
+            # total_videos is in static HTML — no Selenium needed
+            response = httpx.get(url, timeout=20, follow_redirects=True)
+            response.raise_for_status()
+            tree = BeautifulSoup(response.text, "html.parser")
 
-            links = tree.select("a.lEp.epT.divNumEp.smallbox.px-2.mx-1.text-left.d-flex")
-            episode_links = [a.get("href") for a in links if a.get("href") is not None]
-            opts = [str(a.text) for a in links]
+            total_input = tree.select_one("input#total_videos")
+            total = int(total_input.get("value", 0)) if total_input else 0
+
+            if total == 0:
+                logger.debug(f"AnimeFire: no episodes found for '{anime}' at {url}")
+                return
+
+            base = url.rstrip("/")
+            episode_links = [f"{base}/{i}" for i in range(1, total + 1)]
+            opts = [str(i) for i in range(1, total + 1)]
             rep.add_episode_list(anime, opts, episode_links, self.name)
         except Exception as e:
             logger.debug(f"AnimeFire episode fetch failed for '{anime}': {e}")
-            pass
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            with SeleniumWebDriver() as driver:
-                page = driver.fetch(url)
+            # data-video-src is in static HTML — no Selenium needed
+            response = httpx.get(url, timeout=20, follow_redirects=True)
+            response.raise_for_status()
+            page = BeautifulSoup(response.text, "html.parser")
 
             # AnimeFire uses Video.js player with data-video-src attribute
             # The attribute contains an API endpoint that returns JSON with video URLs
@@ -79,7 +89,6 @@ class AnimeFire:
                 api_url = video.get("data-video-src")
                 if api_url:
                     try:
-                        # Fetch the API endpoint directly; AnimeFire returns JSON here.
                         response = httpx.get(api_url, timeout=20, follow_redirects=True)
                         response.raise_for_status()
                         video_data = json.loads(response.text)
@@ -108,7 +117,6 @@ class AnimeFire:
                                         return
                     except Exception as e:
                         logger.debug(f"AnimeFire API fetch failed for '{url}': {e}")
-                        pass
 
                 # Fallback: try standard src attribute
                 src = video.get("src")
