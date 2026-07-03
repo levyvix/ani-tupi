@@ -44,25 +44,21 @@ _AUDIO_MARKER_RE = re.compile(r"\s*[(-]?\s*(dublado|legendado)\s*[)]?\s*", re.IG
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
-def _extract_embed_id(soup: BeautifulSoup) -> str | None:
-    """Extract embed ID from known player controls."""
-    selectors = [
-        ".btn-service.selected[data-embed]",
-        "[data-embed]",
-        ".play-btn[data-id]",
-        "[data-id]",
-    ]
+def _extract_embed_ids(soup: BeautifulSoup) -> list[str]:
+    """Extract all embed IDs from player controls, selected first."""
+    seen: set[str] = set()
+    ids: list[str] = []
 
-    for selector in selectors:
-        element = soup.select_one(selector)
-        if not element:
-            continue
+    for selector in (".btn-service.selected[data-embed]", "[data-embed]", ".play-btn[data-id]"):
+        for el in soup.select(selector):
+            raw = el.get("data-embed") or el.get("data-id")
+            if raw:
+                val = str(raw).strip()
+                if val not in seen:
+                    seen.add(val)
+                    ids.append(val)
 
-        embed_id = element.get("data-embed") or element.get("data-id")
-        if embed_id:
-            return str(embed_id).strip()
-
-    return None
+    return ids
 
 
 def _extract_player_url(embed_html: str) -> str | None:
@@ -230,8 +226,8 @@ class SushiAnimes:
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
 
-            embed_id = _extract_embed_id(soup)
-            if not embed_id:
+            embed_ids = _extract_embed_ids(soup)
+            if not embed_ids:
                 raise ValueError(f"No embed ID found in SushiAnimes episode page: {url}")
 
             ajax_headers = {
@@ -241,19 +237,24 @@ class SushiAnimes:
                 "Referer": url,
             }
 
-            embed_response = httpx.post(
-                f"{BASE_URL}/ajax/embed",
-                data={"id": embed_id},
-                headers=ajax_headers,
-                timeout=REQUEST_TIMEOUT,
-                follow_redirects=True,
-            )
-            embed_response.raise_for_status()
+            for embed_id in embed_ids:
+                try:
+                    embed_response = httpx.post(
+                        f"{BASE_URL}/ajax/embed",
+                        data={"id": embed_id},
+                        headers=ajax_headers,
+                        timeout=REQUEST_TIMEOUT,
+                        follow_redirects=True,
+                    )
+                    embed_response.raise_for_status()
+                    player_url = _extract_player_url(embed_response.text)
+                    if player_url:
+                        store_player_source(container, event, player_url)
+                        return
+                except httpx.HTTPError as e:
+                    logger.debug("sushianimes embed %s falhou: %s", embed_id, e)
 
-            player_url = _extract_player_url(embed_response.text)
-            if not player_url:
-                raise ValueError(f"No player URL found in SushiAnimes embed response for: {url}")
-            store_player_source(container, event, player_url)
+            raise ValueError(f"No player URL found in any SushiAnimes embed for: {url}")
         except httpx.HTTPError as e:
             logger.debug("sushianimes search_player_src falhou: %s", e)
 
