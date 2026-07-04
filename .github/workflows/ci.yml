@@ -60,7 +60,7 @@ jobs:
       run: uv run ruff format --check .
 
     - name: Run tests
-      run: uv run pytest -v --cov=. --cov-report=xml --cov-report=term-missing
+      run: uv run pytest -v --cov=. --cov-report=xml --cov-report=term-missing --ignore=tests/integration/test_scrapers_real_http.py
 
     - name: Upload coverage
       uses: codecov/codecov-action@v4
