@@ -82,19 +82,6 @@ class RandomAnimeService:
             filtered.append(entry)
         return filtered
 
-    def pick_random(self, anime_list: list[AniListMediaListEntry]) -> AniListMediaListEntry | None:
-        """Pick a random anime from the list.
-
-        Args:
-            anime_list: List of anime entries
-
-        Returns:
-            Random anime entry or None if list is empty
-        """
-        if not anime_list:
-            return None
-        return random.choice(anime_list)
-
     def get_anime_info(self, anime_entry: AniListMediaListEntry) -> RandomAnimeResult:
         """Get anime details from an entry.
 

@@ -26,15 +26,6 @@ USER_AGENTS = [
     "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
 ]
 
-COMMON_HEADERS = {
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Accept-Language": "en-US,en;q=0.9",
-    "DNT": "1",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-}
-
 
 class SeleniumWebDriver:
     """Selenium WebDriver wrapper with stealth and parsing capabilities.
@@ -136,33 +127,6 @@ class SeleniumWebDriver:
                         f"Timeout after {max_retries + 1} attempts on {url}: {e}"
                     ) from e
 
-    def fetch_json(self, url: str) -> dict:
-        """Fetch URL and parse as JSON.
-
-        Args:
-            url: Target URL returning JSON
-
-        Returns:
-            dict: Parsed JSON response
-
-        Raises:
-            Exception: If page load or JSON parsing fails
-        """
-        import json
-
-        try:
-            self.driver.get(url)
-        except WebDriverException as e:
-            raise Exception(f"Failed to load URL '{url}': {e}") from e
-        time.sleep(random.uniform(0.5, 1.5))
-
-        try:
-            # Get page text and parse as JSON
-            text = self.driver.find_element(By.TAG_NAME, "body").text
-            return json.loads(text)
-        except json.JSONDecodeError as e:
-            raise Exception(f"Failed to parse JSON response: {e}")
-
     def close(self) -> None:
         """Close browser and cleanup resources."""
         if self.driver:
@@ -181,6 +145,6 @@ class SeleniumWebDriver:
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, _exc_val, _exc_tb):
         """Context manager exit with cleanup."""
         self.close()

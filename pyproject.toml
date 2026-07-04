@@ -52,6 +52,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "deptry>=0.25.1",
     "mypy>=1.19.1",
     "prek>=0.3.0",
     "pyright>=1.1.407",
@@ -59,6 +60,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "python-semantic-release>=9.21.1",
     "ruff>=0.14.10",
+    "vulture>=2.16",
 ]
 
 [tool.hatch.build.targets.wheel]

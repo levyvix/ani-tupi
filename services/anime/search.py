@@ -970,29 +970,6 @@ def _select_from_dual_search_results(
     )
 
 
-def _should_retry_with_resolved_title(
-    search_results: ContextualSearchResults,
-    resolution: AnimeTitleResolution | None,
-    candidate_query: str,
-) -> bool:
-    """Decide whether original-query results are too weak and should use resolved title."""
-    if not resolution:
-        return False
-
-    resolved_title = resolution.resolved_title.strip()
-    if not resolved_title or resolved_title.casefold() == candidate_query.strip().casefold():
-        return False
-
-    if not search_results.titles_with_sources:
-        return True
-
-    best_score = _best_similarity_score_for_reference(
-        search_results.titles_with_sources,
-        resolved_title,
-    )
-    return best_score < 65
-
-
 def _resolve_search_query(query: str) -> AnimeTitleResolution | None:
     """Resolve a failed manual query into a more canonical title."""
     if not settings.search.enable_title_resolution:

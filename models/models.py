@@ -3,14 +3,12 @@
 Defines DTOs (Data Transfer Objects) for:
 - AnimeMetadata: Anime information from scrapers
 - EpisodeData: Episode lists from scrapers
-- SearchResult: Repository search results
 - VideoUrl: Playback URLs with optional headers
 - MangaMetadata: Manga information from MangaDex
 - ChapterData: Chapter information from MangaDex
 - MangaHistoryEntry: Reading progress tracking
 - AnimeSearchResult: Immutable search result for one anime
 - SearchResults: Immutable collection of search results
-- EpisodeList: Immutable episode list
 """
 
 from dataclasses import dataclass, field
@@ -86,18 +84,6 @@ class EpisodeData(BaseModel):
                 f"vs {len(self.episode_urls)} URLs"
             )
         return self
-
-
-class SearchResult(BaseModel):
-    """Repository search result.
-
-    Attributes:
-        anime_titles: List of found anime titles
-        total_sources: Number of sources that returned results
-    """
-
-    anime_titles: list[str] = Field(..., description="Found anime titles")
-    total_sources: int = Field(ge=0, description="Number of sources with results")
 
 
 class AniListSearchResult(BaseModel):
@@ -674,64 +660,6 @@ class SearchResults(BaseModel, frozen=True):
             sources_str = ", ".join(sorted(sources))
             result_list.append(f"{anime.title} [{sources_str}]")
         return result_list
-
-    def find_by_title(self, title: str) -> AnimeSearchResult | None:
-        """Find anime by exact title match.
-
-        Args:
-            title: Anime title to search for
-
-        Returns:
-            AnimeSearchResult if found, None otherwise
-        """
-        for anime in self.results:
-            if anime.title == title:
-                return anime
-        return None
-
-
-class EpisodeList(BaseModel, frozen=True):
-    """Immutable episode list for an anime.
-
-    Stores episode metadata across multiple sources.
-
-    Attributes:
-        anime_title: Title of the anime
-        episodes: Immutable tuple of (title, urls, source) tuples
-    """
-
-    anime_title: str = Field(..., min_length=1, description="Title of the anime")
-    episodes: tuple[tuple[str, list[str], str], ...] = Field(
-        default_factory=tuple,
-        description="Immutable tuple of (title, urls, source) tuples",
-    )
-
-    def get_episode_titles(self) -> list[str]:
-        """Get unified episode title list (from longest source).
-
-        Returns:
-            List of episode titles
-        """
-        if not self.episodes:
-            return []
-        # Return longest episode list (most complete source)
-        episode_lists = [ep[0] for ep in self.episodes]
-        longest_list = max(episode_lists, key=len)
-        return list(longest_list)
-
-    def get_episode_url(self, episode_num: int) -> tuple[str, str] | None:
-        """Get episode URL and source name (1-indexed).
-
-        Args:
-            episode_num: Episode number (1-indexed, e.g., 1, 2, 3)
-
-        Returns:
-            Tuple of (url, source_name) or None if not found
-        """
-        for _title_list, url_list, source in self.episodes:
-            if len(url_list) >= episode_num:
-                return (url_list[episode_num - 1], source)
-        return None
 
 
 # ============================================================================

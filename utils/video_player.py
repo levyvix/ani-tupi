@@ -342,20 +342,6 @@ class VideoPlayer:
             temp_dir = tempfile.gettempdir()
             return str(Path(temp_dir) / f"ani-tupi-mpv-{unique_id}.sock")
 
-    def _format_time(self, seconds: float) -> str:
-        """Format seconds to MPV chapter time format (HH:MM:SS.mmm).
-
-        Args:
-            seconds: Time in seconds
-
-        Returns:
-            Formatted time string
-        """
-        hours = int(seconds // 3600)
-        minutes = int((seconds % 3600) // 60)
-        secs = seconds % 60
-        return f"{hours:02d}:{minutes:02d}:{secs:06.3f}"
-
     def _cleanup_ipc_socket(self, path: str) -> None:
         """Clean up IPC socket file/pipe without errors."""
         if not path:

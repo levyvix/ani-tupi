@@ -2,7 +2,6 @@
 
 import json
 from unittest.mock import MagicMock, call, patch
-from bs4 import BeautifulSoup
 
 from scrapers.plugins.animefire import AnimeFire
 
@@ -103,29 +102,20 @@ class TestAnimeFireScraper:
             ),
         ]
 
-    @patch("scrapers.plugins.animefire.SeleniumWebDriver")
-    def test_search_anime_returns_results(self, mock_selenium):
-        soup = BeautifulSoup(SEARCH_HTML, "html.parser")
-        mock_driver = MagicMock()
-        mock_driver.__enter__ = MagicMock(return_value=mock_driver)
-        mock_driver.__exit__ = MagicMock(return_value=False)
-        mock_driver.fetch.return_value = soup
-        mock_selenium.return_value = mock_driver
+    @patch("scrapers.plugins.animefire.httpx.get")
+    def test_search_anime_returns_results(self, mock_get):
+        mock_get.return_value = _Response(SEARCH_HTML)
 
         results = self.scraper.search_anime("mao")
 
         assert len(results) == 1
         assert results[0].title == "Mao"
         assert results[0].url == "https://animefire.plus/animes/mao"
+        mock_get.assert_called_once()
 
-    @patch("scrapers.plugins.animefire.SeleniumWebDriver")
-    def test_search_anime_returns_empty_without_cards(self, mock_selenium):
-        soup = BeautifulSoup("<html></html>", "html.parser")
-        mock_driver = MagicMock()
-        mock_driver.__enter__ = MagicMock(return_value=mock_driver)
-        mock_driver.__exit__ = MagicMock(return_value=False)
-        mock_driver.fetch.return_value = soup
-        mock_selenium.return_value = mock_driver
+    @patch("scrapers.plugins.animefire.httpx.get")
+    def test_search_anime_returns_empty_without_cards(self, mock_get):
+        mock_get.return_value = _Response("<html></html>")
 
         results = self.scraper.search_anime("nothing")
 

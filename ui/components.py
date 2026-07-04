@@ -6,7 +6,6 @@ This module consolidates menu system and loading indicators:
 """
 
 import sys
-from collections.abc import Callable
 from contextlib import contextmanager
 
 from InquirerPy import inquirer  # type: ignore[import-untyped]
@@ -40,8 +39,6 @@ console = Console(theme=CATPPUCCIN_MOCHA)
 def menu(
     opts: list[str],
     msg: str = "",
-    show_preview: bool = False,
-    preview_callback: Callable | None = None,
     enable_search: bool = True,
 ) -> str:
     """Display interactive menu with automatic "Sair" option.
@@ -49,8 +46,6 @@ def menu(
     Args:
         opts: List of menu options
         msg: Title message
-        show_preview: Ignored (preview feature removed in refactor)
-        preview_callback: Ignored (preview feature removed in refactor)
         enable_search: Enable fuzzy search (default: True)
 
     Returns:
@@ -130,8 +125,6 @@ def menu(
 def menu_navigate(
     opts: list[str],
     msg: str = "",
-    show_preview: bool = False,
-    preview_callback: Callable | None = None,
     enable_search: bool = True,
     search_state=None,
     alternative_language_available: bool = False,
@@ -142,8 +135,6 @@ def menu_navigate(
     Args:
         opts: List of menu options (can include separators "─")
         msg: Title message
-        show_preview: Ignored (preview feature removed in refactor)
-        preview_callback: Ignored (preview feature removed in refactor)
         enable_search: Enable fuzzy search (default: True)
         search_state: Optional IncrementalSearchState for navigation between result sets
         alternative_language_available: Whether language toggle button should be shown

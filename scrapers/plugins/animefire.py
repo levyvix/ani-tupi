@@ -7,12 +7,20 @@ import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.core.blogger_resolver import resolve_blogger_token
-from scrapers.core.selenium_driver import SeleniumWebDriver
 from scrapers.plugins.utils import load_plugin, store_player_source
 from models.models import AnimeMetadata
 from services.repository import rep
 
 logger = get_logger(__name__)
+
+SEARCH_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
 class AnimeFire:
@@ -47,11 +55,7 @@ class AnimeFire:
             logger.debug(f"AnimeFire blogger resolve failed: {e}")
             return url
 
-    def search_anime(self, query: str) -> list[AnimeMetadata]:
-        url = "https://animefire.plus/pesquisar/" + "-".join(query.split())
-        with SeleniumWebDriver() as driver:
-            tree = driver.fetch(url)
-
+    def _parse_search_page(self, tree: BeautifulSoup) -> list[AnimeMetadata]:
         target_class = "col-6 col-sm-4 col-md-3 col-lg-2 mb-1 minWDanime divCardUltimosEps"
         titles_urls = []
         selector = f"div.{target_class.replace(' ', '.')}"
@@ -65,10 +69,17 @@ class AnimeFire:
 
         titles = [str(h3.text) for h3 in tree.select("h3.animeTitle")]
         results = []
-        for title, url in zip(titles, titles_urls, strict=False):
-            if url:
-                results.append(AnimeMetadata(title=title, url=url, source=self.name))
+        for title, page_url in zip(titles, titles_urls, strict=False):
+            if page_url:
+                results.append(AnimeMetadata(title=title, url=page_url, source=self.name))
         return results
+
+    def search_anime(self, query: str) -> list[AnimeMetadata]:
+        url = "https://animefire.plus/pesquisar/" + "-".join(query.split())
+        response = httpx.get(url, timeout=20, follow_redirects=True, headers=SEARCH_HEADERS)
+        response.raise_for_status()
+        tree = BeautifulSoup(response.text, "html.parser")
+        return self._parse_search_page(tree)
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
         try:

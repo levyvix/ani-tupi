@@ -325,7 +325,6 @@ def _sync_anilist_progress(
     anilist_id: int,
     episode: int,
     num_episodes: int,
-    status_obj: Status | None = None,
 ) -> None:
     """Sync watched episode progress to AniList and update status if needed.
 
@@ -336,7 +335,6 @@ def _sync_anilist_progress(
         anilist_id: AniList media ID
         episode: Episode number just watched (1-indexed)
         num_episodes: Total episodes available (from scrapers)
-        status_obj: Pre-fetched Status value to pass when already known (unused internally)
     """
     if not anilist_client.is_authenticated() or not anilist_id:
         return

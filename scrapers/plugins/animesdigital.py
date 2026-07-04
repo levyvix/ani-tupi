@@ -306,31 +306,6 @@ class AnimesDigital:
 
         return self._add_deduplicated(all_anime)
 
-    def _search_episodes_with_audio(
-        self, search_query: str, audio_type: str = "dublado"
-    ) -> list[dict]:
-        payload = {
-            "token": API_TOKEN,
-            "search": search_query,
-            "type": "lista",
-            "filter_audio": audio_type,
-            "limit": "200",
-        }
-        try:
-            response = httpx.post(
-                API_URL,
-                data=payload,
-                headers=API_HEADERS,
-                timeout=REQUEST_TIMEOUT,
-                follow_redirects=True,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return self._parse_episode_results(data.get("results", []))
-        except Exception as e:
-            logger.debug(f"Search failed for audio_type={audio_type}: {e}")
-            return []
-
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
         try:
             self._scrape_series_page(anime, url)
