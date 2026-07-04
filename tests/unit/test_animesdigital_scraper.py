@@ -135,3 +135,28 @@ class TestAnimesDigitalFallbackLogging:
             == "https://animesdigital.org/anime/a/tadaima-ojamasaremasu-todos-episodios?foo=bar&odr=1"
         )
         mock_rep.add_episode_list.assert_not_called()
+
+
+IFRAME_PLAYER_HTML = """
+<html><body>
+  <iframe src="https://api.anivideo.net/player/embed/abc123"></iframe>
+</body></html>
+"""
+
+
+class TestAnimesDigitalPlayerSrc:
+    def setup_method(self):
+        self.scraper = AnimesDigital()
+
+    @patch("scrapers.plugins.animesdigital.httpx.get")
+    def test_search_player_src_extracts_iframe_url(self, mock_get):
+        mock_get.return_value = _html_response(IFRAME_PLAYER_HTML)
+        container = []
+        event = MagicMock()
+        event.is_set.return_value = False
+
+        self.scraper.search_player_src(
+            "https://animesdigital.org/video/a/135463/", container, event
+        )
+
+        assert container == ["https://api.anivideo.net/player/embed/abc123"]

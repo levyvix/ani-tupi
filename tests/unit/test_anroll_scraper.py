@@ -50,7 +50,7 @@ class TestAnRollEpisodes:
 
         assert mock_get.call_count == 2
         mock_rep.add_episode_list.assert_called_once()
-        anime, titles, urls, source = mock_rep.add_episode_list.call_args[0]
+        anime, _, urls, source = mock_rep.add_episode_list.call_args[0]
         assert anime == "Aishiteru Game wo Owarasetai"
         assert source == "anroll"
         assert len(urls) == 3
@@ -75,3 +75,56 @@ class TestAnRollEpisodes:
 
         assert titles == []
         assert urls == []
+
+
+SEARCH_ANIME_HTML = """
+<html><body>
+  <article class="anime-card">
+    <a href="https://anroll.io/anime/mao/">
+      <img alt="Mao" />
+    </a>
+  </article>
+</body></html>
+"""
+
+
+class TestAnRollSearchAnimeAndPlayer:
+    def setup_method(self):
+        self.scraper = AnRoll()
+
+    @patch("scrapers.plugins.anroll.httpx.get")
+    def test_search_anime_returns_results(self, mock_get):
+        mock_get.return_value = _html_response(SEARCH_ANIME_HTML)
+
+        results = self.scraper.search_anime("mao")
+
+        assert len(results) == 1
+        assert results[0].title == "Mao"
+        assert results[0].url == "https://anroll.io/anime/mao/"
+        assert results[0].source == "anroll"
+
+    @patch("scrapers.plugins.anroll.store_player_source")
+    @patch("scrapers.plugins.anroll.SeleniumWebDriver")
+    def test_search_player_src_extracts_video_url(self, mock_selenium_cls, mock_store):
+        mock_store.return_value = True
+        event = MagicMock()
+        event.is_set.return_value = False
+
+        mock_driver_instance = MagicMock()
+        mock_driver_instance.__enter__ = MagicMock(return_value=mock_driver_instance)
+        mock_driver_instance.__exit__ = MagicMock(return_value=False)
+        mock_selenium_cls.return_value = mock_driver_instance
+
+        iframe_el = MagicMock()
+        iframe_el.get_attribute.return_value = "https://anidrive.example.com/embed/abc"
+        mock_driver_instance.driver.find_elements.return_value = [iframe_el]
+        mock_driver_instance.driver.execute_script.return_value = [
+            "https://googlevideo.com/videoplayback?id=abc"
+        ]
+
+        container = []
+        self.scraper.search_player_src("https://anroll.io/53289/", container, event)
+
+        mock_store.assert_called_once_with(
+            container, event, "https://googlevideo.com/videoplayback?id=abc"
+        )

@@ -2,8 +2,24 @@
 Unit tests for anitube scraper episode ordering with ?ord=1 parameter.
 """
 
+import json
 from unittest.mock import MagicMock, patch
 from scrapers.plugins.anitube import AniTube
+
+
+WP_POSTS_JSON = json.dumps(
+    [
+        {"title": {"rendered": "Mao"}, "link": "https://www.anitube.news/video/123/"},
+    ]
+)
+
+HLS_PAGE_HTML = """
+<html><body>
+<script>
+https://api.anivideo.net/videohls.php?d=https://cdn.example.com/mao/9.mp4
+</script>
+</body></html>
+"""
 
 
 def _response(html: str) -> MagicMock:
@@ -112,3 +128,39 @@ class TestAnitubeEpisodeOrdering:
                 ["https://www.anitube.zip/video/1054054/"],
                 "anitube",
             )
+
+
+class TestAnitubeSearchAnimeAndPlayer:
+    def setup_method(self):
+        self.scraper = AniTube()
+
+    @patch("scrapers.plugins.anitube.httpx.get")
+    def test_search_anime_returns_results(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = [
+            {"title": {"rendered": "Mao"}, "link": "https://www.anitube.news/video/123/"},
+        ]
+        mock_get.return_value = mock_response
+
+        results = self.scraper.search_anime("mao")
+
+        assert any(r.title == "Mao" for r in results)
+        assert all(r.source == "anitube" for r in results)
+
+    @patch("scrapers.plugins.anitube.httpx.get")
+    def test_search_player_src_extracts_hls_url(self, mock_get):
+        hls_html = (
+            "<html><body><script>"
+            "src='https://api.anivideo.net/videohls.php?d=https%3A%2F%2Fcdn.example.com%2Fmao%2F9.mp4'"
+            "</script></body></html>"
+        )
+        mock_get.return_value = _response(hls_html)
+        container = []
+        event = MagicMock()
+        event.is_set.return_value = False
+
+        self.scraper.search_player_src("https://www.anitube.news/video/123/1/", container, event)
+
+        assert len(container) == 1
+        assert container[0].endswith(".m3u8") or "cdn.example.com" in container[0]
