@@ -14,15 +14,18 @@ from utils.logging import get_logger
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict
-from urllib.parse import unquote
 
 import httpx
 from bs4 import BeautifulSoup
 from thefuzz import fuzz
 
-from scrapers.core.blogger_resolver import resolve_blogger_token
 from scrapers.core.selenium_driver import SeleniumWebDriver
-from scrapers.plugins.utils import load_plugin, store_player_source
+from scrapers.plugins.utils import (
+    extract_anivideo_hls,
+    extract_blogger_from_bg_mp4,
+    load_plugin,
+    store_player_source,
+)
 from models.models import AnimeMetadata
 from services.repository import rep
 
@@ -450,12 +453,8 @@ class AnimesDigital:
             response.raise_for_status()
             html_content = response.text
 
-            hls_url = None
-            hls_match = re.search(
-                r'https://api\.anivideo\.net/videohls\.php\?d=([^"<>&\s]+)', html_content
-            )
-            if hls_match:
-                hls_url = unquote(hls_match.group(1))
+            if hls_url := extract_anivideo_hls(html_content):
+                store_player_source(container, event, hls_url)
 
             mp4_decoded = None
             mp4_encoded = None
@@ -470,18 +469,20 @@ class AnimesDigital:
                             pass
                     break
 
-            # Prefer the direct HLS source (works on most networks). Fall back to
-            # the blogger/googlevideo source when HLS is unavailable — the
-            # imagesskill HLS CDN can return Cloudflare 403 on some networks.
-            if hls_url and store_player_source(container, event, hls_url):
-                return
+            for candidate in (mp4_decoded, mp4_encoded):
+                if candidate:
+                    store_player_source(container, event, candidate)
 
-            blogger_url = self._resolve_blogger_alt(mp4_encoded)
-            if blogger_url and store_player_source(container, event, blogger_url):
-                return
+            for blogger_url in extract_blogger_from_bg_mp4(
+                html_content,
+                episode_url=url,
+                site_referer="https://animesdigital.org/",
+                headers=BROWSER_HEADERS,
+                timeout=REQUEST_TIMEOUT,
+            ):
+                store_player_source(container, event, blogger_url)
 
-            selected_url = mp4_decoded or mp4_encoded
-            if selected_url and store_player_source(container, event, selected_url):
+            if container:
                 return
 
             logger.debug("No direct video sources found, falling back to iframe method")
@@ -489,31 +490,6 @@ class AnimesDigital:
 
         except Exception as e:
             raise Exception(f"Could not extract video from AnimesDigital: {e}") from e
-
-    @staticmethod
-    def _resolve_blogger_alt(mp4_encoded: str | None) -> str | None:
-        """Resolve the alternate blogger source (bg.mp4 proxy) to a direct URL.
-
-        The bg.mp4 proxy redirects to a blogspot page holding the episode's
-        blogger video token, which resolves to a googlevideo.com stream.
-        """
-        if not mp4_encoded:
-            return None
-        try:
-            r = httpx.get(
-                mp4_encoded,
-                headers={"User-Agent": USER_AGENT, "Referer": "https://animesdigital.org/"},
-                timeout=REQUEST_TIMEOUT,
-                follow_redirects=True,
-            )
-            r.raise_for_status()
-            m = re.search(r"blogger\.com/video\.g\?token=([A-Za-z0-9_-]+)", r.text)
-            if not m:
-                return None
-            return resolve_blogger_token(m.group(1))
-        except Exception as e:
-            logger.debug(f"AnimesDigital blogger alt resolve failed: {e}")
-            return None
 
     def _extract_iframe_src(self, html_content: str, container: list, event) -> None:
         try:

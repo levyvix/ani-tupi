@@ -13,6 +13,7 @@ from datetime import datetime
 
 from models.config import get_data_path
 from utils.logging import get_logger
+from utils.playback_hints import resolve_mpv_stream_options
 
 logger = get_logger(__name__)
 
@@ -263,11 +264,13 @@ class VideoPlayer:
         # Generate custom ani-tupi keybindings
         input_conf_path, _ = self._generate_input_conf()
 
+        referrer, demuxer_lavf_o = resolve_mpv_stream_options(url, referrer)
+
         player = None
         try:
             # Create MPV instance with current settings
             logger.debug("play_video_raw: Creating MPV instance...")
-            player = mpv.MPV(
+            mpv_kwargs = dict(
                 fullscreen=True,
                 cursor_autohide_fs_only=True,
                 log_handler=print,
@@ -287,6 +290,9 @@ class VideoPlayer:
                 referrer=referrer,
                 user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
             )
+            if demuxer_lavf_o:
+                mpv_kwargs["demuxer_lavf_o"] = demuxer_lavf_o
+            player = mpv.MPV(**mpv_kwargs)
 
             # Start playback (blocking)
             logger.debug(" play_video_raw: Calling player.play()...")
@@ -469,6 +475,8 @@ shift+t script-message toggle-sub-dub
         debug_mode = os.environ.get("ANI_TUPI_DEBUG_MPV") == "1"
         self._last_mpv_log_file = None
 
+        referrer, demuxer_lavf_o = resolve_mpv_stream_options(url, referrer)
+
         mpv_args = [
             "mpv",
             f"--input-ipc-server={socket_path}",
@@ -501,6 +509,9 @@ shift+t script-message toggle-sub-dub
 
         if referrer:
             mpv_args.append(f"--referrer={referrer}")
+
+        if demuxer_lavf_o:
+            mpv_args.append(f"--demuxer-lavf-o={demuxer_lavf_o}")
 
         mpv_args.append(url)
 

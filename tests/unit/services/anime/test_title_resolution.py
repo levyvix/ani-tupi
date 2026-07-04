@@ -12,6 +12,7 @@ from services.anime.search import (
     DualSearchResults,
     IncrementalSearchState,
     ManualSearchSelection,
+    _ensure_anime_sources_in_repo,
     search_anime_flow,
 )
 from services.anime.title_resolution import AniListTitleResolver, AnimeTitleResolver
@@ -496,3 +497,24 @@ def test_search_anime_flow_fails_cleanly_when_resolution_fails(
 
     assert result == (None, None, None)
     mock_resolve_query.assert_called_once_with("unknown title")
+
+
+def test_ensure_anime_sources_in_repo_after_dual_search_worker():
+    """Dual search menus must re-register sources in the main process."""
+    from scrapers import loader
+
+    loader.load_plugins()
+    from services.repository import rep
+
+    rep.clear_search_results()
+    selected = "Koko wa Ore ni Makasete Saki ni Ike to Ittekara"
+    assert selected not in rep.anime_to_urls
+
+    assert _ensure_anime_sources_in_repo(
+        selected,
+        "Koko wa Ore ni Makasete Saki",
+    )
+    assert rep.anime_to_urls.get(selected)
+
+    rep.search_episodes(selected)
+    assert rep.get_episode_list(selected)

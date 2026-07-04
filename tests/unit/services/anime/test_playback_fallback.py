@@ -215,7 +215,7 @@ class TestPlayEpisodeWithFallbackLazyExtraction:
     def test_stops_extracting_after_first_success(self):
         """First source extracts + plays OK; lower sources never extracted."""
         player = self.create_mock_player([0])
-        extractor = Mock(return_value="https://video1.mp4")
+        extractor = Mock(return_value=["https://video1.mp4"])
         sources = [
             ("https://page1", "anitube"),
             ("https://page2", "animesdigital"),
@@ -244,7 +244,7 @@ class TestPlayEpisodeWithFallbackLazyExtraction:
         player = self.create_mock_player([0])
 
         def extractor(page_url, source):
-            return None if source in ("anroll", "animesonlinecc") else "https://video.mp4"
+            return None if source in ("anroll", "animesonlinecc") else ["https://video.mp4"]
 
         sources = [
             ("https://anroll", "anroll"),
@@ -282,6 +282,31 @@ class TestPlayEpisodeWithFallbackLazyExtraction:
         assert result.all_failed is True
         assert result.source_used is None
         assert player.play_episode.call_count == 0
+
+    def test_tries_multiple_candidates_within_same_source(self):
+        """When extractor returns several URLs, MPV tries each before the next source."""
+        player = self.create_mock_player([2, 0])
+        extractor = Mock(return_value=["https://blocked.m3u8", "https://works.mp4"])
+        sources = [
+            ("https://page1", "anitube"),
+            ("https://page2", "animefire"),
+        ]
+
+        result = play_episode_with_fallback(
+            player=player,
+            sources=sources,
+            anime_title="Test Anime",
+            episode_number=1,
+            total_episodes=12,
+            extractor=extractor,
+        )
+
+        assert result.source_used == "anitube"
+        assert result.sources_tried == [("anitube", 0)]
+        assert extractor.call_count == 1
+        assert player.play_episode.call_count == 2
+        assert player.play_episode.call_args_list[0][1]["url"] == "https://blocked.m3u8"
+        assert player.play_episode.call_args_list[1][1]["url"] == "https://works.mp4"
 
 
 class TestPlayEpisodeWithFallbackIntegration:

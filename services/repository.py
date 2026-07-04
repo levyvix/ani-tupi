@@ -258,8 +258,8 @@ class Repository:
 
         return self._playback_coordinator.search_player(selected_urls, anime, episode_num)
 
-    def search_player_from_page(self, page_url: str, source_name: str) -> str | None:
-        """Extract video URL from page."""
+    def search_player_from_page(self, page_url: str, source_name: str) -> list[str]:
+        """Extract candidate video URLs from an episode page."""
         if self._playback_coordinator is None:
             self._playback_coordinator = PlaybackCoordinator(self._search_repo.sources)
         return self._playback_coordinator.search_player_from_page(page_url, source_name)

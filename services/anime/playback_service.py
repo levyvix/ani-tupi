@@ -594,13 +594,19 @@ def build_episode_sources(
 
         logger.debug("Extracting video URL from %s page: %s...", source_name, page_url[:80])
         try:
-            video_url = rep.search_player_from_page(page_url, source_name)
-            if video_url:
-                logger.debug("Got video URL from %s: %s...", source_name, video_url[:80])
-                sources.append((video_url, source_name, page_url))
+            video_urls = rep.search_player_from_page(page_url, source_name)
+            if video_urls:
+                logger.debug(
+                    "Got %d candidate URL(s) from %s (first: %s...)",
+                    len(video_urls),
+                    source_name,
+                    video_urls[0][:80],
+                )
+                for video_url in video_urls:
+                    sources.append((video_url, source_name, page_url))
                 seen_sources.add(source_name)
             else:
-                logger.debug("search_player_from_page returned None for %s", source_name)
+                logger.debug("search_player_from_page returned no URLs for %s", source_name)
         except Exception as e:
             logger.debug("Exception extracting from %s: %s", source_name, e)
             continue

@@ -22,9 +22,11 @@ https://api.anivideo.net/videohls.php?d=https://cdn.example.com/mao/9.mp4
 """
 
 
-def _response(html: str) -> MagicMock:
+def _response(html: str, status_code: int = 200, headers: dict | None = None) -> MagicMock:
     mock = MagicMock()
     mock.text = html
+    mock.status_code = status_code
+    mock.headers = headers or {}
     mock.raise_for_status = MagicMock()
     return mock
 
@@ -164,3 +166,40 @@ class TestAnitubeSearchAnimeAndPlayer:
 
         assert len(container) == 1
         assert container[0].endswith(".m3u8") or "cdn.example.com" in container[0]
+
+    @patch("scrapers.plugins.anitube.httpx.get")
+    def test_search_player_src_collects_blogger_and_hls_candidates(self, mock_get):
+        episode_html = """
+        <html><body>
+          <iframe class="metaframe" src="https://www.anitube.zip/bg.mp4?p=1"></iframe>
+          <script>https://api.anivideo.net/videohls.php?d=https%3A%2F%2Fcdn.example.com%2Fmao%2F9.mp4</script>
+        </body></html>
+        """
+        provider_html = (
+            "<html><body><script>blogger.com/video.g?token=abc123</script></body></html>"
+        )
+
+        def _responses(url, *args, **kwargs):
+            url = str(url)
+            if url.endswith("/bg.mp4?p=1"):
+                return _response("", status_code=302, headers={"location": "https://provider"})
+            if url == "https://provider":
+                return _response(provider_html)
+            return _response(episode_html)
+
+        mock_get.side_effect = _responses
+
+        with patch(
+            "scrapers.plugins.utils.resolve_blogger_streams",
+            return_value=["https://googlevideo.com/play"],
+        ):
+            container = []
+            event = MagicMock()
+            self.scraper.search_player_src(
+                "https://www.anitube.news/video/123/1/", container, event
+            )
+
+        assert container == [
+            "https://cdn.example.com/mao/9.mp4/index.m3u8",
+            "https://googlevideo.com/play",
+        ]

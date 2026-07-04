@@ -220,25 +220,24 @@ class PlaybackCoordinator:
 
         return asyncio.run(search_all_sources())
 
-    def search_player_from_page(self, page_url: str, source_name: str) -> str | None:
-        """Extract video URL from an episode page for a specific source.
+    def search_player_from_page(self, page_url: str, source_name: str) -> list[str]:
+        """Extract candidate video URLs from an episode page for a specific source.
 
         Args:
             page_url: URL of the episode page (e.g., https://animesdigital.org/video/a/134940/)
             source_name: Name of the source (e.g., "animesdigital")
 
         Returns:
-            Video URL or None if extraction fails
+            Ordered list of candidate video URLs, or an empty list if extraction fails
         """
         if source_name not in self.sources:
             logger.warning(f"Source '{source_name}' not registered, cannot extract video")
-            return None
+            return []
 
         try:
             container = []
             event = Event()
 
-            # Call the source's search_player_src to extract video URL from the page
             success = safe_plugin_call(
                 self.sources[source_name].search_player_src,
                 page_url,
@@ -247,10 +246,10 @@ class PlaybackCoordinator:
             )
 
             if success and container:
-                return container[0]
+                return list(container)
             if not success:
                 logger.debug(f"No video URL extracted for {source_name}")
-            return None
+            return []
         except Exception as e:
             logger.warning(f"Exception extracting video from {source_name}: {e}")
-            return None
+            return []

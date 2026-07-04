@@ -786,6 +786,36 @@ def _search_results_from_serialized(query: str, payload: dict) -> ContextualSear
     )
 
 
+def _ensure_anime_sources_in_repo(selected_anime: str, *fallback_queries: str) -> bool:
+    """Populate ``anime_to_urls`` after searches that ran outside the main process.
+
+    Dual contextual search uses worker processes, so their repository state is not
+    visible here. Re-run lightweight scraper searches in-process until the chosen
+    anime title is registered.
+    """
+    if rep.anime_to_urls.get(selected_anime):
+        return True
+
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for query in (selected_anime, *fallback_queries):
+        cleaned = (query or "").strip()
+        if not cleaned:
+            continue
+        key = cleaned.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append(cleaned)
+
+    for candidate in candidates:
+        rep.search_anime(candidate, verbose=False)
+        if rep.anime_to_urls.get(selected_anime):
+            return True
+
+    return bool(rep.anime_to_urls.get(selected_anime))
+
+
 def run_dual_contextual_search(user_query: str, official_query: str) -> DualSearchResults:
     """Run user query and official-title query in parallel and return both result sets."""
     with ProcessPoolExecutor(max_workers=2) as executor:
@@ -1032,6 +1062,7 @@ def search_anime_flow(args):
 
     selected_anime = None
     source = None
+    search_query_used = query
     fallback_resolution = resolution
 
     if resolution:
@@ -1043,6 +1074,8 @@ def search_anime_flow(args):
         if selection.found:
             selected_anime = selection.selected_anime
             source = selection.source
+            if selection.search_query_used:
+                search_query_used = selection.search_query_used
 
     for candidate_query in [] if selected_anime else [query]:
         # Cache-first: Check if query is in cache before searching scrapers
@@ -1127,7 +1160,16 @@ def search_anime_flow(args):
         return None, None, None
 
     # At this point, selected_anime is set from either cache or scrapers
+    fallback_queries = [query, search_query_used]
+    if fallback_resolution:
+        fallback_queries.append(fallback_resolution.resolved_title)
+
     with loading("Carregando episódios..."):
+        if not _ensure_anime_sources_in_repo(selected_anime, *fallback_queries):
+            logger.warning(
+                "Não foi possível localizar fontes para '%s' após a seleção.",
+                selected_anime,
+            )
         rep.search_episodes(selected_anime)
 
     # Handle season selection

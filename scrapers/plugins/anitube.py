@@ -1,13 +1,16 @@
 from utils.logging import get_logger
-import re
 import urllib.parse
-from urllib.parse import unquote
 
 import httpx
 from bs4 import BeautifulSoup
 
-from scrapers.core.blogger_resolver import resolve_blogger_token
-from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
+from scrapers.plugins.utils import (
+    DEFAULT_HEADERS,
+    extract_anivideo_hls,
+    extract_blogger_from_bg_mp4,
+    load_plugin,
+    store_player_source,
+)
 from models.models import AnimeMetadata
 from services.repository import rep
 
@@ -81,68 +84,25 @@ class AniTube:
         try:
             response = httpx.get(url, headers=HEADERS, timeout=30, follow_redirects=True)
             response.raise_for_status()
-            page = BeautifulSoup(response.text, "html.parser")
+            html = response.text
 
-            # anivideo HLS backend: the direct CDN stream lives in the
-            # videohls.php `d=` parameter, usually right on the episode page.
-            if hls_url := self._extract_hls(response.text):
-                if store_player_source(container, event, hls_url):
-                    return
+            if hls_url := extract_anivideo_hls(html):
+                store_player_source(container, event, hls_url)
 
-            # Otherwise the episode embeds a Referer-gated redirector (bg.mp4)
-            # that is not the real stream. Follow it to the provider page and
-            # re-check for the videohls source there.
-            meta = page.select_one("iframe.metaframe")
-            redirector = meta.get("src") if meta else None
-            if redirector:
-                hop = httpx.get(
-                    redirector,
-                    headers={**HEADERS, "Referer": url},
-                    timeout=30,
-                    follow_redirects=False,
-                )
-                location = hop.headers.get("location", "")
-                if location.startswith("http"):
-                    provider = httpx.get(
-                        location,
-                        headers={**HEADERS, "Referer": f"{self.base_url}/"},
-                        timeout=30,
-                        follow_redirects=True,
-                    )
-                    provider.raise_for_status()
-                    if hls_url := self._extract_hls(provider.text):
-                        if store_player_source(container, event, hls_url):
-                            return
+            for blogger_url in extract_blogger_from_bg_mp4(
+                html,
+                episode_url=url,
+                site_referer=f"{self.base_url}/",
+                headers=HEADERS,
+            ):
+                store_player_source(container, event, blogger_url)
 
-                    # Blogger backend: resolve the token to a direct
-                    # googlevideo.com URL (playable by MPV with a browser UA).
-                    for token in re.findall(
-                        r"blogger\.com/video\.g\?token=([A-Za-z0-9_-]+)", provider.text
-                    ):
-                        try:
-                            video_url = resolve_blogger_token(token)
-                        except Exception as e:
-                            logger.debug(f"AniTube blogger token resolve failed, trying next: {e}")
-                            continue
-                        if store_player_source(container, event, video_url):
-                            return
+            if container:
+                return
 
             raise Exception("No playable video source found in AniTube episode page")
         except httpx.HTTPError as e:
             raise Exception(f"Could not extract video from AniTube: {e}") from e
-
-    @staticmethod
-    def _extract_hls(html: str) -> str | None:
-        """Extract the direct HLS URL from an anivideo videohls.php `d=` param.
-
-        The `d=` value points at the CDN base (an .mp4 path); the actual
-        playlist is served at `<base>/index.m3u8`.
-        """
-        match = re.search(r"https://api\.anivideo\.net/videohls\.php\?d=([^\"'<>&\s]+)", html)
-        if not match:
-            return None
-        base = unquote(match.group(1))
-        return base if base.endswith(".m3u8") else f"{base}/index.m3u8"
 
 
 def load() -> None:

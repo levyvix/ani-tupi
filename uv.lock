@@ -8,7 +8,7 @@ resolution-markers = [
 
 [[package]]
 name = "ani-tupi"
-version = "2.3.5"
+version = "2.3.7"
 source = { editable = "." }
 dependencies = [
     { name = "bs4" },

@@ -121,17 +121,17 @@ class TestPlaybackCoordinator:
         coordinator = PlaybackCoordinator(sources)
         result = coordinator.search_player_from_page("http://page.url", "animesdigital")
 
-        assert result == "http://video.url"
+        assert result == ["http://video.url"]
 
     def test_search_player_from_page_unknown_source(self):
-        """Return None for unknown source."""
+        """Return empty list for unknown source."""
         coordinator = PlaybackCoordinator({})
         result = coordinator.search_player_from_page("http://page.url", "unknown")
 
-        assert result is None
+        assert result == []
 
     def test_search_player_from_page_extraction_fails(self):
-        """Return None if extraction fails."""
+        """Return empty list if extraction fails."""
 
         def mock_search(url, container, event):
             # Empty container = failure
@@ -144,7 +144,7 @@ class TestPlaybackCoordinator:
         coordinator = PlaybackCoordinator(sources)
         result = coordinator.search_player_from_page("http://page.url", "animesdigital")
 
-        assert result is None
+        assert result == []
 
     def test_search_player_empty_sources_returns_none(self):
         """Return None when no sources provided."""

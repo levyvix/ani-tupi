@@ -91,7 +91,10 @@ def test_build_episode_sources_keeps_fast_path_and_fallback_sources():
         with patch.object(
             anime_cmd.rep,
             "search_player_from_page",
-            side_effect=["https://animesdigital.cdn/ep8.m3u8", "https://anitube.cdn/ep8.m3u8"],
+            side_effect=[
+                ["https://animesdigital.cdn/ep8.m3u8", "https://animesdigital.cdn/ep8-blogger.mp4"],
+                ["https://anitube.cdn/ep8.m3u8"],
+            ],
         ) as mock_extract:
             sources = anime_cmd.build_episode_sources("Kami no Shizuku", 8, url_result)
 
@@ -99,6 +102,11 @@ def test_build_episode_sources_keeps_fast_path_and_fallback_sources():
         ("https://cdn.example.com/ep8.m3u8", "animefire", None),
         (
             "https://animesdigital.cdn/ep8.m3u8",
+            "animesdigital",
+            "https://animesdigital.example/ep8",
+        ),
+        (
+            "https://animesdigital.cdn/ep8-blogger.mp4",
             "animesdigital",
             "https://animesdigital.example/ep8",
         ),
