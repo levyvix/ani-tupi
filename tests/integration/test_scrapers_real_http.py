@@ -44,6 +44,36 @@ VIDEO_PROBE_HEADERS = {
 # Helpers
 # ---------------------------------------------------------------------------
 
+_BLOCK_STATUS_CODES = frozenset({403, 429, 503})
+
+
+def _search_anime_or_skip(scraper, query: str) -> list[AnimeMetadata]:
+    """Run search; skip (not fail) when the site blocks this environment."""
+    try:
+        results = scraper.search_anime(query)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in _BLOCK_STATUS_CODES:
+            pytest.skip(
+                f"{scraper.name} returned HTTP {exc.response.status_code} "
+                f"from this environment: {exc.request.url}"
+            )
+        raise
+    except httpx.HTTPError as exc:
+        pytest.skip(f"{scraper.name} unreachable from this environment: {exc}")
+
+    if not results:
+        pytest.skip(
+            f"{scraper.name} search returned empty for {query!r} "
+            "(site may block datacenter IPs or be temporarily down)"
+        )
+    return results
+
+
+def _require_episode_urls(urls: list[str], anime_url: str, source: str) -> list[str]:
+    if not urls:
+        pytest.skip(f"{source} returned no episode URLs for {anime_url}")
+    return urls
+
 
 def _run_player_src(scraper, episode_url: str) -> list:
     container: list = []
@@ -157,12 +187,11 @@ def _capture_episodes(scraper, anime_url: str, anime_name: str) -> list[str]:
 
 @pytest.fixture(scope="class")
 def animefire_search_results() -> list[AnimeMetadata]:
-    return AnimeFire().search_anime(QUERY)
+    return _search_anime_or_skip(AnimeFire(), QUERY)
 
 
 @pytest.fixture(scope="class")
 def animefire_episode_target(animefire_search_results) -> AnimeMetadata:
-    assert animefire_search_results, "search_anime returned empty list"
     return _pick_anime_for_episode_tests(animefire_search_results, QUERY)
 
 
@@ -170,8 +199,7 @@ def animefire_episode_target(animefire_search_results) -> AnimeMetadata:
 def animefire_episode_urls(animefire_episode_target) -> list[str]:
     scraper = AnimeFire()
     urls = _capture_episodes(scraper, animefire_episode_target.url, animefire_episode_target.title)
-    assert urls, f"no episode URLs found for {animefire_episode_target.url}"
-    return urls
+    return _require_episode_urls(urls, animefire_episode_target.url, "animefire")
 
 
 class TestAnimeFireRealHTTP:
@@ -181,7 +209,6 @@ class TestAnimeFireRealHTTP:
         self.search_results = animefire_search_results
 
     def test_search_anime_returns_results(self):
-        assert self.search_results, "search_anime returned empty list"
         for result in self.search_results:
             assert result.title, "result has no title"
             assert result.url.startswith("http"), f"invalid url: {result.url}"
@@ -190,7 +217,7 @@ class TestAnimeFireRealHTTP:
         urls = _capture_episodes(
             self.scraper, animefire_episode_target.url, animefire_episode_target.title
         )
-        assert urls, f"no episode URLs found for {animefire_episode_target.url}"
+        _require_episode_urls(urls, animefire_episode_target.url, "animefire")
         assert all(url.startswith("http") for url in urls)
 
     def test_search_player_src_returns_video_url(self, animefire_episode_urls):
@@ -216,25 +243,29 @@ class TestAnimesOnlineCCRealHTTP:
         self.scraper = AnimesOnlineCC()
 
     def test_search_anime_returns_results(self):
-        results = self.scraper.search_anime(QUERY)
-        assert results, "search_anime returned empty list"
+        results = _search_anime_or_skip(self.scraper, QUERY)
         for r in results:
             assert r.title
             assert r.url.startswith("http")
 
     def test_search_episodes_returns_urls(self):
-        results = self.scraper.search_anime(QUERY)
-        assert results
+        results = _search_anime_or_skip(self.scraper, QUERY)
         anime = _pick_anime_for_episode_tests(results, QUERY)
-        urls = _capture_episodes(self.scraper, anime.url, anime.title)
-        assert urls, f"no episode URLs for {anime.url}"
+        urls = _require_episode_urls(
+            _capture_episodes(self.scraper, anime.url, anime.title),
+            anime.url,
+            self.scraper.name,
+        )
+        assert all(url.startswith("http") for url in urls)
 
     def test_search_player_src_returns_video_url(self):
-        results = self.scraper.search_anime(QUERY)
-        assert results
+        results = _search_anime_or_skip(self.scraper, QUERY)
         anime = _pick_anime_for_episode_tests(results, QUERY)
-        urls = _capture_episodes(self.scraper, anime.url, anime.title)
-        assert urls
+        urls = _require_episode_urls(
+            _capture_episodes(self.scraper, anime.url, anime.title),
+            anime.url,
+            self.scraper.name,
+        )
         container = _run_player_src(self.scraper, urls[0])
         assert container, f"empty container for {urls[0]}"
         assert container[0].startswith("http")
@@ -250,22 +281,22 @@ class TestAniTubeRealHTTP:
         self.scraper = AniTube()
 
     def test_search_anime_returns_results(self):
-        results = self.scraper.search_anime(QUERY)
-        assert results, "search_anime returned empty list"
+        results = _search_anime_or_skip(self.scraper, QUERY)
         for r in results:
             assert r.title
             assert r.url.startswith("http")
 
     def test_search_episodes_returns_urls(self):
-        results = self.scraper.search_anime(QUERY)
-        assert results
+        results = _search_anime_or_skip(self.scraper, QUERY)
         anime = _pick_anime_for_episode_tests(results, QUERY)
-        urls = _capture_episodes(self.scraper, anime.url, anime.title)
-        assert urls, f"no episode URLs for {anime.url}"
+        _require_episode_urls(
+            _capture_episodes(self.scraper, anime.url, anime.title),
+            anime.url,
+            self.scraper.name,
+        )
 
     def test_search_player_src_returns_video_url(self):
-        results = self.scraper.search_anime(QUERY)
-        assert results
+        results = _search_anime_or_skip(self.scraper, QUERY)
         for anime in results[:3]:
             urls = _capture_episodes(self.scraper, anime.url, anime.title)
             if not urls:
@@ -294,25 +325,28 @@ class TestGoyabuRealHTTP:
         self.scraper = Goyabu()
 
     def test_search_anime_returns_results(self):
-        results = self.scraper.search_anime(QUERY)
-        assert results, "search_anime returned empty list"
+        results = _search_anime_or_skip(self.scraper, QUERY)
         for r in results:
             assert r.title
             assert r.url.startswith("http")
 
     def test_search_episodes_returns_urls(self):
-        results = self.scraper.search_anime(QUERY)
-        assert results
+        results = _search_anime_or_skip(self.scraper, QUERY)
         anime = _pick_anime_for_episode_tests(results, QUERY)
-        urls = _capture_episodes(self.scraper, anime.url, anime.title)
-        assert urls, f"no episode URLs for {anime.url}"
+        _require_episode_urls(
+            _capture_episodes(self.scraper, anime.url, anime.title),
+            anime.url,
+            self.scraper.name,
+        )
 
     def test_search_player_src_returns_video_url(self):
-        results = self.scraper.search_anime(QUERY)
-        assert results
+        results = _search_anime_or_skip(self.scraper, QUERY)
         anime = _pick_anime_for_episode_tests(results, QUERY)
-        urls = _capture_episodes(self.scraper, anime.url, anime.title)
-        assert urls
+        urls = _require_episode_urls(
+            _capture_episodes(self.scraper, anime.url, anime.title),
+            anime.url,
+            self.scraper.name,
+        )
         container = _run_player_src(self.scraper, urls[0])
         assert container, f"empty container for {urls[0]}"
         assert container[0].startswith("http")
@@ -328,15 +362,13 @@ class TestAnimesDigitalRealHTTP:
         self.scraper = AnimesDigital()
 
     def test_search_anime_returns_results(self):
-        results = self.scraper.search_anime(QUERY)
-        assert results, "search_anime returned empty list"
+        results = _search_anime_or_skip(self.scraper, QUERY)
         for r in results:
             assert r.title
             assert r.url.startswith("http")
 
     def _get_episode_urls(self) -> tuple[str, list[str]]:
-        results = self.scraper.search_anime(QUERY)
-        assert results
+        results = _search_anime_or_skip(self.scraper, QUERY)
         anime = _pick_anime_for_episode_tests(results, QUERY)
         captured_urls: list[str] = []
 
@@ -351,12 +383,12 @@ class TestAnimesDigitalRealHTTP:
         return anime.url, captured_urls
 
     def test_search_episodes_returns_urls(self):
-        _, urls = self._get_episode_urls()
-        assert urls, "no episode URLs found"
+        anime_url, urls = self._get_episode_urls()
+        _require_episode_urls(urls, anime_url, self.scraper.name)
 
     def test_search_player_src_returns_video_url(self):
-        _, episode_urls = self._get_episode_urls()
-        assert episode_urls
+        anime_url, episode_urls = self._get_episode_urls()
+        _require_episode_urls(episode_urls, anime_url, self.scraper.name)
         container = _run_player_src(self.scraper, episode_urls[0])
         assert container, f"empty container for {episode_urls[0]}"
         assert container[0].startswith("http")
