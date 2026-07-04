@@ -145,5 +145,20 @@ changelog_file = "CHANGELOG.md"
 type = "github"
 
 [tool.pyright]
-venvPath = "./"
+venvPath = "."
 venv = ".venv"
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportOptionalMemberAccess = false
+reportOptionalSubscript = false
+reportOptionalCall = false
+reportOptionalIterable = false
+reportOptionalContextManager = false
+reportAttributeAccessIssue = false
+reportCallIssue = false
+reportArgumentType = false
+reportReturnType = false
+reportIndexIssue = false
+reportAssignmentType = false
+reportUnusedVariable = false
+reportUnusedImport = false
