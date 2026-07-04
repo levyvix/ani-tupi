@@ -77,17 +77,25 @@ class AnimesOnlineCC:
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "html.parser")
 
-            for iframe in soup.find_all("iframe", src=re.compile(r"blogger\.com/video\.g")):
+            iframes = soup.find_all("iframe", src=re.compile(r"blogger\.com/video\.g"))
+            if not iframes:
+                raise ValueError("No blogger iframe found in AnimesOnlineCC episode page")
+
+            for iframe in iframes:
                 src = iframe.get("src", "")
                 m = _TOKEN_RE.search(src)
                 if not m:
                     continue
                 token = m.group(1)
-                video_url = resolve_blogger_token(token)
+                try:
+                    video_url = resolve_blogger_token(token)
+                except Exception as e:
+                    logger.debug(f"AnimesOnlineCC blogger token resolve failed, trying next: {e}")
+                    continue
                 if store_player_source(container, event, video_url):
                     return
 
-            raise ValueError("No blogger iframe found in AnimesOnlineCC episode page")
+            raise ValueError("No playable blogger source in AnimesOnlineCC episode page")
         except Exception as e:
             raise type(e)(f"AnimesOnlineCC: {e}") from e
 

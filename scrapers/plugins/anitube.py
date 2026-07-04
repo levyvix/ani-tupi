@@ -6,6 +6,7 @@ from urllib.parse import unquote
 import httpx
 from bs4 import BeautifulSoup
 
+from scrapers.core.blogger_resolver import resolve_blogger_token
 from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
 from models.models import AnimeMetadata
 from services.repository import rep
@@ -113,13 +114,18 @@ class AniTube:
                         if store_player_source(container, event, hls_url):
                             return
 
-                    # Blogger backend: the stream is a googlevideo URL bound to
-                    # the browser session (403s any external player), so give up
-                    # and let other sources handle this episode.
-                    if "blogger.com/video.g" in provider.text:
-                        raise Exception(
-                            "AniTube episode uses Blogger backend (not externally playable)"
-                        )
+                    # Blogger backend: resolve the token to a direct
+                    # googlevideo.com URL (playable by MPV with a browser UA).
+                    for token in re.findall(
+                        r"blogger\.com/video\.g\?token=([A-Za-z0-9_-]+)", provider.text
+                    ):
+                        try:
+                            video_url = resolve_blogger_token(token)
+                        except Exception as e:
+                            logger.debug(f"AniTube blogger token resolve failed, trying next: {e}")
+                            continue
+                        if store_player_source(container, event, video_url):
+                            return
 
             raise Exception("No playable video source found in AniTube episode page")
         except httpx.HTTPError as e:

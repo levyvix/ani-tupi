@@ -6,6 +6,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import httpx
 from bs4 import BeautifulSoup
 
+from scrapers.core.blogger_resolver import resolve_blogger_token
 from scrapers.core.selenium_driver import SeleniumWebDriver
 from scrapers.plugins.utils import load_plugin, store_player_source
 from models.models import AnimeMetadata
@@ -31,6 +32,20 @@ class AnimeFire:
         return urlunsplit(
             (parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)
         )
+
+    @staticmethod
+    def _resolve_if_blogger(url: str | None) -> str | None:
+        """Resolve blogger.com/video.g embeds to direct googlevideo URLs."""
+        if not url:
+            return url
+        m = re.search(r"blogger\.com/video\.g\?token=([^&\s]+)", url)
+        if not m:
+            return url
+        try:
+            return resolve_blogger_token(m.group(1))
+        except Exception as e:
+            logger.debug(f"AnimeFire blogger resolve failed: {e}")
+            return url
 
     def search_anime(self, query: str) -> list[AnimeMetadata]:
         url = "https://animefire.plus/pesquisar/" + "-".join(query.split())
@@ -116,6 +131,7 @@ class AnimeFire:
                                     best_video = videos[-1].get("src")
 
                                 best_video = self._strip_ip_param(best_video)
+                                best_video = self._resolve_if_blogger(best_video)
 
                                 if best_video:
                                     if store_player_source(container, event, best_video):
@@ -124,7 +140,7 @@ class AnimeFire:
                         logger.debug(f"AnimeFire API fetch failed for '{url}': {e}")
 
                 # Fallback: try standard src attribute
-                src = video.get("src")
+                src = self._resolve_if_blogger(video.get("src"))
                 if src:
                     if store_player_source(container, event, src):
                         return
@@ -132,7 +148,7 @@ class AnimeFire:
             # Try to find source tag inside video
             source = page.select_one("video source")
             if source:
-                src = source.get("src")
+                src = self._resolve_if_blogger(source.get("src"))
                 if src:
                     if store_player_source(container, event, src):
                         return
@@ -140,7 +156,7 @@ class AnimeFire:
             # Try to find iframe
             iframe = page.select_one("iframe")
             if iframe:
-                src = iframe.get("src")
+                src = self._resolve_if_blogger(iframe.get("src"))
                 if src:
                     if store_player_source(container, event, src):
                         return
