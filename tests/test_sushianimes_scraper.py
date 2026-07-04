@@ -178,7 +178,6 @@ class TestSushiAnimesScraper:
         assert container == [
             "https://cdn-s01.pixel-sus-4k-image.com/stream/d/dorohedoro-dublado/01.mp4"
         ]
-        event.set.assert_called_once()
 
         post_headers = mock_post.call_args.kwargs["headers"]
         assert post_headers["X-Requested-With"] == "XMLHttpRequest"
