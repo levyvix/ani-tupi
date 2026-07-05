@@ -22,7 +22,6 @@ from thefuzz import fuzz
 from scrapers.core.selenium_driver import SeleniumWebDriver
 from scrapers.plugins.utils import (
     extract_anivideo_hls,
-    extract_blogger_from_bg_mp4,
     load_plugin,
     store_player_source,
 )
@@ -447,15 +446,6 @@ class AnimesDigital:
             for candidate in (mp4_decoded, mp4_encoded):
                 if candidate:
                     store_player_source(container, event, candidate)
-
-            for blogger_url in extract_blogger_from_bg_mp4(
-                html_content,
-                episode_url=url,
-                site_referer="https://animesdigital.org/",
-                headers=BROWSER_HEADERS,
-                timeout=REQUEST_TIMEOUT,
-            ):
-                store_player_source(container, event, blogger_url)
 
             if container:
                 return

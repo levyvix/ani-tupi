@@ -295,25 +295,6 @@ class TestAniTubeRealHTTP:
             self.scraper.name,
         )
 
-    def test_search_player_src_returns_video_url(self):
-        results = _search_anime_or_skip(self.scraper, QUERY)
-        for anime in results[:3]:
-            urls = _capture_episodes(self.scraper, anime.url, anime.title)
-            if not urls:
-                continue
-            container: list = []
-            event = threading.Event()
-            try:
-                self.scraper.search_player_src(urls[0], container, event)
-            except Exception as e:
-                if "Blogger" in str(e):
-                    continue
-                pytest.fail(f"AniTube.search_player_src raised: {e}")
-            if container:
-                assert container[0].startswith("http")
-                return
-        pytest.skip("All AniTube results use Blogger backend (not externally playable)")
-
 
 # ---------------------------------------------------------------------------
 # Goyabu

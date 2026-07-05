@@ -5,7 +5,6 @@ import httpx
 from bs4 import BeautifulSoup
 
 from models.models import AnimeMetadata
-from scrapers.core.blogger_resolver import resolve_blogger_streams
 from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
 from services.repository import rep
 from utils.logging import get_logger
@@ -18,7 +17,6 @@ REQUEST_TIMEOUT = 20
 
 _PLAYER_OPTION_RE = re.compile(r"data-type='([^']+)' data-post='(\d+)' data-nume='([^']+)'")
 _EPISODE_NUM_RE = re.compile(r"-episodio-(\d+)/?$")
-_BLOGGER_TOKEN_RE = re.compile(r"blogger\.com/video\.g\?token=([^&\"'\s]+)")
 
 
 class AnimesOnlineCloud:
@@ -75,7 +73,6 @@ class AnimesOnlineCloud:
             r.raise_for_status()
 
             found = False
-            blogger_tokens = []
             for typ, post, nume in _PLAYER_OPTION_RE.findall(r.text):
                 embed = self._dooplayer_embed(url, post, typ, nume)
                 if not embed:
@@ -84,18 +81,6 @@ class AnimesOnlineCloud:
                     if source := self._decode_source(embed.get("embed_url", "")):
                         if store_player_source(container, event, source):
                             found = True
-                elif token := _BLOGGER_TOKEN_RE.search(embed.get("embed_url", "")):
-                    blogger_tokens.append(token.group(1))
-
-            # Blogger fallback (HD first) when no direct mp4/HLS source was found.
-            if not found:
-                for token in blogger_tokens:
-                    try:
-                        for stream in resolve_blogger_streams(token):
-                            if store_player_source(container, event, stream):
-                                found = True
-                    except Exception as e:
-                        logger.debug(f"AnimesOnlineCloud blogger resolve failed: {e}")
 
             if not found:
                 raise ValueError("No playable source in AnimesOnlineCloud episode page")

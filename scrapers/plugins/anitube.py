@@ -7,7 +7,6 @@ from bs4 import BeautifulSoup
 from scrapers.plugins.utils import (
     DEFAULT_HEADERS,
     extract_anivideo_hls,
-    extract_blogger_from_bg_mp4,
     load_plugin,
     store_player_source,
 )
@@ -88,14 +87,6 @@ class AniTube:
 
             if hls_url := extract_anivideo_hls(html):
                 store_player_source(container, event, hls_url)
-
-            for blogger_url in extract_blogger_from_bg_mp4(
-                html,
-                episode_url=url,
-                site_referer=f"{self.base_url}/",
-                headers=HEADERS,
-            ):
-                store_player_source(container, event, blogger_url)
 
             if container:
                 return
