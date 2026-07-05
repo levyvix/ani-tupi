@@ -160,7 +160,10 @@ class AnimesDigital:
     def _extract_series_url(self, episode_url: str) -> str | None:
         try:
             resp = httpx.get(
-                episode_url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+                episode_url,
+                headers=BROWSER_HEADERS,
+                timeout=REQUEST_TIMEOUT,
+                follow_redirects=True,
             )
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
@@ -274,7 +277,9 @@ class AnimesDigital:
                 seen_urls.add(legendado_url)
                 results.append(
                     AnimeMetadata(
-                        title=data["base_title"], url=legendado_url, source=AnimesDigital.name
+                        title=data["base_title"],
+                        url=legendado_url,
+                        source=AnimesDigital.name,
                     )
                 )
             if keep_dublado:
@@ -306,6 +311,7 @@ class AnimesDigital:
         return self._add_deduplicated(all_anime)
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+        _ = params
         try:
             self._scrape_series_page(anime, url)
 
@@ -320,7 +326,10 @@ class AnimesDigital:
 
             if homepage_episodes:
                 self._merge_homepage_episodes(
-                    anime, animesdigital_urls, homepage_episodes, len(animesdigital_urls)
+                    anime,
+                    animesdigital_urls,
+                    homepage_episodes,
+                    len(animesdigital_urls),
                 )
         except Exception as e:
             logger.debug(f"AnimesDigital series page scraping failed for '{anime}': {e}")

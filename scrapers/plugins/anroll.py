@@ -54,6 +54,7 @@ class AnRoll:
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+        _ = params
         try:
             response = httpx.get(
                 url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
@@ -99,7 +100,10 @@ class AnRoll:
         thousands. The sidebar on any episode page lists all episodes in order.
         """
         response = httpx.get(
-            first_ep_url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            first_ep_url,
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT,
+            follow_redirects=True,
         )
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")

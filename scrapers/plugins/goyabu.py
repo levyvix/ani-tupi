@@ -49,6 +49,7 @@ class Goyabu:
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+        _ = params
         try:
             response = httpx.get(
                 url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True

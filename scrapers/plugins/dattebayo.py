@@ -204,6 +204,7 @@ class Dattebayo:
         return _parse_episode_items(BeautifulSoup(response.text, "html.parser"))
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+        _ = params
         try:
             all_items: list[tuple[str, str]] = []
             page = 1

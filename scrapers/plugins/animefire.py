@@ -82,6 +82,7 @@ class AnimeFire:
         return self._parse_search_page(tree)
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+        _ = params
         try:
             response = httpx.get(url, timeout=20, follow_redirects=True)
             response.raise_for_status()

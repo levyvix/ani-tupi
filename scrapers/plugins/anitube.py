@@ -56,6 +56,7 @@ class AniTube:
         return collected
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+        _ = params
         try:
             separator = "&" if "?" in url else "?"
             episodes_url = f"{url}{separator}ord=1"

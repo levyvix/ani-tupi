@@ -45,6 +45,7 @@ class AnimesOnlineCC:
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+        _ = params
         try:
             r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
             r.raise_for_status()
