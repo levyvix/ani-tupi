@@ -77,13 +77,18 @@ class SensitiveDataFilter:
 
 
 def _json_formatter(record):
-    """Format a log record as JSON.
+    """Format a log record as a JSON line.
+
+    Loguru treats a callable format's return value as a *format template* and
+    runs ``str.format_map`` on it. Returning raw JSON would make loguru parse
+    the ``{...}`` braces as format fields (KeyError). So we stash the serialized
+    JSON in ``record["extra"]`` and return a template that only references it.
 
     Args:
         record: Loguru record dictionary
 
     Returns:
-        JSON string representation of the log record
+        A format template string referencing the serialized JSON
     """
     log_data = {
         "timestamp": record["time"].isoformat(),
@@ -105,7 +110,8 @@ def _json_formatter(record):
             "traceback": str(exc_traceback) if exc_traceback else None,
         }
 
-    return json.dumps(log_data) + "\n"
+    record["extra"]["serialized"] = json.dumps(log_data)
+    return "{extra[serialized]}\n"
 
 
 def configure_logging(debug: bool = False) -> None:
