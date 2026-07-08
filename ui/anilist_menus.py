@@ -11,7 +11,7 @@ from services.anilist_service import anilist_client
 from services.anime_service import anilist_anime_flow
 from services.anime.airing_episodes_service import AiringEpisodesService
 from models.config import get_data_path, settings
-from ui.components import loading, menu_navigate
+from ui.components import loading, menu_navigate, pause, render_section, show_error, show_info
 from models.models import AniListTitle
 from utils.cache import get_cache
 from utils.logging import get_logger
@@ -193,8 +193,8 @@ def _show_account_menu() -> None:
         user_info = anilist_client.get_viewer_info()
 
         if not user_info:
-            logger.info("\n❌ Erro ao carregar informações do usuário")
-            input("Pressione Enter para continuar...")
+            show_error("Não foi possível carregar as informações da conta.")
+            pause()
             return
 
         username = user_info.name
@@ -276,7 +276,7 @@ def _show_account_menu() -> None:
     account_info.extend(["", "─" * 40])
 
     # Print account info once
-    logger.info("\n" + "\n".join(account_info))
+    render_section(f"Conta: {username}", account_info)
 
     # Menu options loop
     while True:
@@ -294,9 +294,9 @@ def _show_account_menu() -> None:
 
         if selection == "🌐 Abrir perfil no navegador":
             profile_url = f"https://anilist.co/user/{user_id}"
-            logger.info(f"\n🌐 Abrindo: {profile_url}")
+            show_info(f"Abrindo perfil no navegador: {profile_url}")
             webbrowser.open(profile_url)
-            input("\nPressione Enter para continuar...")
+            pause()
             continue
 
         if selection == "🚪 Logout":
@@ -399,7 +399,9 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
             search_title = get_search_title(media.title, display_title)
 
             anime_id = media.id
-            episodes = _get_episode_count(anime_id, media.episodes) or "?"
+            # Avoid blocking list rendering with one extra AniList request per anime
+            # when AniList does not expose the episode count for ongoing shows.
+            episodes = media.episodes if media.episodes is not None else "?"
 
             # Build display string
             if progress > 0:

@@ -27,7 +27,15 @@ from services.anime.playback_service import (
 from utils.logging import get_logger
 from services.anime.download_service import AnimeDownloadService
 from services.anime.playback_fallback import play_episode_with_fallback
-from ui.components import loading, menu_navigate, menu_navigate_episodes
+from ui.components import (
+    loading,
+    menu_navigate,
+    menu_navigate_episodes,
+    pause,
+    show_error,
+    show_info,
+    show_warning,
+)
 from utils.video_player import VideoPlayer
 from utils.episode_range_parser import parse_episode_range, RangeParseError
 
@@ -259,14 +267,13 @@ def anime(args) -> None:
                 total_episodes = len(episode_list)
 
                 if total_episodes == 0:
-                    logger.error("❌ Nao foi possivel carregar episodios para este anime.")
+                    show_error("Nao foi possivel carregar episodios para este anime.")
                     return
 
                 # Validate episode number is within bounds
                 if args.episode < 1 or args.episode > total_episodes:
-                    logger.error(
-                        f"❌ Episódio {args.episode} não existe ou ainda não foi ao ar. "
-                        f"Episódios disponíveis: 1-{total_episodes}"
+                    show_error(
+                        f"Episódio {args.episode} não existe ou ainda não foi ao ar. Episódios disponíveis: 1-{total_episodes}"
                     )
                     return
 
@@ -307,9 +314,8 @@ def anime(args) -> None:
 
             # Validate episode number is within bounds
             if args.episode < 1 or args.episode > total_episodes:
-                logger.error(
-                    f"❌ Episódio {args.episode} não existe ou ainda não foi ao ar. "
-                    f"Episódios disponíveis: 1-{total_episodes}"
+                show_error(
+                    f"Episódio {args.episode} não existe ou ainda não foi ao ar. Episódios disponíveis: 1-{total_episodes}"
                 )
                 return
 
@@ -323,9 +329,9 @@ def anime(args) -> None:
 
     # Display AniList discovery info if found
     if ctx.anilist_title:
-        logger.info(f"✅ Encontrado: {ctx.anilist_title}")
+        show_info(f"Encontrado: {ctx.anilist_title}", title="AniList")
     else:
-        logger.info("⚠️  Não foi possível encontrar no AniList (continuando sem sincronização)")
+        show_warning("Não foi possível encontrar no AniList (continuando sem sincronização)")
 
     # Initialize video player for this session
     player = VideoPlayer()
@@ -344,9 +350,10 @@ def anime(args) -> None:
             logger.info(f"[DEBUG] Final sources count: {len(sources)}")
 
         if not sources:
-            logger.info("❌ Nenhuma fonte conseguiu extrair o video.")
-            logger.info("   💡 O episódio pode estar indisponível em todas as fontes.")
-            logger.info("   💡 Tente outro episódio ou espere e tente novamente mais tarde.\n")
+            show_error("Nenhuma fonte conseguiu extrair o video.")
+            show_info(
+                "O episódio pode estar indisponível em todas as fontes. Tente outro episódio ou espere e tente novamente mais tarde."
+            )
             break
 
         # Use first source for initial display
@@ -404,18 +411,18 @@ def anime(args) -> None:
 
         # Show appropriate message based on playback outcome
         if exit_code == 0:
-            logger.info(f"✅ Reprodução concluída (Fonte: {source_used})")
+            show_info(f"Reprodução concluída (Fonte: {source_used})", title="Playback")
         elif exit_code == 3:
-            logger.info("⏸️  Reprodução interrompida pelo usuário")
+            show_warning("Reprodução interrompida pelo usuário", title="Playback")
         elif all_failed:
-            logger.info("❌ Nenhuma fonte conseguiu reproduzir o episódio")
+            show_error("Nenhuma fonte conseguiu reproduzir o episódio")
             sources_tried = ", ".join(f"{source}" for source, _ in fallback_result.sources_tried)
-            logger.info(f"   Fontes tentadas: {sources_tried}")
-            logger.info("   💡 Tente trocar de fonte manualmente ou verifique sua conexão.")
+            show_info(f"Fontes tentadas: {sources_tried}")
+            show_info("Tente trocar de fonte manualmente ou verifique sua conexão.")
         else:
-            logger.info(f"⚠️  Erro ao reproduzir (código: {exit_code})")
+            show_warning(f"Erro ao reproduzir (código: {exit_code})")
             if error_hint:
-                logger.info(f"   ❌ {error_hint}")
+                show_error(error_hint)
 
         logger.info("📊 Reprodução encerrada:")
         logger.info(f"   Exit code: {exit_code}")
@@ -431,11 +438,7 @@ def anime(args) -> None:
         # If there was an error, keep messages visible for user to read
         if exit_code != 0:
             # Error occurred - give user time to see error messages
-            logger.info("⏳ Pressione Enter para continuar...")
-            try:
-                input()
-            except (EOFError, KeyboardInterrupt):
-                pass
+            pause()
 
         # Save the URL that was played so next iteration can try pattern derivation
         if exit_code in (0, 3) and sources:
@@ -520,7 +523,7 @@ def anime(args) -> None:
                         ctx = navigate_episodes(new_ctx, "choose", new_episode_idx)
                         break
                 else:
-                    logger.info("⚠️  Troca de fonte cancelada ou não foi possível trocar de fonte.")
+                    show_warning("Troca de fonte cancelada ou não foi possível trocar de fonte.")
 
 
 def handle_random_anime(args) -> None:

@@ -1061,11 +1061,9 @@ def anilist_anime_flow(
 
         if result.action != "next":
             if result.exit_code != 0:
-                logger.info("⏳ Pressione Enter para continuar...")
-                try:
-                    input()
-                except (EOFError, KeyboardInterrupt):
-                    pass
+                from ui.components import pause
+
+                pause()
 
                 pass
 

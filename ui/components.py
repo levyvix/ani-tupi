@@ -1,8 +1,9 @@
-"""Reusable UI components: menu(), loading()
+"""Reusable UI components for the terminal UI.
 
 This module consolidates menu system and loading indicators:
 - menu() / menu_navigate() - Interactive menus with InquirerPy
 - loading() - Rich spinners for API calls
+- shared state helpers for empty/error/info screens
 """
 
 import sys
@@ -12,6 +13,7 @@ from InquirerPy import inquirer  # type: ignore[import-untyped]
 from InquirerPy.separator import Separator
 from rich.console import Console
 from rich.live import Live
+from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.theme import Theme
 from utils.logging import get_logger
@@ -21,19 +23,58 @@ logger = get_logger(__name__)
 # Catppuccin Mocha Theme
 CATPPUCCIN_MOCHA = Theme(
     {
-        "menu.title": "bold #cba6f7",  # Purple header
-        "menu.text": "#cdd6f4",  # Light text
-        "menu.highlight": "reverse #cba6f7",  # Inverted purple
-        "menu.muted": "#6c7086",  # Muted gray
-        "info": "#89dceb",  # Sky blue for info
-        "success": "#a6e3a1",  # Green for success
-        "warning": "#f9e2af",  # Yellow for warnings
-        "error": "#f38ba8",  # Red for errors
+        "menu.title": "bold #d7c3ff",
+        "menu.text": "#dce0ea",
+        "menu.highlight": "bold reverse #b8a1ff",
+        "menu.muted": "#8a8fa3",
+        "menu.accent": "#89b4fa",
+        "info": "#89b4fa",
+        "success": "#a6e3a1",
+        "warning": "#f9e2af",
+        "error": "#f38ba8",
     }
 )
 
 # Global console with theme
 console = Console(theme=CATPPUCCIN_MOCHA)
+
+
+def _divider(width: int = 30) -> str:
+    return "─" * width
+
+
+def show_state(
+    title: str, message: str, style: str = "menu.text", title_style: str = "menu.title"
+) -> None:
+    """Render a compact terminal state card."""
+    console.print(
+        Panel(
+            message,
+            title=f"[{title_style}]{title}[/{title_style}]",
+            border_style=style,
+            padding=(1, 2),
+        )
+    )
+
+
+def show_info(message: str, title: str = "Info") -> None:
+    show_state(title, message, style="info")
+
+
+def show_success(message: str, title: str = "Concluído") -> None:
+    show_state(title, message, style="success")
+
+
+def show_warning(message: str, title: str = "Atenção") -> None:
+    show_state(title, message, style="warning")
+
+
+def show_error(message: str, title: str = "Erro") -> None:
+    show_state(title, message, style="error")
+
+
+def pause(message: str = "Pressione Enter para continuar...") -> None:
+    input(message)
 
 
 def menu(
@@ -85,7 +126,7 @@ def menu(
             qmark="",
             amark="►",
             pointer="►",
-            instruction="(Type to search, Q to quit)",
+            instruction="(Digite para buscar, Q para sair)",
             mandatory=False,
             keybindings={
                 "skip": [
@@ -104,7 +145,7 @@ def menu(
             qmark="",
             amark="►",
             pointer="►",
-            instruction="(Use arrow keys, Q to quit)",
+            instruction="(Use as setas, Q para sair)",
             mandatory=False,
             keybindings={
                 "skip": [
@@ -217,7 +258,7 @@ def menu_navigate(
             qmark="",
             amark="►",
             pointer="►",
-            instruction="(Type to search, Q to quit)",
+            instruction="(Digite para buscar, Q para sair)",
             mandatory=False,
             keybindings={
                 "skip": [
@@ -236,7 +277,7 @@ def menu_navigate(
             qmark="",
             amark="►",
             pointer="►",
-            instruction="(Use arrow keys, Q to quit)",
+            instruction="(Use as setas, Q para sair)",
             mandatory=False,
             keybindings={
                 "skip": [
@@ -311,6 +352,14 @@ def loading(msg: str = "Carregando..."):
         transient=True,  # Spinner disappears after completion
     ):
         yield
+
+
+def render_section(title: str, lines: list[str], style: str = "menu.text") -> None:
+    """Render a simple section with consistent spacing."""
+    console.print(f"[menu.title]{title}[/menu.title]")
+    console.print(f"[menu.muted]{_divider()}[/menu.muted]")
+    for line in lines:
+        console.print(f"[{style}]{line}[/{style}]")
 
 
 if __name__ == "__main__":

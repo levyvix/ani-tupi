@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 from services.anilist_service import anilist_client
 from services.manga_service import UnifiedMangaService
-from ui.components import loading, menu_navigate
+from ui.components import loading, menu_navigate, pause, show_info, show_warning
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -66,8 +66,8 @@ def handle_anilist_list(
 
     # Check authentication
     if not anilist_client.is_authenticated():
-        logger.info("🔐 Faça login primeiro: uv run python main.py anilist auth")
-        input("Pressione Enter para continuar...")
+        show_warning("Faça login primeiro: uv run python main.py anilist auth", title="AniList")
+        pause()
         return
 
     # Load list
@@ -75,8 +75,8 @@ def handle_anilist_list(
         manga_list = anilist_client.get_user_manga_list(anilist_status)
 
     if not manga_list:
-        logger.info(f"📂 {empty_msg}")
-        input("Pressione Enter para continuar...")
+        show_info(empty_msg, title=menu_title)
+        pause()
         return
 
     # Format options

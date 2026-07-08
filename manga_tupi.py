@@ -19,7 +19,7 @@ from services.manga_service import (
 from utils.logging import get_logger
 from services.manga.anilist_lists import handle_anilist_list
 from services.manga.download import _download_images, download_chapter, prompt_download_range
-from ui.components import loading, menu_navigate
+from ui.components import loading, menu_navigate, pause, show_error, show_info, show_warning
 from utils.manga_reader import is_zathura_running, open_pdf_reader
 from utils.pdf_converter import create_pdf_from_images
 from utils.manga_source_preferences import manga_source_preferences
@@ -72,16 +72,16 @@ def _handle_recent_history(service: UnifiedMangaService) -> None:
         history_file = get_data_path() / "manga_history.json"
 
         if not history_file.exists():
-            logger.info("📂 Nenhum histórico recente")
-            input("Pressione Enter para continuar...")
+            show_info("Nenhum histórico recente", title="Histórico")
+            pause()
             return
 
         with history_file.open() as f:
             history_data = json.load(f)
 
         if not history_data:
-            logger.info("📂 Histórico vazio")
-            input("Pressione Enter para continuar...")
+            show_info("Histórico vazio", title="Histórico")
+            pause()
             return
 
         # Get unique recent manga titles (last 10)
@@ -116,8 +116,8 @@ def _handle_recent_history(service: UnifiedMangaService) -> None:
                 pass
 
     except Exception as e:
-        logger.info(f"❌ Erro ao carregar histórico: {e}")
-        input("Pressione Enter para continuar...")
+        show_error(f"Erro ao carregar histórico: {e}")
+        pause()
 
 
 def _handle_trending(service: UnifiedMangaService) -> None:
@@ -126,8 +126,8 @@ def _handle_trending(service: UnifiedMangaService) -> None:
         manga_list = anilist_client.get_trending_manga()
 
     if not manga_list:
-        logger.info("📂 Nenhum mangá trending encontrado")
-        input("Pressione Enter para continuar...")
+        show_info("Nenhum mangá trending encontrado", title="Trending")
+        pause()
         return
 
     # Format options
@@ -1208,9 +1208,11 @@ def _handle_local_library() -> None:
         manga_list = local_service.get_manga_list()
 
     if not manga_list:
-        logger.info("📂 Nenhum mangá baixado encontrado")
-        logger.info(f"   Diretório: {config.output_directory}")
-        input("Pressione Enter para continuar...")
+        show_info(
+            f"Nenhum mangá baixado encontrado\nDiretório: {config.output_directory}",
+            title="Biblioteca local",
+        )
+        pause()
         return
 
     # Show manga selection with back button
@@ -1237,8 +1239,8 @@ def _show_local_chapters(local_service: "LocalMangaService", manga_title: str) -
         chapters = local_service.get_chapters_for_manga(manga_title)
 
     if not chapters:
-        logger.info(f"❌ Nenhum capítulo encontrado para: {manga_title}")
-        input("Pressione Enter para continuar...")
+        show_warning(f"Nenhum capítulo encontrado para: {manga_title}", title="Capítulos")
+        pause()
         return
 
     # Check reading history for resume hint
@@ -1309,18 +1311,18 @@ def _process_local_chapter(
             chapter.chapter_number,
         )
         if not pdf_path:
-            logger.info("❌ Erro ao criar PDF")
-            input("Pressione Enter para continuar...")
+            show_error("Erro ao criar PDF")
+            pause()
             return
     elif not chapter.has_pdf:
-        logger.info("❌ Capítulo não disponível (sem PDF ou imagens)")
-        input("Pressione Enter para continuar...")
+        show_error("Capítulo não disponível (sem PDF ou imagens)")
+        pause()
         return
 
     # Open PDF reader and track the process
     if pdf_path is None:
-        logger.info("❌ Caminho do PDF não disponível")
-        input("Pressione Enter para continuar...")
+        show_error("Caminho do PDF não disponível")
+        pause()
         return
     reader_process = open_pdf_reader(pdf_path)
 
@@ -1393,8 +1395,8 @@ def _process_local_chapter(
                 history,
             )
         else:
-            logger.info("📚 Você chegou ao último capítulo disponível!")
-            input("Pressione Enter para continuar...")
+            show_info("Você chegou ao último capítulo disponível!", title="Navegação")
+            pause()
 
     elif action == "Capítulo anterior":
         if current_index > 0:
@@ -1408,8 +1410,8 @@ def _process_local_chapter(
                 history,
             )
         else:
-            logger.info("📚 Este é o primeiro capítulo!")
-            input("Pressione Enter para continuar...")
+            show_info("Este é o primeiro capítulo!", title="Navegação")
+            pause()
 
     elif action == "Ler novamente":
         _process_local_chapter(
@@ -1462,7 +1464,7 @@ def _handle_search_flow(service: UnifiedMangaService) -> None:
     # Get search query
     query = inquirer.text(message="Pesquise mangá").execute()  # type: ignore[attr-defined]
     if not query.strip():
-        logger.info("Pesquisa vazia")
+        show_warning("Pesquisa vazia", title="Busca")
         return
 
     selected_source = service.current_source
@@ -1475,17 +1477,17 @@ def _handle_search_flow(service: UnifiedMangaService) -> None:
         with loading(f"Buscando mangás em {selected_source}..."):
             results = service.search_manga(search_term)
     except MangaNotFoundError:
-        logger.info("❌ Mangá não encontrado. Tente outra pesquisa.")
+        show_error("Mangá não encontrado. Tente outra pesquisa.")
         return
     except MangaDexError as e:
-        logger.info(f"⚠️  {e.user_message}")
+        show_warning(e.user_message)
         return
     except Exception as e:
-        logger.info(f"❌ Erro inesperado: {e}")
+        show_error(f"Erro inesperado: {e}")
         return
 
     if not results:
-        logger.info("❌ Nenhum mangá encontrado. Tente outra pesquisa.")
+        show_error("Nenhum mangá encontrado. Tente outra pesquisa.")
         return
 
     # Select manga
