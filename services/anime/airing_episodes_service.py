@@ -16,6 +16,7 @@ from datetime import datetime, UTC
 from models.config import settings
 from models.models import AiringAnimeEntry, AniListTitle
 from services.anilist_service import anilist_client
+from utils.cache import get_cache
 
 
 logger = get_logger(__name__)
@@ -121,6 +122,15 @@ class AiringEpisodesService:
             List of AiringAnimeEntry objects sorted by urgency (most behind first),
             or empty list if not authenticated, no airing anime, or no awaiting episodes found
         """
+        cache = get_cache()
+        cache_key = f"anilist:watching-airing:{self.client.user_id or 'anonymous'}"
+        cached = cache.get(cache_key)
+        if cached:
+            try:
+                return [AiringAnimeEntry.model_validate(item) for item in cached]
+            except Exception:
+                pass
+
         # Fetch raw API entries
         entries = self.client.get_airing_episodes_for_watching()
 
@@ -222,5 +232,8 @@ class AiringEpisodesService:
 
         # Sort by episodes_behind descending (most urgent first)
         airing_anime.sort(key=lambda x: x.episodes_behind, reverse=True)
+
+        # Short-lived cache keeps the same information but avoids repeated AniList round-trips
+        cache.set(cache_key, [item.model_dump() for item in airing_anime], ttl=120)
 
         return airing_anime
