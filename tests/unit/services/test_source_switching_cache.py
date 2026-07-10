@@ -38,21 +38,21 @@ def setup_mocks():
     mock_load_anilist.return_value = None  # Use current_anime instead
     patches.append(mock_anilist_patch)
 
-    # Patch loading context manager
-    mock_loading_patch = patch("services.anime.source_management.loading")
+    # Patch loading context manager (lazy proxy resolves ui.components.loading)
+    mock_loading_patch = patch("ui.components.loading")
     mock_loading = mock_loading_patch.start()
     mock_loading.return_value.__enter__ = Mock()
     mock_loading.return_value.__exit__ = Mock(return_value=None)
     patches.append(mock_loading_patch)
 
     # Patch menu_navigate (anime selection)
-    mock_menu_patch = patch("services.anime.source_management.menu_navigate")
+    mock_menu_patch = patch("ui.components.menu_navigate")
     mock_menu = mock_menu_patch.start()
     mock_menu.side_effect = ["Test Anime [animefire]"]
     patches.append(mock_menu_patch)
 
     # Patch menu_navigate_episodes (episode selection returns 0-based index)
-    mock_menu_eps_patch = patch("services.anime.source_management.menu_navigate_episodes")
+    mock_menu_eps_patch = patch("ui.components.menu_navigate_episodes")
     mock_menu_eps = mock_menu_eps_patch.start()
     mock_menu_eps.return_value = 0
     patches.append(mock_menu_eps_patch)

@@ -7,8 +7,8 @@ while maintaining episode progress and AniList synchronization.
 import json
 
 from models.config import get_data_path
+from services import ui_bridge
 from services.repository import rep
-from ui.components import loading, menu_navigate, menu_navigate_episodes
 from services.anime.title_normalization import (
     normalize_anime_title,
     normalize_title_for_dedup,
@@ -29,6 +29,9 @@ def switch_anime_source(
     args,
     anilist_id: int | None = None,
     display_title: str | None = None,
+    menu=ui_bridge.menu_navigate,
+    menu_episodes=ui_bridge.menu_navigate_episodes,
+    progress=ui_bridge.loading,
 ) -> tuple[str, int] | tuple[None, None]:
     """Allow user to switch to a different anime source/title.
 
@@ -113,7 +116,7 @@ def switch_anime_source(
 
     menu_options.extend(normalized_search_results)
 
-    selected_anime_with_source = menu_navigate(menu_options, msg=menu_title)
+    selected_anime_with_source = menu(menu_options, msg=menu_title)
 
     if not selected_anime_with_source:
         # User cancelled
@@ -129,7 +132,15 @@ def switch_anime_source(
             # For now, restart the flow to keep it simple
             if saved_episode_data:
                 rep.restore_episode_state(current_anime, saved_episode_data)
-            return switch_anime_source(current_anime, args, anilist_id, display_title)
+            return switch_anime_source(
+                current_anime,
+                args,
+                anilist_id,
+                display_title,
+                menu=menu,
+                menu_episodes=menu_episodes,
+                progress=progress,
+            )
         return None, None
 
     if selected_anime_with_source == "➡️  Resultados próximos (menos palavras)":
@@ -138,7 +149,15 @@ def switch_anime_source(
             # Recursively call with preserved state
             if saved_episode_data:
                 rep.restore_episode_state(current_anime, saved_episode_data)
-            return switch_anime_source(current_anime, args, anilist_id, display_title)
+            return switch_anime_source(
+                current_anime,
+                args,
+                anilist_id,
+                display_title,
+                menu=menu,
+                menu_episodes=menu_episodes,
+                progress=progress,
+            )
         return None, None
 
     # User selected an anime - map normalized back to original
@@ -146,7 +165,7 @@ def switch_anime_source(
     selected_anime = normalized_to_original.get(normalized_selected, normalized_selected)
 
     # 5. Load episodes from new source
-    with loading("Carregando episódios..."):
+    with progress("Carregando episódios..."):
         rep.search_episodes(selected_anime)
 
     # 6. Get episode list from new source
@@ -217,21 +236,21 @@ def switch_anime_source(
         # Add option to choose any episode
         options.append("📋 Escolher outro episódio")
 
-        choice = menu_navigate(options, msg=f"{selected_anime} - De onde quer continuar?")
+        choice = menu(options, msg=f"{selected_anime} - De onde quer continuar?")
 
         if not choice:
             return None, None  # User cancelled
 
         if choice == "📋 Escolher outro episódio":
             # Let user choose from full episode list
-            episode_idx = menu_navigate_episodes(episode_list)
+            episode_idx = menu_episodes(episode_list)
             if episode_idx is None:
                 return None, None
         else:
             episode_idx = option_to_idx[choice]
     else:
         # No progress - show full episode list
-        episode_idx = menu_navigate_episodes(episode_list)
+        episode_idx = menu_episodes(episode_list)
 
         if episode_idx is None:
             return None, None  # User cancelled
