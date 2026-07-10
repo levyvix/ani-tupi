@@ -66,7 +66,12 @@ class EpisodeRepository:
         self.sources = sources
 
     def add_episode_list(
-        self, anime: str, title_list: list[str], url_list: list[str], source: str, season: int = 1
+        self,
+        anime: str,
+        title_list: list[str],
+        url_list: list[str],
+        source: str,
+        season: int | None = None,
     ) -> None:
         """Add episode list with validation.
 
@@ -78,16 +83,13 @@ class EpisodeRepository:
             title_list: List of raw episode labels from the scraper
             url_list: List of episode URLs
             source: Plugin source name
-            season: Season number (default: 1, inferred from title if not specified)
+            season: Season number; None means unknown (inferred from title, defaulting to 1)
 
         Raises:
             ValueError: If title_list and url_list have different lengths.
         """
-        # Infer season from anime title if not explicitly provided
-        if season == 1:  # Only infer if default
-            inferred_season = self._infer_season_from_title(anime)
-            if inferred_season:
-                season = inferred_season
+        if season is None:
+            season = self._infer_season_from_title(anime) or 1
 
         # Normalize raw labels ("Episódio 1", "Episodio - Legendado - 1") to ints
         episode_numbers = [
@@ -144,7 +146,8 @@ class EpisodeRepository:
             r"temp\s+(\d+)",  # "temp 2"
             r"\s-\s(\d+)(?:\s|$|[^0-9])",  # " - 2 "
             r"\|\s(\d+)(?:\s|$|[^0-9])",  # "| 2 "
-            r"\s([2-9]|[1-9]\d)(?:\s|$)",  # 2-99 at end
+            r"part\s+(\d+)",  # "Part 2", "part 3"
+            r"(\d+)ª?\s+parte",  # "2ª Parte", "2 parte"
         ]
 
         for pattern in patterns:
@@ -436,7 +439,7 @@ class EpisodeRepository:
                         batches = self.sources[source_name].search_episodes(
                             anime, episode_url, episode_params
                         )
-                        for batch in batches or []:
+                        for batch in batches:
                             self.add_episode_list(
                                 anime,
                                 batch.titles,

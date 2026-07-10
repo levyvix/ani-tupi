@@ -104,7 +104,7 @@ class ScrapedEpisodes:
     titles: list[str]
     urls: list[str]
     source: str
-    season: int = 1
+    season: int | None = None
 
 
 class AniListSearchResult(BaseModel):
