@@ -2,9 +2,7 @@
 
 Consolidated utilities:
 - video_player: MPV integration for video playback with IPC support for episode navigation
-- scraper_cache: SQLite-based episode caching
-- cache_manager: Cache management operations
-- anilist_discovery: AniList ID discovery
+- cache: Unified cache system with pluggable backends
 
 Key exports from video_player:
 - play_episode(): New IPC-aware playback with episode navigation
@@ -13,9 +11,7 @@ Key exports from video_player:
 """
 
 from utils import (
-    anilist_discovery,
-    cache_manager,
-    scraper_cache,
+    cache,
     video_player,
 )
 from utils.video_player import (
@@ -25,9 +21,7 @@ from utils.video_player import (
 )
 
 __all__ = [
-    "anilist_discovery",
-    "cache_manager",
-    "scraper_cache",
+    "cache",
     "video_player",
     # New IPC-aware exports
     "VideoPlaybackResult",

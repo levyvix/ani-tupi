@@ -16,7 +16,7 @@ from dataclasses import FrozenInstanceError
 from unittest.mock import MagicMock, patch
 import pytest
 
-from services.anime.anilist_discovery_service import AniListDiscoveryResult
+from services.anilist.discovery import AniListDiscoveryResult
 
 
 # =============================================================================

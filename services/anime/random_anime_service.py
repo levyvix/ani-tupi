@@ -12,7 +12,7 @@ import random
 from dataclasses import dataclass
 
 from models.models import AniListMediaListEntry
-from services.anilist_service import anilist_client
+from services.anilist import anilist_client
 from services.repository import rep
 from services.anime.playback_service import (
     prepare_playback_from_search,
@@ -23,7 +23,7 @@ from services.anime.playback_service import (
 )
 from utils.logging import get_logger
 from utils.video_player import VideoPlayer
-from ui.components import loading, menu_navigate
+from services import ui_bridge
 from services.history_service import save_history
 
 logger = get_logger(__name__)
@@ -108,18 +108,19 @@ class RandomAnimeService:
         )
 
     def search_and_prepare(
-        self, anime_title: str, start_episode: int = 0
+        self, anime_title: str, start_episode: int = 0, progress=ui_bridge.loading
     ) -> PlaybackContext | None:
         """Search for anime and prepare playback context.
 
         Args:
             anime_title: Title to search for
             start_episode: Episode index to start from (0-indexed)
+            progress: Context-manager factory for the loading spinner
 
         Returns:
             PlaybackContext or None if not found
         """
-        with loading(f"Buscando {anime_title}..."):
+        with progress(f"Buscando {anime_title}..."):
             rep.search_anime(anime_title, verbose=False)
             titles = rep.get_anime_titles(anime_title)
 
@@ -128,7 +129,7 @@ class RandomAnimeService:
 
         selected = titles[0]
 
-        with loading("Carregando episódios..."):
+        with progress("Carregando episódios..."):
             rep.search_episodes(selected)
 
         ctx = prepare_playback_from_search(selected, episode_idx=start_episode, source=None)
@@ -136,7 +137,7 @@ class RandomAnimeService:
         return ctx
 
     def find_available_anime(
-        self, anime_list: list[AniListMediaListEntry]
+        self, anime_list: list[AniListMediaListEntry], progress=ui_bridge.loading
     ) -> tuple[AniListMediaListEntry, PlaybackContext] | None:
         """Find an anime from the list that's available in sources.
 
@@ -155,7 +156,9 @@ class RandomAnimeService:
             if not info.success:
                 continue
 
-            ctx = self.search_and_prepare(info.title, start_episode=info.progress)
+            ctx = self.search_and_prepare(
+                info.title, start_episode=info.progress, progress=progress
+            )
             if ctx:
                 first_available = self._find_first_available_episode(ctx)
                 if first_available > 0:
@@ -179,17 +182,21 @@ class RandomAnimeService:
                 return ep
         return 0
 
-    def play_anime(self, ctx: PlaybackContext, args) -> None:
+    def play_anime(
+        self, ctx: PlaybackContext, args, menu=ui_bridge.menu_navigate, progress=ui_bridge.loading
+    ) -> None:
         """Start playing the anime and handle post-playback flow.
 
         Args:
             ctx: Playback context
             args: Command line arguments
+            menu: Callable to render a selection menu
+            progress: Context-manager factory for the loading spinner
         """
         player = VideoPlayer()
         episode = ctx.episode_idx + 1
 
-        with loading("Buscando vídeo..."):
+        with progress("Buscando vídeo..."):
             url_result = get_episode_url_and_source(ctx.anime_title, episode)
 
         if not (url_result.success and url_result.player_url):
@@ -204,20 +211,27 @@ class RandomAnimeService:
             source=url_result.source or "unknown",
         )
 
-        self.handle_post_playback(ctx, episode, url_result.source)
+        self.handle_post_playback(ctx, episode, url_result.source, menu=menu, progress=progress)
 
-    def handle_post_playback(self, ctx: PlaybackContext, episode: int, source: str | None) -> None:
+    def handle_post_playback(
+        self,
+        ctx: PlaybackContext,
+        episode: int,
+        source: str | None,
+        menu=ui_bridge.menu_navigate,
+        progress=ui_bridge.loading,
+    ) -> None:
         """Handle post-playback confirmation and options.
 
         Args:
             ctx: Playback context
             episode: Episode number watched
             source: Video source name
+            menu: Callable to render a selection menu
+            progress: Context-manager factory for the loading spinner
         """
         confirm_options = ["✅ Sim, assisti até o final", "❌ Não, parei antes."]
-        confirm = menu_navigate(
-            confirm_options, msg=f"Você assistiu o episódio {episode} até o final?"
-        )
+        confirm = menu(confirm_options, msg=f"Você assistiu o episódio {episode} até o final?")
 
         confirmed = confirm == "✅ Sim, assisti até o final"
 
@@ -249,13 +263,13 @@ class RandomAnimeService:
         opts.append("🔁 Replay")
         opts.append("🔙 Sair")
 
-        selected = menu_navigate(opts, msg="O que quer fazer agora?")
+        selected = menu(opts, msg="O que quer fazer agora?")
 
         if selected == "▶️ Próximo episódio":
             ctx = navigate_episodes(ctx, "next")
-            self.play_anime(ctx, None)
+            self.play_anime(ctx, None, menu=menu, progress=progress)
         elif selected == "🔁 Replay":
-            self.play_anime(ctx, None)
+            self.play_anime(ctx, None, menu=menu, progress=progress)
 
 
 def handle_random_anime(args) -> None:
@@ -271,7 +285,7 @@ def handle_random_anime(args) -> None:
         logger.info("   Execute: ani-tupi anilist auth")
         return
 
-    with loading("Buscando sua lista..."):
+    with ui_bridge.loading("Buscando sua lista..."):
         anime_list = service.get_user_anime_list()
 
     if not anime_list:

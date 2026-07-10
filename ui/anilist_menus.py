@@ -7,9 +7,6 @@ import json
 import os
 import webbrowser
 
-from services.anilist_service import anilist_client
-from services.anime_service import anilist_anime_flow
-from services.anime.airing_episodes_service import AiringEpisodesService
 from models.config import get_data_path, settings
 from ui.components import loading, menu_navigate, pause, render_section, show_error, show_info
 from models.models import AniListTitle, Status
@@ -20,6 +17,57 @@ logger = get_logger(__name__)
 
 # History file path (centralized from config)
 HISTORY_PATH = get_data_path()
+
+# ---------------------------------------------------------------------------
+# Dependency injection holders
+#
+# ``ui`` must remain a pure rendering layer: it may not import from
+# ``services.*`` or ``commands.*``. The command layer wires the real
+# implementations at runtime via :func:`configure`. Tests may patch these
+# module attributes directly.
+# ---------------------------------------------------------------------------
+
+
+def _not_configured(*_, **__):
+    raise RuntimeError(
+        "ui.anilist_menus não foi configurado — chame configure() antes de usar os menus"
+    )
+
+
+anilist_client = _not_configured
+anilist_anime_flow = _not_configured
+run_anime_actions = _not_configured
+airing_service_factory = _not_configured
+handle_local_library_playback = _not_configured
+
+
+def configure(
+    *,
+    client,
+    anime_flow,
+    anime_actions,
+    airing_service,
+    local_library_playback,
+) -> None:
+    """Wire the runtime dependencies used by the AniList menus.
+
+    Called by the command layer so ``ui`` never imports ``services``/``commands``.
+
+    Args:
+        client: AniList client instance (``services.anilist.anilist_client``)
+        anime_flow: Playback flow callable (``anilist_anime_flow``)
+        anime_actions: Per-anime actions callback (``run_anime_actions``)
+        airing_service: Zero-arg factory returning an airing-episodes service
+        local_library_playback: Local library playback callback
+    """
+    global anilist_client, anilist_anime_flow, run_anime_actions
+    global airing_service_factory, handle_local_library_playback
+
+    anilist_client = client
+    anilist_anime_flow = anime_flow
+    run_anime_actions = anime_actions
+    airing_service_factory = airing_service
+    handle_local_library_playback = local_library_playback
 
 
 def get_search_title(title: AniListTitle, display_title: str = "") -> str:
@@ -495,11 +543,6 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
         # Get selected anime info
         display_title, search_title, anime_id, progress, episodes = anime_map[selection]
 
-        # Import here to avoid circular import
-        import argparse
-
-        from commands.anilist import run_anime_actions
-
         # Create args object for anilist_anime_flow
         args = argparse.Namespace(debug=False)
 
@@ -626,11 +669,6 @@ def _show_recent_history() -> None:
         # Use AniList progress as primary source, fall back to local history
         # This ensures we always have the most up-to-date progress
         starting_progress = max(anilist_progress, episode_idx)
-
-        # Import here to avoid circular import
-        import argparse
-
-        from commands.anilist import run_anime_actions
 
         # Create args object
         args = argparse.Namespace(debug=False)
@@ -865,7 +903,7 @@ def _show_airing_episodes() -> None:
     while True:
         # Fetch airing episodes
         with loading("Carregando episódios em transmissão..."):
-            service = AiringEpisodesService()
+            service = airing_service_factory()
             airing_anime = service.get_watching_with_airing_episodes()
 
         if not airing_anime:
@@ -920,8 +958,6 @@ def _show_airing_episodes() -> None:
         # Create args object for anilist_anime_flow
         args = argparse.Namespace(debug=False)
 
-        from commands.anilist import run_anime_actions
-
         # Show per-anime actions menu
         run_anime_actions(
             search_title,
@@ -945,8 +981,6 @@ def _show_local_library() -> None:
     - Navigation menu (Next/Previous/Replay/Back)
     - Playback loop for multiple episodes
     """
-    from commands.local_anime import handle_local_library_playback
-
     args = argparse.Namespace(debug=False)
     handle_local_library_playback(args)
 

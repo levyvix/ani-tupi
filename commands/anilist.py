@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from services import anime_service
+from ui import anilist_menus
 from ui.anilist_menus import (
     anilist_main_menu,
     anime_actions_menu,
@@ -21,6 +22,25 @@ from ui.anilist_menus import (
 from ui.components import loading, pause, show_error, show_info, show_success, show_warning
 
 _console = Console()
+
+
+def _wire_anilist_menus() -> None:
+    """Inject runtime dependencies into the pure ``ui.anilist_menus`` layer.
+
+    Keeps ``ui`` free of ``services``/``commands`` imports (breaks the
+    dependency cycle) while preserving production behaviour.
+    """
+    from services.anilist import anilist_client
+    from services.anime.airing_episodes_service import AiringEpisodesService
+    from commands.local_anime import handle_local_library_playback
+
+    anilist_menus.configure(
+        client=anilist_client,
+        anime_flow=anime_service.anilist_anime_flow,
+        anime_actions=run_anime_actions,
+        airing_service=AiringEpisodesService,
+        local_library_playback=handle_local_library_playback,
+    )
 
 
 def _handle_anilist_download(anime_title: str, total_episodes: int | None) -> None:
@@ -35,7 +55,7 @@ def _handle_anilist_download(anime_title: str, total_episodes: int | None) -> No
     """
     from services.anime.download_service import AnimeDownloadService
     from services.anime.playback_service import get_episode_url_and_source
-    from utils.episode_range_parser import RangeParseError
+    from utils.range_parser import RangeParseError
 
     if not total_episodes or total_episodes <= 0:
         show_warning("Número total de episódios desconhecido. Não é possível baixar.")
@@ -78,7 +98,7 @@ def _handle_status_change(anilist_id: int) -> None:
     Args:
         anilist_id: AniList anime ID to update
     """
-    from services.anilist_service import anilist_client
+    from services.anilist import anilist_client
 
     if not anilist_client.is_authenticated():
         show_warning("Você precisa estar autenticado no AniList para mudar o status.")
@@ -148,6 +168,7 @@ def run_anime_actions(
 
 def anilist_auth(args) -> None:
     """Handle AniList authentication flow."""
+    _wire_anilist_menus()
     authenticate_flow()
 
 
@@ -157,7 +178,9 @@ def anilist_menu(args) -> None:
     Allows users to browse and watch anime from AniList,
     with automatic progress synchronization.
     """
-    from services.anilist_service import anilist_client
+    from services.anilist import anilist_client
+
+    _wire_anilist_menus()
 
     if not anilist_client.is_authenticated():
         want_to_connect = Confirm.ask(

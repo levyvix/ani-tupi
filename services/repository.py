@@ -264,6 +264,20 @@ class Repository:
             self._playback_coordinator = PlaybackCoordinator(self._search_repo.sources)
         return self._playback_coordinator.search_player_from_page(page_url, source_name)
 
+    def search_homepage_incremental(self, source_name: str, title: str) -> list[dict]:
+        """Find freshly-released episodes for ``title`` on a source's homepage.
+
+        Routes through the registered plugin instead of importing it directly,
+        keeping the service layer decoupled from concrete scrapers. Returns an
+        empty list if the source is unavailable or does not support homepage
+        incremental search.
+        """
+        plugin = self._search_repo.sources.get(source_name)
+        if plugin is None or not hasattr(plugin, "search_homepage_incremental"):
+            logger.warning(f"Source '{source_name}' unavailable for homepage incremental search")
+            return []
+        return plugin.search_homepage_incremental(title)
+
     # Data access (for backward compatibility)
     @property
     def anime_to_urls(self):

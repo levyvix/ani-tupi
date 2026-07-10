@@ -1,9 +1,13 @@
 import re
+import time
 
 import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.core.blogger_resolver import resolve_blogger_streams
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
@@ -12,6 +16,93 @@ DEFAULT_HEADERS = {
 
 _BG_MP4_IFRAME_RE = re.compile(r'<iframe[^>]+src=["\']([^"\']*bg\.mp4[^"\']*)["\']', re.I)
 _TOKEN_RE = re.compile(r"blogger\.com/video\.g\?token=([^&\"'\s]+)")
+
+
+def http_get_with_retry(
+    url: str,
+    *,
+    headers: dict | None = None,
+    timeout: float = 30,
+    follow_redirects: bool = True,
+    max_retries: int = 3,
+    backoff_base: float = 0.5,
+    client: httpx.Client | None = None,
+) -> httpx.Response:
+    """Perform an HTTP GET with retry/backoff for transient failures.
+
+    Retries on rate limiting (HTTP 429), server errors (>= 500), timeouts,
+    and transport/connection errors, up to ``max_retries`` times. For a 429
+    response the ``Retry-After`` header (in seconds) is honored when present;
+    otherwise exponential backoff (``backoff_base * 2 ** attempt``) is used.
+    Other 4xx errors (except 429) are raised immediately without retrying.
+
+    On success the response is returned with ``raise_for_status()`` already
+    verified. When all retries are exhausted the last error is re-raised.
+
+    Args:
+        url: The URL to fetch.
+        headers: Optional request headers.
+        timeout: Per-request timeout in seconds.
+        follow_redirects: Whether to follow redirects.
+        max_retries: Maximum number of retry attempts after the first request.
+        backoff_base: Base seconds for exponential backoff.
+        client: Optional ``httpx.Client`` to use (mainly for testability).
+
+    Returns:
+        The successful ``httpx.Response`` (status verified via raise_for_status).
+    """
+
+    def _do_get() -> httpx.Response:
+        if client is not None:
+            return client.get(
+                url, headers=headers, timeout=timeout, follow_redirects=follow_redirects
+            )
+        return httpx.get(url, headers=headers, timeout=timeout, follow_redirects=follow_redirects)
+
+    last_exc: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            response = _do_get()
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            last_exc = exc
+            if attempt >= max_retries:
+                raise
+            delay = backoff_base * 2**attempt
+            logger.debug(
+                f"http_get_with_retry retry {attempt + 1}/{max_retries} for {url} "
+                f"(reason: {type(exc).__name__}), sleeping {delay:.2f}s"
+            )
+            time.sleep(delay)
+            continue
+
+        status = getattr(response, "status_code", None)
+        if isinstance(status, int) and (status == 429 or status >= 500):
+            last_exc = None
+            if attempt >= max_retries:
+                response.raise_for_status()
+                return response
+            if status == 429 and (retry_after := response.headers.get("Retry-After")):
+                try:
+                    delay = float(retry_after)
+                except ValueError:
+                    delay = backoff_base * 2**attempt
+            else:
+                delay = backoff_base * 2**attempt
+            logger.debug(
+                f"http_get_with_retry retry {attempt + 1}/{max_retries} for {url} "
+                f"(reason: HTTP {status}), sleeping {delay:.2f}s"
+            )
+            time.sleep(delay)
+            continue
+
+        # Success or a non-retryable 4xx: let raise_for_status decide.
+        response.raise_for_status()
+        return response
+
+    # Should not reach here, but re-raise last error defensively.
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("http_get_with_retry exhausted retries without a response")
 
 
 def append_player_source(container: list, source: str) -> bool:

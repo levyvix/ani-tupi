@@ -3,12 +3,13 @@
 import time
 
 from models.config import get_data_path
+from services import ui_bridge
 from services.repository import rep
 from utils.persistence import JSONStore
 from utils.title_utils import clean_title_for_display
 from utils.exceptions import PersistenceError
 from utils.logging import get_logger
-from utils.anilist_discovery import get_anilist_id_with_interactive_fallback
+from services.anilist.discovery import get_anilist_id_with_interactive_fallback
 from models.models import HistoryEntry, Status
 from services.anime.mappings import load_anilist_urls
 
@@ -20,10 +21,8 @@ _history_store = JSONStore(HISTORY_PATH / "history.json")
 _RETRY = object()
 
 
-def _load_persisted_history():
+def _load_persisted_history(menu=ui_bridge.menu_navigate):
     """Load history JSON, build menu, return parsed selection or None if cancelled."""
-    from ui.components import menu_navigate
-
     data = _history_store.load({})
     sorted_data = sorted(data.items(), key=lambda x: x[1][0], reverse=True)
 
@@ -37,7 +36,7 @@ def _load_persisted_history():
         )
         titles[entry + ep_info] = len(ep_info)
 
-    selected = menu_navigate(list(titles.keys()), msg="Continue assistindo.")
+    selected = menu(list(titles.keys()), msg="Continue assistindo.")
     if not selected:
         return None
 
@@ -46,15 +45,13 @@ def _load_persisted_history():
     return data, anime, he.episode_idx, he.anilist_id, he.source, he.urls or None
 
 
-def _resolve_anilist_progress(anilist_id, saved_source, anime):
+def _resolve_anilist_progress(anilist_id, saved_source, anime, progress=ui_bridge.loading):
     """Resolve AniList progress. Returns (anilist_id, anilist_title, anilist_ep_idx)."""
-    from ui.components import loading
-
     anilist_title = None
     anilist_ep_idx = -1
 
     if anilist_id:
-        from services.anilist_service import anilist_client
+        from services.anilist import anilist_client
 
         info = anilist_client.get_anime_by_id(anilist_id)
         if info:
@@ -63,10 +60,10 @@ def _resolve_anilist_progress(anilist_id, saved_source, anime):
         if entry and entry.progress:
             anilist_ep_idx = entry.progress - 1
     elif saved_source == "local":
-        with loading(f"Buscando '{anime}' no AniList..."):
+        with progress(f"Buscando '{anime}' no AniList..."):
             anilist_id = get_anilist_id_with_interactive_fallback(anime, strict_threshold=95)
         if anilist_id:
-            from services.anilist_service import anilist_client
+            from services.anilist import anilist_client
 
             info = anilist_client.get_anime_by_id(anilist_id)
             if info:
@@ -78,15 +75,15 @@ def _resolve_anilist_progress(anilist_id, saved_source, anime):
     return anilist_id, anilist_title, anilist_ep_idx
 
 
-def _validate_anime_sources(search_results):
+def _validate_anime_sources(
+    search_results, menu=ui_bridge.menu_navigate, progress=ui_bridge.loading
+):
     """Validate which scraper sources have episodes. Returns (title, episode_list) or (_RETRY, None)."""
-    from ui.components import loading, menu_navigate
-
     logger.info("ℹ️  Validando fontes disponíveis...")
     valid = {}
     for aw in search_results.get_anime_titles_with_sources():
         title = aw.rsplit(" [", 1)[0] if " [" in aw else aw
-        with loading(f"Verificando '{title}'..."):
+        with progress(f"Verificando '{title}'..."):
             rep.search_episodes(title)
         eps = rep.get_episode_list(title)
         if eps:
@@ -100,7 +97,7 @@ def _validate_anime_sources(search_results):
         return t, rep.get_episode_list(t)
 
     valid_list = [f"{s} ({valid[s]} eps)" for s in valid]
-    selected = menu_navigate(valid_list, msg="Múltiplas fontes com episódios. Escolha uma:")
+    selected = menu(valid_list, msg="Múltiplas fontes com episódios. Escolha uma:")
     if not selected:
         return _RETRY, None
     idx = valid_list.index(selected)
@@ -108,14 +105,20 @@ def _validate_anime_sources(search_results):
     return aw.rsplit(" [", 1)[0], rep.get_episode_list(aw.rsplit(" [", 1)[0])
 
 
-def _find_episodes(anime, anilist_id, anilist_title, saved_source, saved_urls):
+def _find_episodes(
+    anime,
+    anilist_id,
+    anilist_title,
+    saved_source,
+    saved_urls,
+    menu=ui_bridge.menu_navigate,
+    progress=ui_bridge.loading,
+):
     """Load episodes from saved URLs, AniList cache, or scraper search.
 
     Returns (anime, episode_list, searched_scrapers, was_found).
     episode_list=None means user cancelled (retry).
     """
-    from ui.components import loading
-
     if saved_urls and saved_source:
         rep.clear_search_results()
         if isinstance(saved_urls, dict):
@@ -123,7 +126,7 @@ def _find_episodes(anime, anilist_id, anilist_title, saved_source, saved_urls):
                 rep.add_anime(anime, url, src)
         else:
             rep.add_anime(anime, saved_urls, saved_source)
-        with loading(f"Carregando episódios de {saved_source}..."):
+        with progress(f"Carregando episódios de {saved_source}..."):
             rep.search_episodes(anime)
         ep_list = rep.get_episode_list(anime)
         if ep_list:
@@ -135,7 +138,7 @@ def _find_episodes(anime, anilist_id, anilist_title, saved_source, saved_urls):
             rep.clear_search_results()
             for src, url in cached.items():
                 rep.add_anime(anime, url, src)
-            with loading(f"Carregando episódios de {anime}..."):
+            with progress(f"Carregando episódios de {anime}..."):
                 rep.search_episodes(anime, source_filter=saved_source)
             ep_list = rep.get_episode_list(anime)
             if ep_list:
@@ -146,7 +149,7 @@ def _find_episodes(anime, anilist_id, anilist_title, saved_source, saved_urls):
 
     search_title = clean_title_for_display(anime)
     rep.clear_search_results()
-    with loading(f"Buscando '{search_title}'..."):
+    with progress(f"Buscando '{search_title}'..."):
         search_results = rep.search_anime(search_title)
 
     anime_titles = search_results.get_anime_titles()
@@ -156,23 +159,29 @@ def _find_episodes(anime, anilist_id, anilist_title, saved_source, saved_urls):
     if len(anime_titles) == 1:
         t = anime_titles[0]
         if saved_source:
-            with loading(f"Carregando episódios de {saved_source}..."):
+            with progress(f"Carregando episódios de {saved_source}..."):
                 rep.search_episodes(t, source_filter=saved_source)
         else:
-            with loading("Carregando episódios..."):
+            with progress("Carregando episódios..."):
                 rep.search_episodes(t)
         return t, rep.get_episode_list(t) or [], True, True
 
-    t, ep_list = _validate_anime_sources(search_results)
+    t, ep_list = _validate_anime_sources(search_results, menu=menu, progress=progress)
     if t is _RETRY:
         return anime, None, True, True
     return t or anime, ep_list or [], True, bool(ep_list)
 
 
-def _pick_episode(anime, episode_list, last_ep_idx, progress_source):
+def _pick_episode(
+    anime,
+    episode_list,
+    last_ep_idx,
+    progress_source,
+    menu=ui_bridge.menu_navigate,
+    menu_episodes=ui_bridge.menu_navigate_episodes,
+    prompt=ui_bridge.prompt,
+):
     """Show episode picker. Returns episode_idx or None to retry."""
-    from ui.components import menu_navigate, menu_navigate_episodes
-
     last_ep_num = last_ep_idx + 1
     options = []
     option_to_idx = {}
@@ -197,15 +206,15 @@ def _pick_episode(anime, episode_list, last_ep_idx, progress_source):
     options.append("📋 Escolher outro episódio")
     options.append("🔄 Começar do zero")
 
-    choice = menu_navigate(options, msg=f"{anime} - De onde quer continuar?")
+    choice = menu(options, msg=f"{anime} - De onde quer continuar?")
     if not choice:
         return None
 
     if choice == "📋 Escolher outro episódio":
-        return menu_navigate_episodes(episode_list)
+        return menu_episodes(episode_list)
 
     if choice == "🔄 Começar do zero":
-        confirm = menu_navigate(
+        confirm = menu(
             ["✅ Sim, resetar", "❌ Cancelar"],
             msg="Tem certeza? Seu progresso será perdido.",
         )
@@ -218,24 +227,31 @@ def _pick_episode(anime, episode_list, last_ep_idx, progress_source):
     ep_idx = option_to_idx[choice]
     if ep_idx is None:
         logger.info(f"\n⏳ Episódio {last_ep_num + 1} ainda não disponível nos scrapers.")
-        input("\nPressione Enter para voltar...")
+        prompt("\nPressione Enter para voltar...")
         return None
     return ep_idx
 
 
-def load_history() -> tuple[str, int, int | None, str | None] | None:
+def load_history(
+    menu=ui_bridge.menu_navigate,
+    menu_episodes=ui_bridge.menu_navigate_episodes,
+    progress=ui_bridge.loading,
+    prompt=ui_bridge.prompt,
+) -> tuple[str, int, int | None, str | None] | None:
     """Load watch history and let user choose episode.
 
     Format:
         - v6: {"anime_name": [timestamp, episode_idx, anilist_id, source, total_episodes, anime_urls], ...}
 
     Returns: (anime_name, episode_idx, anilist_id, anilist_title)
-    """
-    from ui.components import menu_navigate
 
+    UI callables (``menu``, ``menu_episodes``, ``progress``, ``prompt``) are
+    injected so the service never imports the presentation layer. They default
+    to lazy proxies over ``ui.components`` for production use.
+    """
     for _ in range(6):
         try:
-            entry = _load_persisted_history()
+            entry = _load_persisted_history(menu=menu)
         except (FileNotFoundError, PersistenceError) as e:
             logger.warning("Error loading history: %s", e)
             return None
@@ -247,13 +263,13 @@ def load_history() -> tuple[str, int, int | None, str | None] | None:
         original_anime_name = anime
 
         anilist_id, anilist_title, anilist_ep_idx = _resolve_anilist_progress(
-            anilist_id, saved_source, anime
+            anilist_id, saved_source, anime, progress=progress
         )
         last_ep_idx = max(local_ep_idx, anilist_ep_idx)
         progress_source = "AniList" if anilist_ep_idx > local_ep_idx else "Local"
 
         anime, episode_list, searched, was_found = _find_episodes(
-            anime, anilist_id, anilist_title, saved_source, saved_urls
+            anime, anilist_id, anilist_title, saved_source, saved_urls, menu=menu, progress=progress
         )
         if episode_list is None:
             continue
@@ -274,7 +290,7 @@ def load_history() -> tuple[str, int, int | None, str | None] | None:
                 logger.info("  • O anime foi removido")
                 logger.info("  • O scraper está temporariamente offline")
 
-            retry_choice = menu_navigate(
+            retry_choice = menu(
                 [
                     "🔍 Buscar manualmente (digite outro nome)",
                     "🗑️  Remover do histórico",
@@ -284,27 +300,25 @@ def load_history() -> tuple[str, int, int | None, str | None] | None:
             )
 
             if retry_choice == "🔍 Buscar manualmente (digite outro nome)":
-                manual_query = input("\n🔍 Digite o nome para buscar: ").strip()
+                manual_query = prompt("\n🔍 Digite o nome para buscar: ").strip()
                 if not manual_query:
                     continue
 
-                from ui.components import loading
-
                 rep.clear_search_results()
-                with loading(f"Buscando '{manual_query}'..."):
+                with progress(f"Buscando '{manual_query}'..."):
                     search_results = rep.search_anime(manual_query)
 
                 anime_titles = search_results.get_anime_titles()
                 if not anime_titles:
                     logger.info(f"\n❌ Nenhum resultado encontrado para '{manual_query}'")
-                    input("\nPressione Enter para continuar...")
+                    prompt("\nPressione Enter para continuar...")
                     continue
 
                 anime_with_sources = search_results.get_anime_titles_with_sources()
                 if len(anime_with_sources) == 1:
                     selected_title = anime_titles[0]
                 else:
-                    selected = menu_navigate(
+                    selected = menu(
                         anime_with_sources,
                         msg=f"Resultados para '{manual_query}'. Escolha:",
                     )
@@ -312,17 +326,17 @@ def load_history() -> tuple[str, int, int | None, str | None] | None:
                         continue
                     selected_title = selected.rsplit(" [", 1)[0]
 
-                with loading("Carregando episódios..."):
+                with progress("Carregando episódios..."):
                     rep.search_episodes(selected_title)
                 episode_list = rep.get_episode_list(selected_title)
 
                 if not episode_list:
                     logger.info(f"\n❌ '{selected_title}' não tem episódios disponíveis")
-                    input("\nPressione Enter para continuar...")
+                    prompt("\nPressione Enter para continuar...")
                     continue
 
                 anime = selected_title
-                replace = menu_navigate(
+                replace = menu(
                     ["✅ Sim, substituir", "❌ Não, manter ambos"],
                     msg=f"Deseja substituir '{original_anime_name}' por '{anime}' no histórico?",
                 )
@@ -334,7 +348,7 @@ def load_history() -> tuple[str, int, int | None, str | None] | None:
             elif retry_choice == "🗑️  Remover do histórico":
                 reset_history(original_anime_name)
                 logger.info(f"✅ '{original_anime_name}' removido do histórico.")
-                input("\nPressione Enter para continuar...")
+                prompt("\nPressione Enter para continuar...")
                 continue
             else:
                 continue
@@ -343,7 +357,15 @@ def load_history() -> tuple[str, int, int | None, str | None] | None:
             # No scraper search was done (local+anilist path); proceed with empty list
             pass
 
-        episode_idx = _pick_episode(anime, episode_list, last_ep_idx, progress_source)
+        episode_idx = _pick_episode(
+            anime,
+            episode_list,
+            last_ep_idx,
+            progress_source,
+            menu=menu,
+            menu_episodes=menu_episodes,
+            prompt=prompt,
+        )
         if episode_idx is None:
             continue
 
@@ -438,7 +460,7 @@ def save_history_from_event(
     logger.info(f"Saved history for '{anime_title}' Ep {episode_idx + 1} (action: {action})")
 
     if anilist_id and action == "watched":
-        from services.anilist_service import anilist_client
+        from services.anilist import anilist_client
 
         if anilist_client.is_authenticated():
             try:

@@ -17,6 +17,7 @@ from services.anime.title_normalization import (
     normalize_title_for_dedup,
 )
 from utils.logging import get_logger
+from utils.title_utils import normalize_title_for_filter
 
 logger = get_logger(__name__)
 
@@ -29,6 +30,18 @@ class SearchRepository:
     - Searching anime across multiple sources
     - Deduplicating results by title normalization
     - Caching search results
+
+    Expected call sequence (implicit ordering contract):
+        1. ``clear_search_results()`` — reset state before a new query.
+        2. A population step — ``search_anime()`` / ``search_anime_with_word_limit()``
+           / ``add_anime()`` (also invoked internally by ``_search_with_incremental_results``).
+           A search that runs but finds nothing still counts as populated: the
+           ordering was correct, results were simply empty.
+        3. A reader — ``get_anime_titles()`` / ``get_anime_titles_with_sources()``.
+
+    Calling a reader before any population step returns an empty list. This used
+    to be silent; the ``_populated`` flag now makes that out-of-order case emit a
+    WARNING so it is observable in logs (without raising, to avoid breaking flows).
     """
 
     _instance = None
@@ -51,6 +64,10 @@ class SearchRepository:
         self._compact_idx: dict[str, list[tuple[str, str]]] = {}
         self._last_search_metadata = {}
         self._add_lock = threading.Lock()
+        # Tracks whether a population step (search/add/cache-load) has run since
+        # the last clear. Distinct from "results are empty": a search that ran
+        # but found nothing sets this True so readers do not warn.
+        self._populated = False
 
         SearchRepository._initialized = True
 
@@ -71,6 +88,7 @@ class SearchRepository:
         self.norm_titles = {}
         self._norm_idx = {}
         self._compact_idx = {}
+        self._populated = False
 
     def _build_search_results(self, query: str) -> SearchResults:
         results = []
@@ -223,10 +241,7 @@ class SearchRepository:
 
     @staticmethod
     def _normalize_for_filter(text: str) -> str:
-        text = text.lower()
-        for char in ["-", ":", "(", ")", "!", "?", ".", "–", "—"]:
-            text = text.replace(char, " ")
-        return " ".join(text.split())
+        return normalize_title_for_filter(text)
 
     @staticmethod
     def _matches_filter_query(title: str, filter_by_query: str) -> bool:
@@ -310,7 +325,7 @@ class SearchRepository:
         """Check cache for query. Returns (cached_data, check_time_ms)."""
         start = time.time()
         try:
-            from utils.cache_manager import get_cache
+            from utils.cache import get_cache
 
             cached = get_cache().get(normalize_search_cache_key(query))
         except Exception as e:
@@ -321,7 +336,7 @@ class SearchRepository:
 
     def _save_cache(self, query: str, verbose: bool) -> None:
         try:
-            from utils.cache_manager import get_cache
+            from utils.cache import get_cache
 
             get_cache().set(
                 normalize_search_cache_key(query),
@@ -338,6 +353,7 @@ class SearchRepository:
     def add_anime(self, title: str, url: str, source: str, params: dict | None = None) -> None:
         """Add anime with multi-source deduplication via title normalization."""
         with self._add_lock:
+            self._populated = True
             params = params or {}
             normalized_new = normalize_title_for_dedup(title)
             compact_new = get_compact_normalized_title_key(normalized_new)
@@ -443,6 +459,9 @@ class SearchRepository:
         if len(self.anime_to_urls) > 0:
             self._save_cache(query, verbose)
 
+        # A search ran (correct ordering) even if it found nothing — mark
+        # populated so readers do not warn about an out-of-order call.
+        self._populated = True
         return self._build_search_results(query)
 
     def search_anime_with_word_limit(
@@ -470,6 +489,8 @@ class SearchRepository:
 
         self.clear_search_results()
         self._search_with_incremental_results(limited_query, verbose)
+        # A search ran (correct ordering) even if it found nothing.
+        self._populated = True
         return self._build_search_results(query)
 
     def get_search_metadata(self) -> SearchMetadata:
@@ -488,6 +509,20 @@ class SearchRepository:
             )
         return SearchMetadata.model_validate(self._last_search_metadata)
 
+    def _warn_if_unpopulated(self, reader_name: str) -> None:
+        """Log a WARNING when a reader runs before any population step.
+
+        Makes the previously-silent out-of-order case observable. Only fires when
+        no population step has run AND no results exist; a search that ran but
+        found nothing sets ``_populated`` and is therefore not flagged.
+        """
+        if not self._populated and not self.anime_to_urls:
+            logger.warning(
+                f"{reader_name}() called before any search/add/cache-load populated "
+                "results; returning empty list. Ensure a population step "
+                "(search_anime/add_anime/load_from_cache) runs first."
+            )
+
     def get_anime_titles(
         self, filter_by_query: str | None = None, min_score: int | None = None
     ) -> list[str]:
@@ -496,6 +531,7 @@ class SearchRepository:
         Args:
             min_score: Ignored (kept for API compatibility)
         """
+        self._warn_if_unpopulated("get_anime_titles")
         titles = list(self.anime_to_urls.keys())
         if not filter_by_query:
             return sorted(titles)
@@ -512,6 +548,7 @@ class SearchRepository:
 
         Format: "Anime Title [source1, source2]"
         """
+        self._warn_if_unpopulated("get_anime_titles_with_sources")
         titles = list(self.anime_to_urls.keys())
 
         if filter_by_query:

@@ -4,7 +4,7 @@ Handles conversion of AniList title objects to display and search strings.
 """
 
 from models.models import AniListTitle
-from services.search_repository import SearchRepository
+from utils.title_utils import normalize_title_for_filter
 
 
 def format_title(title_obj: AniListTitle | dict) -> str:
@@ -32,8 +32,7 @@ def format_title(title_obj: AniListTitle | dict) -> str:
     if (
         romaji
         and english
-        and SearchRepository._normalize_for_filter(romaji)
-        != SearchRepository._normalize_for_filter(english)
+        and normalize_title_for_filter(romaji) != normalize_title_for_filter(english)
     ):
         return f"{romaji} / {english}"
     # If only romaji

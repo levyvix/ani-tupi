@@ -289,7 +289,8 @@ def retry_offline_syncs() -> dict[str, int]:
         try:
             _get_queue_path().unlink()
             logger.debug("Offline sync queue is empty, deleted file")
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to delete empty offline sync queue file: %s", exc)
             pass
 
     return {"successful": successful_count, "failed": failed_count}

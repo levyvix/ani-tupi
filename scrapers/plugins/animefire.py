@@ -7,10 +7,12 @@ import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.core.blogger_resolver import resolve_blogger_token
-from scrapers.plugins.utils import load_plugin, store_player_source
+from scrapers.plugins.utils import http_get_with_retry, load_plugin, store_player_source
 from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
+
+REQUEST_TIMEOUT = 20
 
 SEARCH_HEADERS = {
     "User-Agent": (
@@ -75,16 +77,14 @@ class AnimeFire:
 
     def search_anime(self, query: str) -> list[AnimeMetadata]:
         url = "https://animefire.plus/pesquisar/" + "-".join(query.split())
-        response = httpx.get(url, timeout=20, follow_redirects=True, headers=SEARCH_HEADERS)
-        response.raise_for_status()
+        response = http_get_with_retry(url, headers=SEARCH_HEADERS, timeout=REQUEST_TIMEOUT)
         tree = BeautifulSoup(response.text, "html.parser")
         return self._parse_search_page(tree)
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
-            response = httpx.get(url, timeout=20, follow_redirects=True)
-            response.raise_for_status()
+            response = http_get_with_retry(url, timeout=REQUEST_TIMEOUT)
             tree = BeautifulSoup(response.text, "html.parser")
 
             ep_links = tree.select("a.lEp")
@@ -110,7 +110,7 @@ class AnimeFire:
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
             # data-video-src is in static HTML — no Selenium needed
-            response = httpx.get(url, timeout=20, follow_redirects=True)
+            response = httpx.get(url, timeout=REQUEST_TIMEOUT, follow_redirects=True)
             response.raise_for_status()
             page = BeautifulSoup(response.text, "html.parser")
 
@@ -121,7 +121,9 @@ class AnimeFire:
                 api_url = video.get("data-video-src")
                 if api_url:
                     try:
-                        response = httpx.get(api_url, timeout=20, follow_redirects=True)
+                        response = httpx.get(
+                            api_url, timeout=REQUEST_TIMEOUT, follow_redirects=True
+                        )
                         response.raise_for_status()
                         video_data = json.loads(response.text)
 

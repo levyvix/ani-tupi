@@ -6,9 +6,9 @@ into a single parameterized function to eliminate code duplication.
 
 from collections.abc import Callable
 
-from services.anilist_service import anilist_client
+from services import ui_bridge
+from services.anilist import anilist_client
 from services.manga_service import UnifiedMangaService
-from ui.components import loading, menu_navigate, pause, show_info, show_warning
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -41,6 +41,11 @@ def handle_anilist_list(
     service: UnifiedMangaService,
     list_type: str,
     on_manga_selected: Callable[[UnifiedMangaService, str], None],
+    menu=ui_bridge.menu_navigate,
+    progress=ui_bridge.loading,
+    pause=ui_bridge.pause,
+    show_info=ui_bridge.show_info,
+    show_warning=ui_bridge.show_warning,
 ) -> None:
     """Handle any AniList manga list (reading, completed, planning).
 
@@ -71,7 +76,7 @@ def handle_anilist_list(
         return
 
     # Load list
-    with loading(f"Carregando {loading_msg}..."):
+    with progress(f"Carregando {loading_msg}..."):
         manga_list = anilist_client.get_user_manga_list(anilist_status)
 
     if not manga_list:
@@ -101,7 +106,7 @@ def handle_anilist_list(
             manga_map[display] = title
 
     # Show menu
-    selection = menu_navigate(options, menu_title)
+    selection = menu(options, menu_title)
 
     if selection and selection != "← Voltar":
         try:

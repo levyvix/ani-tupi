@@ -1,31 +1,29 @@
-"""Cache system for scraper results (wrapper for backward compatibility).
+"""AniList-aware scraper cache adapters.
 
-DEPRECATED: This module is kept for backward compatibility only.
-New code should use utils.cache instead.
+These adapters wrap the pure disk-cache primitives in ``utils.cache`` with
+AniList discovery: when an AniList ID can be resolved for a title, episode
+data is keyed by that stable ID instead of the raw (source-specific) title.
 
-Cache settings (location, duration) are configured in config.py
+They live in the service layer (not ``utils``) because they depend on AniList
+discovery, which is itself a service-layer concern.
 """
 
-from utils.cache import (
-    get_cache as _get_unified_cache,
-    clear_cache_all,
-    clear_cache_by_prefix,
-)
-from utils.anilist_discovery import get_anilist_id_from_title
-from models.models import ScraperCacheData
+from models.config import settings
+from utils.cache import get_cache
+
+from services.anilist.discovery import get_anilist_id_from_title
 
 
-def get_cache(anime_title: str) -> ScraperCacheData | None:
-    """Get cached scraper data for an anime (backward compatibility wrapper).
+def get_scraper_cache(anime_title: str):
+    """Get cached scraper data for an anime.
 
     Args:
         anime_title: Normalized anime title
 
     Returns:
         ScraperCacheData with episode_urls and episode_count or None if not found
-
     """
-    from models.config import settings
+    from models.models import ScraperCacheData
 
     # Check if episodes cache is enabled
     if not settings.cache.episodes_cache_enabled:
@@ -41,7 +39,7 @@ def get_cache(anime_title: str) -> ScraperCacheData | None:
             cache_key = f"episodes:{anime_title}"
 
         # Get from unified cache system
-        cache_obj = _get_unified_cache()
+        cache_obj = get_cache()
         cached_urls = cache_obj.get(cache_key)
 
         if cached_urls and isinstance(cached_urls, list):
@@ -57,23 +55,20 @@ def get_cache(anime_title: str) -> ScraperCacheData | None:
         return None
 
 
-def set_cache(anime_title: str, episode_count: int, episode_urls: list[str]) -> None:
-    """Save scraper results to cache (backward compatibility wrapper).
+def set_scraper_cache(anime_title: str, episode_count: int, episode_urls: list[str]) -> None:
+    """Save scraper results to cache.
 
     Args:
         anime_title: Normalized anime title
         episode_count: Number of episodes found
         episode_urls: List of episode URLs
-
     """
-    from models.config import settings
-
     # Check if episodes cache is enabled
     if not settings.cache.episodes_cache_enabled:
         return
 
     try:
-        cache_obj = _get_unified_cache()
+        cache_obj = get_cache()
 
         # Try to discover AniList ID for better cache key
         anilist_id = get_anilist_id_from_title(anime_title)
@@ -88,27 +83,3 @@ def set_cache(anime_title: str, episode_count: int, episode_urls: list[str]) -> 
 
     except Exception:
         pass  # Silent fail - cache is optional
-
-
-def clear_cache(anime_title: str | None = None) -> None:
-    """Clear cache for specific anime or all cache (backward compatibility wrapper).
-
-    Args:
-        anime_title: Anime to clear, or None to clear all
-
-    """
-    try:
-        if anime_title is None:
-            # Clear all cache
-            clear_cache_all()
-        else:
-            # Try to discover AniList ID for precise clearing
-            anilist_id = get_anilist_id_from_title(anime_title)
-
-            if anilist_id:
-                clear_cache_by_prefix(f":{anilist_id}:")
-            else:
-                clear_cache_by_prefix(f":{anime_title}:")
-
-    except Exception:
-        pass  # Silent fail

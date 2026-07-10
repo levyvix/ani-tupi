@@ -22,7 +22,7 @@ from .anilist_integration import (
 )
 from .source_management import switch_anime_source
 from .search import search_anime_flow
-from .anilist_discovery_service import AniListDiscoveryResult, discover_anilist_info
+from services.anilist.discovery import AniListDiscoveryResult, discover_anilist_info
 from .progress_service import (
     EpisodeProgressInfo,
     ProgressContext,

@@ -103,7 +103,7 @@ class PlaybackCoordinator:
 
         # CACHE CHECK: Try to get video URL from cache first
         try:
-            from utils.cache_manager import get_cache as get_dc
+            from utils.cache import get_cache as get_dc
 
             dc = get_dc()
             cache_key_full = f"video:{cache_key}:ep:{episode_num}"

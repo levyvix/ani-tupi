@@ -15,7 +15,7 @@ from datetime import datetime, UTC
 
 from models.config import settings
 from models.models import AiringAnimeEntry, AniListTitle
-from services.anilist_service import anilist_client
+from services.anilist import anilist_client
 from utils.cache import get_cache
 
 
@@ -128,7 +128,8 @@ class AiringEpisodesService:
         if cached:
             try:
                 return [AiringAnimeEntry.model_validate(item) for item in cached]
-            except Exception:
+            except Exception as exc:
+                logger.debug("Failed to validate cached airing entries: %s", exc)
                 pass
 
         # Fetch raw API entries

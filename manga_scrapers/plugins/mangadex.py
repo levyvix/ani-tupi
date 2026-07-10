@@ -8,6 +8,14 @@ from typing import Any
 
 import httpx
 
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+REQUEST_TIMEOUT = 10
+
+_NETWORK_ERRORS = (httpx.HTTPError, ConnectionError, TimeoutError)
+
 
 class MangaDex:
     """MangaDex API scraper plugin."""
@@ -32,12 +40,16 @@ class MangaDex:
             resp = httpx.get(
                 f"{self.base_url}/manga",
                 params={"title": query, "limit": 100},
-                timeout=10,
+                timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
             resp.raise_for_status()
             data = resp.json()
-        except Exception:
+        except _NETWORK_ERRORS as exc:
+            logger.warning(f"MangaDex search_manga network error for '{query}': {exc}")
+            return []
+        except Exception as exc:
+            logger.debug(f"MangaDex search_manga failed for '{query}': {exc}")
             return []
 
         if not data.get("data"):
@@ -102,7 +114,7 @@ class MangaDex:
                 resp = httpx.get(
                     f"{self.base_url}/manga/{manga_id}/feed",
                     params=params,
-                    timeout=10,
+                    timeout=REQUEST_TIMEOUT,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -144,7 +156,11 @@ class MangaDex:
 
             return chapters
 
-        except Exception:
+        except _NETWORK_ERRORS as exc:
+            logger.warning(f"MangaDex get_chapters network error for '{manga_id}': {exc}")
+            return []
+        except Exception as exc:
+            logger.debug(f"MangaDex get_chapters failed for '{manga_id}': {exc}")
             return []
 
     def get_chapter_pages(self, chapter_id: str, chapter_url: str) -> list[str]:
@@ -160,7 +176,7 @@ class MangaDex:
         try:
             resp = httpx.get(
                 f"{self.base_url}/at-home/server/{chapter_id}",
-                timeout=10,
+                timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
             resp.raise_for_status()
@@ -172,7 +188,11 @@ class MangaDex:
 
             return [f"{base_url}/data/{hash_code}/{filename}" for filename in files]
 
-        except Exception:
+        except _NETWORK_ERRORS as exc:
+            logger.warning(f"MangaDex get_chapter_pages network error for '{chapter_id}': {exc}")
+            return []
+        except Exception as exc:
+            logger.debug(f"MangaDex get_chapter_pages failed for '{chapter_id}': {exc}")
             return []
 
     @staticmethod

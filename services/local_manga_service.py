@@ -258,7 +258,7 @@ class LocalMangaService:
                 # Try fuzzy search using AniList discovery
                 logger.debug(f"Searching AniList for: {manga_title}")
                 try:
-                    from utils.anilist_discovery import get_anilist_id_from_title
+                    from services.anilist.discovery import get_anilist_id_from_title
 
                     anilist_id = get_anilist_id_from_title(manga_title)
                 except Exception as search_error:

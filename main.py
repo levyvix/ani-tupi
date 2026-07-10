@@ -11,6 +11,8 @@ from commands import manga as manga_cmd
 from commands import manage_sources as manage_sources_cmd
 from commands import config as config_cmd
 from commands import update as update_cmd
+from commands.cache import handle_clear_cache
+from commands.update import run_startup_update_check, show_version_info
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -61,38 +63,6 @@ def main_menu_flow(args) -> None:
             manga_cmd(args)
         elif choice == "⚙️  Gerenciar Fontes":
             manage_sources_cmd(args)
-
-
-def run_startup_update_check() -> None:
-    """Check for updates and render startup notice when available."""
-    try:
-        from services.update_check_service import UpdateCheckService
-
-        result = UpdateCheckService().check_for_updates()
-        if result.update_available and result.message:
-            logger.info(result.message)
-    except Exception as exc:
-        logger.debug(f"Startup update check skipped due to unexpected error: {exc}")
-
-
-def show_version_info() -> None:
-    """Show local version and compare with latest remote release."""
-    from services.update_check_service import UpdateCheckService
-    from models.config import settings
-
-    service = UpdateCheckService()
-    local_version, latest_version = service.get_version_info()
-
-    logger.info(f"ani-tupi local: {local_version}")
-    if not latest_version:
-        logger.info("ani-tupi remoto: indisponível (falha ao consultar release)")
-        return
-
-    logger.info(f"ani-tupi remoto: {latest_version}")
-    if service.is_remote_newer(local_version, latest_version):
-        logger.info(f"⬆️  Atualização disponível. Execute: {settings.updates.update_command}")
-    else:
-        logger.info("✅ Você já está na versão mais recente.")
 
 
 def cli() -> None:
@@ -215,27 +185,7 @@ def cli() -> None:
 
     # Handle --clear-cache before other commands
     if args.clear_cache:
-        from utils.cache_manager import clear_cache_all, clear_cache_by_prefix
-        from utils.anilist_discovery import auto_discover_anilist_id
-        from services.anime.mappings import clear_anilist_mapping
-
-        if args.clear_cache is True:
-            # Clear all cache
-            clear_cache_all()
-            logger.info("✅ Cache completamente limpo!")
-        else:
-            # Try to discover AniList ID for more precise clearing
-            anilist_id = auto_discover_anilist_id(args.clear_cache)
-            if anilist_id:
-                clear_cache_by_prefix(f":{anilist_id}:")
-                clear_anilist_mapping(anilist_id)
-                logger.info(
-                    f"✅ Cache de '{args.clear_cache}' (AniList ID {anilist_id}) foi limpo!"
-                )
-            else:
-                # Fallback: clear by title prefix
-                clear_cache_by_prefix(f":{args.clear_cache}:")
-                logger.info(f"✅ Cache de '{args.clear_cache}' foi limpo!")
+        handle_clear_cache(args.clear_cache)
         sys.exit(0)
 
     # Handle commands

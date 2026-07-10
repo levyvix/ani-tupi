@@ -4,6 +4,10 @@ Handles single chapter downloads, batch downloads, and download range prompting.
 Extracted from manga_tupi.py to improve maintainability and enable unit testing.
 """
 
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from os import cpu_count
 from pathlib import Path
 import httpx
 from InquirerPy import inquirer
@@ -14,6 +18,45 @@ from utils.logging import get_logger
 from utils.range_parser import parse_range_input
 
 logger = get_logger(__name__)
+
+# Minimum fraction of a chapter's pages that must download successfully for the
+# chapter to be considered a valid download (below this the chapter is failed).
+MIN_DOWNLOAD_SUCCESS_RATIO = 0.5
+
+
+@dataclass
+class BatchDownloadResult:
+    """Outcome of a batch download run."""
+
+    successful: int = 0
+    failed_chapters: list[str] = field(default_factory=list)
+    cancelled: bool = False
+
+
+def split_new_and_downloaded(
+    chapters: list,
+    manga_id: str,
+    tracker: DownloadedChaptersTracker,
+) -> tuple[list, list]:
+    """Split chapters into (new, already_downloaded) per the tracker.
+
+    Pure helper so the command layer can decide how to prompt the user.
+    """
+    already_downloaded = []
+    new_chapters = []
+    for chapter in chapters:
+        if tracker.is_downloaded(manga_id, chapter.number):
+            already_downloaded.append(chapter)
+        else:
+            new_chapters.append(chapter)
+    return new_chapters, already_downloaded
+
+
+def resolve_parallelism(max_parallel: int) -> int:
+    """Resolve the effective worker count (0 means use CPU count)."""
+    if max_parallel == 0:
+        return cpu_count() or 4
+    return max_parallel
 
 
 def download_chapter(
@@ -99,7 +142,7 @@ def download_chapter(
                 f"Nenhuma imagem válida baixada para capítulo {chapter.number}",
             )
 
-        if len(image_files) < len(pages) * 0.5:
+        if len(image_files) < len(pages) * MIN_DOWNLOAD_SUCCESS_RATIO:
             return (
                 False,
                 f"Apenas {len(image_files)}/{len(pages)} imagens válidas baixadas para capítulo {chapter.number}",
@@ -149,8 +192,13 @@ def download_chapters_batch(
     selected_source: str,
     config,
     tracker: DownloadedChaptersTracker,
-) -> tuple[int, list[str]]:
-    """Download multiple chapters with progress tracking.
+    max_parallel: int = 1,
+    on_progress: Callable[[int, list[str]], None] | None = None,
+    on_failure: Callable[[str], bool] | None = None,
+) -> BatchDownloadResult:
+    """Download multiple chapters sequentially or in parallel.
+
+    UI-free: no menus, no progress bars. Callers hook in via callbacks.
 
     Args:
         chapters: List of ChapterData objects to download
@@ -160,33 +208,79 @@ def download_chapters_batch(
         selected_source: Source name
         config: Manga settings
         tracker: DownloadedChaptersTracker instance
+        max_parallel: Number of parallel workers (0 = CPU count, 1 = sequential)
+        on_progress: Optional callback(successful, failed) invoked after each
+            chapter finishes (used to update a progress bar).
+        on_failure: Optional callback(error_msg) -> bool invoked when a chapter
+            fails during a *sequential* run. Return False to abort the batch.
+            Ignored in parallel mode (all submitted tasks run to completion).
 
     Returns:
-        Tuple of (successful_count, failed_chapter_numbers)
+        BatchDownloadResult with counts and (for sequential) a cancelled flag.
     """
-    successful = 0
-    failed_chapters = []
+    workers = resolve_parallelism(max_parallel)
+    total = len(chapters)
+    result = BatchDownloadResult()
 
-    for i, chapter in enumerate(chapters, 1):
-        success, error_msg = download_chapter(
-            chapter,
-            service,
-            selected_manga,
-            manga_url,
-            selected_source,
-            config,
-            tracker,
-            i,
-            len(chapters),
-        )
+    if workers == 1 or total == 1:
+        for i, chapter in enumerate(chapters, 1):
+            success, error_msg = download_chapter(
+                chapter,
+                service,
+                selected_manga,
+                manga_url,
+                selected_source,
+                config,
+                tracker,
+                i,
+                total,
+            )
+            if success:
+                result.successful += 1
+            else:
+                logger.info(f"❌ {error_msg}")
+                result.failed_chapters.append(chapter.number)
+                if on_failure is not None and not on_failure(error_msg):
+                    result.cancelled = True
+                    break
+            if on_progress is not None:
+                on_progress(result.successful, result.failed_chapters)
+        return result
 
-        if success:
-            successful += 1
-        else:
-            failed_chapters.append(chapter.number)
-            logger.info(f"❌ {error_msg}")
+    # Parallel download.
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_chapter = {
+            executor.submit(
+                download_chapter,
+                chapter,
+                service,
+                selected_manga,
+                manga_url,
+                selected_source,
+                config,
+                tracker,
+                i,
+                total,
+            ): chapter
+            for i, chapter in enumerate(chapters, 1)
+        }
 
-    return successful, failed_chapters
+        for future in as_completed(future_to_chapter):
+            chapter = future_to_chapter[future]
+            try:
+                success, error_msg = future.result()
+                if success:
+                    result.successful += 1
+                else:
+                    logger.info(f"❌ {error_msg}")
+                    result.failed_chapters.append(chapter.number)
+            except Exception as e:
+                logger.info(f"❌ Erro inesperado no capítulo {chapter.number}: {e}")
+                result.failed_chapters.append(chapter.number)
+            if on_progress is not None:
+                on_progress(result.successful, result.failed_chapters)
+
+    return result
 
 
 def prompt_download_range(

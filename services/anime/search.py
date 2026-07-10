@@ -4,28 +4,28 @@ Handles manual anime search with progressive word reduction,
 cache integration, and scraper discovery.
 """
 
-import os
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import FIRST_EXCEPTION, ProcessPoolExecutor, wait
 from dataclasses import dataclass, field
 
 from models.config import settings
 from models.models import AnimeTitleResolution
 from services.anime.title_resolution import AnimeTitleResolver
 from services.repository import rep
-from ui.components import loading, menu_navigate, menu_navigate_episodes
-from utils.scraper_cache import get_cache
+from services import ui_bridge
+from services.anilist.scraper_cache import get_scraper_cache
 from services.anime.title_normalization import normalize_anime_title
 from utils.logging import get_logger
 
 
 logger = get_logger(__name__)
-INCREMENTAL_SEARCH_MAX_RESULTS = 20
+# Sourced from user-tunable settings (ANI_TUPI__SEARCH__INCREMENTAL_MAX_RESULTS).
+INCREMENTAL_SEARCH_MAX_RESULTS = settings.search.incremental_max_results
 
 
 def _debug_incremental_search(message: str) -> None:
     """Emit opt-in debug logs for incremental search investigations."""
-    if os.getenv("ANI_TUPI_DEBUG_INCREMENTAL_SEARCH") == "1":
+    if settings.debug_incremental_search:
         logger.info(f"🔎 [incremental] {message}")
 
 
@@ -83,10 +83,8 @@ def _filter_anime_results(titles: list[str], query: str) -> list[str]:
         normalized title, or the compact normalized query appears in the
         compact normalized title
     """
-    from services.search_repository import SearchRepository as _SearchRepository
     from services.anime.title_normalization import get_compact_normalized_title_key
-
-    normalize_fn = _SearchRepository._normalize_for_filter
+    from utils.title_utils import normalize_title_for_filter as normalize_fn
 
     query_normalized = normalize_fn(query)
     query_compact = get_compact_normalized_title_key(query_normalized)
@@ -116,9 +114,10 @@ def _rank_anime_results_by_reference(titles: list[str], reference_title: str) ->
     """Rank title strings using the canonical AniList reference title."""
     from thefuzz import fuzz
     from services.search_repository import SearchRepository
+    from utils.title_utils import normalize_title_for_filter
 
     reference_title = reference_title.split(" / ")[0]
-    reference_normalized = SearchRepository._normalize_for_filter(reference_title)
+    reference_normalized = normalize_title_for_filter(reference_title)
     reference_compact = SearchRepository._normalize_for_similarity(reference_title)
     reference_words = SearchRepository._normalize_words_for_similarity(reference_title)
 
@@ -131,7 +130,7 @@ def _rank_anime_results_by_reference(titles: list[str], reference_title: str) ->
     scored_titles = []
     for title in titles:
         base_title = title.split(" [")[0] if " [" in title else title
-        normalized_title = SearchRepository._normalize_for_filter(base_title)
+        normalized_title = normalize_title_for_filter(base_title)
         compact_title = SearchRepository._normalize_for_similarity(base_title)
         title_words = SearchRepository._normalize_words_for_similarity(base_title)
 
@@ -173,17 +172,18 @@ def _best_similarity_score_for_reference(titles: list[str], reference_title: str
     """Return the best similarity score between results and a reference title."""
     from thefuzz import fuzz
     from services.search_repository import SearchRepository
+    from utils.title_utils import normalize_title_for_filter
 
     if not titles or not reference_title:
         return 0
 
-    reference_normalized = SearchRepository._normalize_for_filter(reference_title)
+    reference_normalized = normalize_title_for_filter(reference_title)
     reference_compact = SearchRepository._normalize_for_similarity(reference_title)
     best_score = 0
 
     for title in titles:
         base_title = title.split(" [")[0] if " [" in title else title
-        normalized_title = SearchRepository._normalize_for_filter(base_title)
+        normalized_title = normalize_title_for_filter(base_title)
         compact_title = SearchRepository._normalize_for_similarity(base_title)
 
         score = max(
@@ -352,6 +352,14 @@ class IncrementalSearchState:
     def toggle_language(self) -> str:
         """Switch to the alternative language and update state.
 
+        NOTE: this intentionally mutates ``self`` in place. Unlike the
+        source-selection helpers, ``IncrementalSearchState`` is loop-owned
+        internal search state (never a caller-passed input to transform), and
+        the interactive search loop that owns it relies on this in-place
+        semantics. Making it return a new copy would be invasive here (and the
+        toggle-language tests assert in-place mutation), so it is not an
+        immutable-data-flow violation.
+
         Returns:
             The new current language after toggle
 
@@ -378,6 +386,94 @@ class IncrementalSearchState:
             f"{current.word_count} words, {len(current.results)} results" if current else "none"
         )
         return f"IncrementalSearchState(current={current_str}, history_size={len(self.search_history)})"
+
+
+def _count_sources(titles_with_sources: list[str]) -> dict[str, int]:
+    """Count how many results each source contributed.
+
+    Parses the ``"Title [source]"`` display format and tallies each source.
+    """
+    source_counts: dict[str, int] = {}
+    for title_entry in titles_with_sources:
+        if " [" in title_entry:
+            _, source = title_entry.rsplit(" [", 1)
+            source = source.rstrip("]")
+            source_counts[source] = source_counts.get(source, 0) + 1
+    return source_counts
+
+
+@dataclass
+class _ScraperSearchOutcome:
+    """Result of a single scraper search + ranking pass."""
+
+    titles_with_sources: list[str]
+    used_query: str
+    anilist_reference_title: str | None
+
+
+def _perform_scraper_search(partial_query: str) -> _ScraperSearchOutcome:
+    """Run a scraper search for ``partial_query`` and rank the results.
+
+    Clears prior results, searches all scrapers, attempts an AniList match for
+    ranking, and returns the ranked titles-with-sources plus the query actually
+    used and any AniList reference title discovered.
+    """
+    rep.clear_search_results()
+    rep.search_anime(partial_query, verbose=True)
+
+    search_metadata = rep.get_search_metadata()
+    used_query = search_metadata.used_query or partial_query
+
+    ranking_query = used_query
+    anilist_reference_title: str | None = None
+    anilist_results = None
+    try:
+        from services.anilist.discovery import auto_discover_anilist_id
+
+        anilist_results = auto_discover_anilist_id(used_query)
+        if anilist_results:
+            ranking_query = anilist_results[0].title
+            anilist_reference_title = ranking_query
+    except Exception as e:
+        logger.debug(f"AniList indisponível para '{used_query}': {e}")
+
+    titles_with_sources = _get_ranked_titles_with_sources(
+        filter_by_query=used_query,
+        original_query=ranking_query,
+        anilist_results=anilist_results,
+    )
+
+    if anilist_reference_title:
+        titles_with_sources = _rank_anime_results_by_reference(
+            titles_with_sources, anilist_reference_title
+        )
+
+    return _ScraperSearchOutcome(titles_with_sources, used_query, anilist_reference_title)
+
+
+def _init_language_tracking(
+    state: IncrementalSearchState,
+    query: str,
+    english_title: str | None,
+    romaji_title: str | None,
+) -> None:
+    """Seed language-toggle tracking on ``state`` from the query's language."""
+    if not (english_title and romaji_title and english_title != romaji_title):
+        return
+
+    query_lower = query.lower()
+    english_lower = english_title.lower()
+
+    if english_lower in query_lower or query_lower == english_lower:
+        state.current_language = "english"
+        state.current_title = english_title
+        state.alternative_title = romaji_title
+        state.alternative_language = "romaji"
+    else:
+        state.current_language = "romaji"
+        state.current_title = romaji_title
+        state.alternative_title = english_title
+        state.alternative_language = "english"
 
 
 def incremental_search_anime(
@@ -407,25 +503,7 @@ def incremental_search_anime(
     """
     state = IncrementalSearchState()
 
-    # Initialize language tracking if both titles are provided
-    if english_title and romaji_title and english_title != romaji_title:
-        # Determine current language based on query
-        query_lower = query.lower()
-        english_lower = english_title.lower()
-
-        # Check which title is closer to the query
-        if english_lower in query_lower or query_lower == english_lower:
-            # Query matches English title
-            state.current_language = "english"
-            state.current_title = english_title
-            state.alternative_title = romaji_title
-            state.alternative_language = "romaji"
-        else:
-            # Default to Romaji or if query matches Romaji
-            state.current_language = "romaji"
-            state.current_title = romaji_title
-            state.alternative_title = english_title
-            state.alternative_language = "english"
+    _init_language_tracking(state, query, english_title, romaji_title)
 
     # Normalize query first (remove season patterns, punctuation, convert to lowercase, etc)
     # normalize_anime_title() returns a list of variations from most specific to least
@@ -449,7 +527,6 @@ def incremental_search_anime(
     current_results: list[str] = []
     base_results: list[str] = []  # Store base search results for filtering
     anilist_reference_title: str | None = None
-    anilist_results = None
 
     # Progressive filtering: add words until results ≤ 20
     # After the initial base search, we filter results instead of re-searching scrapers
@@ -461,38 +538,14 @@ def incremental_search_anime(
         if current_word_count == start_word_count:
             # Initial search: execute scraper search (only happens once)
             # All subsequent iterations will filter this base result set
-            rep.clear_search_results()
             try:
-                with loading(f"Buscando '{partial_query}'..."):
-                    rep.search_anime(partial_query, verbose=True)
+                with ui_bridge.loading(f"Buscando '{partial_query}'..."):
+                    outcome = _perform_scraper_search(partial_query)
 
-                # Get results from this iteration
-                search_metadata = rep.get_search_metadata()
-                used_query = search_metadata.used_query or partial_query
-
-                # Try to get AniList match for ranking
-                ranking_query = used_query
-                try:
-                    from utils.anilist_discovery import auto_discover_anilist_id
-
-                    anilist_results = auto_discover_anilist_id(used_query)
-                    if anilist_results:
-                        ranking_query = anilist_results[0].title
-                        anilist_reference_title = ranking_query
-                except Exception as e:
-                    logger.debug(f"AniList indisponível para '{used_query}': {e}")
-
-                # Get anime titles with sources, ranked by AniList if available
-                titles_with_sources = _get_ranked_titles_with_sources(
-                    filter_by_query=used_query,
-                    original_query=ranking_query,
-                    anilist_results=anilist_results,
-                )
-
-                if anilist_reference_title:
-                    titles_with_sources = _rank_anime_results_by_reference(
-                        titles_with_sources, anilist_reference_title
-                    )
+                used_query = outcome.used_query
+                if outcome.anilist_reference_title:
+                    anilist_reference_title = outcome.anilist_reference_title
+                titles_with_sources = outcome.titles_with_sources
 
                 # Store base results for filtering in subsequent iterations
                 # These results are from the base N-word search and will be filtered, not re-searched
@@ -502,21 +555,12 @@ def incremental_search_anime(
                     f"base_search results={len(current_results)} used_query='{used_query}'"
                 )
 
-                # Count results from each source for metadata
-                source_counts: dict[str, int] = {}
-                for title_entry in titles_with_sources:
-                    # Parse "Title [source]" format
-                    if " [" in title_entry:
-                        _, source = title_entry.rsplit(" [", 1)
-                        source = source.rstrip("]")
-                        source_counts[source] = source_counts.get(source, 0) + 1
-
                 # Store results in state (with normalized used_query)
                 state.add_result(
                     current_word_count,
                     partial_query,
                     titles_with_sources,
-                    source_counts,
+                    _count_sources(titles_with_sources),
                     used_query=used_query,
                     is_filtered=False,
                 )
@@ -544,7 +588,7 @@ def incremental_search_anime(
             # Subsequent iterations: filter base results instead of re-searching
             # This avoids unnecessary scraper calls and is much faster
             try:
-                with loading(f"Filtrando '{partial_query}'..."):
+                with ui_bridge.loading(f"Filtrando '{partial_query}'..."):
                     # Filter the base results by the expanded query
                     # Uses substring matching on normalized titles (same as repository does)
                     filtered = _filter_anime_results(base_results, partial_query)
@@ -571,37 +615,13 @@ def incremental_search_anime(
                         f"fresh_search triggered for='{partial_query}' because filtered_count={len(filtered)}"
                     )
                     # Clear and re-search with the full query
-                    rep.clear_search_results()
-                    with loading(f"Buscando '{partial_query}'..."):
-                        rep.search_anime(partial_query, verbose=True)
+                    with ui_bridge.loading(f"Buscando '{partial_query}'..."):
+                        outcome = _perform_scraper_search(partial_query)
 
-                    # Get results from fresh search
-                    search_metadata = rep.get_search_metadata()
-                    used_query = search_metadata.used_query or partial_query
-
-                    # Try to get AniList match for ranking
-                    ranking_query = used_query
-                    try:
-                        from utils.anilist_discovery import auto_discover_anilist_id
-
-                        anilist_results = auto_discover_anilist_id(used_query)
-                        if anilist_results:
-                            ranking_query = anilist_results[0].title
-                            anilist_reference_title = ranking_query
-                    except Exception as e:
-                        logger.debug(f"AniList indisponível para '{used_query}': {e}")
-
-                    # Get anime titles with sources, ranked by AniList if available
-                    titles_with_sources = _get_ranked_titles_with_sources(
-                        filter_by_query=used_query,
-                        original_query=ranking_query,
-                        anilist_results=anilist_results,
-                    )
-
-                    if anilist_reference_title:
-                        titles_with_sources = _rank_anime_results_by_reference(
-                            titles_with_sources, anilist_reference_title
-                        )
+                    used_query = outcome.used_query
+                    if outcome.anilist_reference_title:
+                        anilist_reference_title = outcome.anilist_reference_title
+                    titles_with_sources = outcome.titles_with_sources
 
                     if not titles_with_sources:
                         _debug_incremental_search(
@@ -623,19 +643,11 @@ def incremental_search_anime(
                         f"fresh_search results={len(current_results)} used_query='{used_query}'"
                     )
 
-                    # Count results from each source for metadata
-                    source_counts: dict[str, int] = {}
-                    for title_entry in titles_with_sources:
-                        if " [" in title_entry:
-                            _, source = title_entry.rsplit(" [", 1)
-                            source = source.rstrip("]")
-                            source_counts[source] = source_counts.get(source, 0) + 1
-
                     state.add_result(
                         current_word_count,
                         partial_query,
                         titles_with_sources,
-                        source_counts,
+                        _count_sources(titles_with_sources),
                         used_query=used_query,
                         is_filtered=False,  # This was a fresh search, not a filter
                     )
@@ -651,20 +663,11 @@ def incremental_search_anime(
                         f"using_filtered_results count={len(current_results)} for='{partial_query}'"
                     )
 
-                    # Count results from each source for metadata
-                    source_counts: dict[str, int] = {}
-                    for title_entry in filtered:
-                        # Parse "Title [source]" format
-                        if " [" in title_entry:
-                            _, source = title_entry.rsplit(" [", 1)
-                            source = source.rstrip("]")
-                            source_counts[source] = source_counts.get(source, 0) + 1
-
                     state.add_result(
                         current_word_count,
                         partial_query,
                         filtered,
-                        source_counts,
+                        _count_sources(filtered),
                         used_query=partial_query,
                         is_filtered=True,
                     )
@@ -829,8 +832,19 @@ def run_dual_contextual_search(user_query: str, official_query: str) -> DualSear
             official_query,
             official_query,
         )
-        user_payload = user_future.result()
-        official_payload = official_future.result()
+        futures = (user_future, official_future)
+        # Wait for both to settle (or for the first failure). This ensures a
+        # failure in one future never leaves the other's result unretrieved.
+        wait(futures, return_when=FIRST_EXCEPTION)
+        try:
+            user_payload = user_future.result()
+            official_payload = official_future.result()
+        except BaseException:
+            # Cancel anything still pending, then let the ``with`` block's
+            # shutdown(wait=True) reap the running worker, and re-raise.
+            for future in futures:
+                future.cancel()
+            raise
 
     return DualSearchResults(
         user_query=user_query,
@@ -893,7 +907,7 @@ def _select_from_manual_search_results(
             titles_with_button = filtered_titles
             show_continue_msg = ""
 
-        selected_anime_with_source = menu_navigate(
+        selected_anime_with_source = ui_bridge.menu_navigate(
             titles_with_button,
             msg=f"Escolha o Anime.{show_continue_msg}",
             enable_search=False,
@@ -948,7 +962,7 @@ def _select_from_dual_search_results(
     if not seen_titles:
         return ManualSearchSelection(selected_anime=None, source=None, was_cancelled=False)
 
-    selected_anime_with_source = menu_navigate(
+    selected_anime_with_source = ui_bridge.menu_navigate(
         options,
         msg="Escolha o Anime.",
         enable_search=False,
@@ -1016,6 +1030,23 @@ def _build_search_query_candidates(
     return candidates
 
 
+def _try_cache_hit(candidate_query: str) -> bool:
+    """Populate the repository from cache for ``candidate_query`` if present.
+
+    Returns ``True`` when a cache entry was found and loaded (so the caller can
+    treat ``candidate_query`` as the selected anime), ``False`` otherwise.
+    """
+    cache_data = get_scraper_cache(candidate_query)
+    if not cache_data:
+        return False
+
+    logger.info(f"Usando cache ({cache_data.episode_count} eps disponíveis)")
+    # Populate repository from cache and discover available sources (background search).
+    rep.load_from_cache(candidate_query, cache_data)
+    rep.search_anime(candidate_query, verbose=False)
+    return True
+
+
 def search_anime_flow(args):
     """Flow for searching and selecting an anime with progressive search support.
 
@@ -1028,7 +1059,7 @@ def search_anime_flow(args):
     # (Repository is singleton, so it keeps data between calls)
     rep.clear_search_results()
 
-    query = input("\n🔍 Pesquise anime: ") if not args.query else args.query
+    query = ui_bridge.prompt("\n🔍 Pesquise anime: ") if not args.query else args.query
 
     source = None
     resolution = _resolve_search_query(query)
@@ -1056,16 +1087,7 @@ def search_anime_flow(args):
 
     for candidate_query in [] if selected_anime else [query]:
         # Cache-first: Check if query is in cache before searching scrapers
-        cache_data = get_cache(candidate_query)
-
-        if cache_data:
-            logger.info(f"Usando cache ({cache_data.episode_count} eps disponíveis)")
-            # Populate repository from cache
-            rep.load_from_cache(candidate_query, cache_data)
-
-            # Discover available sources for this anime (background search)
-            rep.search_anime(candidate_query, verbose=False)
-
+        if _try_cache_hit(candidate_query):
             selected_anime = candidate_query
             break
 
@@ -1102,12 +1124,7 @@ def search_anime_flow(args):
                     f"{candidate_query}"
                 )
 
-            cache_data = get_cache(candidate_query)
-
-            if cache_data:
-                logger.info(f"Usando cache ({cache_data.episode_count} eps disponíveis)")
-                rep.load_from_cache(candidate_query, cache_data)
-                rep.search_anime(candidate_query, verbose=False)
+            if _try_cache_hit(candidate_query):
                 selected_anime = candidate_query
                 break
 
@@ -1141,7 +1158,7 @@ def search_anime_flow(args):
     if fallback_resolution:
         fallback_queries.append(fallback_resolution.resolved_title)
 
-    with loading("Carregando episódios..."):
+    with ui_bridge.loading("Carregando episódios..."):
         if not _ensure_anime_sources_in_repo(selected_anime, *fallback_queries):
             logger.warning(
                 "Não foi possível localizar fontes para '%s' após a seleção.",
@@ -1178,7 +1195,9 @@ def search_anime_flow(args):
                     season_options.append((season, f"🎬 Estação {season}"))
 
             season_options_display = [opt[1] for opt in season_options]
-            selected_option = menu_navigate(season_options_display, msg="Escolha a estação.")
+            selected_option = ui_bridge.menu_navigate(
+                season_options_display, msg="Escolha a estação."
+            )
 
             if selected_option is None:
                 return None, None, None  # User cancelled
@@ -1208,7 +1227,7 @@ def search_anime_flow(args):
         episode_idx = args.episode - 1
     else:
         # No -e flag: show menu for user to select
-        episode_idx = menu_navigate_episodes(episode_list)
+        episode_idx = ui_bridge.menu_navigate_episodes(episode_list)
 
         if episode_idx is None:
             return None, None, None  # User cancelled
