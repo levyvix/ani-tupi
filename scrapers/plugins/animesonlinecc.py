@@ -67,7 +67,7 @@ class AnimesOnlineCC:
                 urls.append(ep_url)
 
             if titles and urls:
-                return [ScrapedEpisodes(titles, urls, self.name)]
+                return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
             return []
         except httpx.HTTPError as e:
             logger.debug(f"AnimesOnlineCC episode fetch failed for '{anime}': {e}")

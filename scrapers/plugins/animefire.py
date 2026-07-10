@@ -102,7 +102,7 @@ class AnimeFire:
                 m = re.search(r"/(\d+(?:\.\d+)?)$", href)
                 opts.append(m.group(1) if m else href.split("/")[-1])
 
-            return [ScrapedEpisodes(opts, episode_links, self.name)]
+            return [ScrapedEpisodes(titles=opts, urls=episode_links, source=self.name)]
         except Exception as e:
             logger.debug(f"AnimeFire episode fetch failed for '{anime}': {e}")
             return []

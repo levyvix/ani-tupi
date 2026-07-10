@@ -77,7 +77,7 @@ class AnRoll:
                 if first_ep_url:
                     titles, urls = self._episodes_from_sidebar(first_ep_url)
             if titles and urls:
-                return [ScrapedEpisodes(titles, urls, self.name)]
+                return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
             return []
         except httpx.HTTPError as e:
             logger.debug("anroll search_episodes falhou: %s", e)
