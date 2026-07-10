@@ -1,11 +1,15 @@
 """Tests for the AniList per-anime actions menu and its helpers."""
 
+import builtins
 from argparse import Namespace
+from contextlib import contextmanager
 from unittest.mock import Mock, patch
 
 import pytest
 
 import commands.anilist as cmd
+import services.anilist as svc_anilist
+import services.anime.download_service as dl_service
 import ui.anilist_menus as menus
 from models.models import Status
 from utils.range_parser import RangeParseError
@@ -41,59 +45,122 @@ def _make_client(authenticated=True):
     entry = Mock()
     entry.progress = 3
     client.get_media_list_entry.return_value = entry
+    client.change_status.return_value = True
     return client
 
 
+def _make_download_service():
+    """Fake external AnimeDownloadService (network/filesystem boundary)."""
+    service = Mock()
+    result = Mock()
+    result.summary = "2 baixados"
+    service.download_episodes.return_value = result
+    return service
+
+
+# Menu labels exposed by the real ``ui.anilist_menus`` action menu. Selecting
+# these via the (mocked) input boundary drives the real ``action_map`` routing
+# instead of substituting the module's own routing helper.
+_ACTION_LABELS = {
+    "watch": "▶️  Assistir agora",
+    "download": "📥 Baixar",
+    "status": "🔄 Mudar status",
+    "open": "🌐 Abrir página no AniList",
+}
+
+
 class TestActionLoop:
-    """Task 5.1: action loop routes each option; None returns to list."""
+    """Task 5.1: action loop routes each option; None returns to list.
 
+    Real integration: the true ``run_anime_actions`` loop, the real
+    ``anime_actions_menu`` (via the mocked ``menu_navigate`` input boundary),
+    and the real internal handlers (``_handle_anilist_download`` /
+    ``_handle_status_change``) all execute. Only genuine external boundaries
+    are faked: the AniList HTTP client, the playback service, the download
+    service, ``webbrowser``, and terminal input/menu selection.
+    """
+
+    @contextmanager
     def _run(self, actions, client, anime_info):
-        """Run anilist_menu with a mocked main menu and action sequence.
+        """Drive the real ``anilist_menu`` action loop for one selected anime.
 
-        The main menu yields one anime then exits; anime_actions_menu yields
-        the provided actions in order.
+        Yields ``(watch_mock, browser_mock)``. The real ``run_anime_actions``
+        loop, the real ``anime_actions_menu`` (via the mocked ``menu_navigate``
+        input boundary) and the real internal handlers all execute. The context
+        manager form lets individual tests layer additional external-boundary
+        fakes (download service, ``status_select_menu``) around the run.
+
+        Args:
+            actions: sequence of action keys ("watch"/"download"/"status"/
+                "open") or ``None`` (ESC); mapped to real menu labels and fed
+                to ``menu_navigate``.
+            client: fake AniList client (external boundary).
+            anime_info: fake AniList anime info returned by the client.
         """
         client.get_anime_by_id.return_value = anime_info
+
+        # Translate action keys into the real menu labels; None stays None (ESC).
+        action_selections = [_ACTION_LABELS[a] if a is not None else None for a in actions]
+        # anilist_main_menu is a pure UI selector (defined in ui.anilist_menus,
+        # not the module under test); keep it patched to select one anime, then
+        # let the real action loop run against the real menus/handlers.
         with (
-            patch("services.anilist.anilist_client", client),
+            patch.object(svc_anilist, "anilist_client", client),
             patch.object(cmd, "anilist_main_menu", side_effect=[("cool anime", 42), None]),
-            patch.object(cmd, "anime_actions_menu", side_effect=actions),
+            patch.object(menus, "menu_navigate", side_effect=action_selections),
             patch.object(cmd.anime_service, "anilist_anime_flow") as watch,
-            patch.object(cmd, "_handle_anilist_download") as download,
-            patch.object(cmd, "_handle_status_change") as status,
+            patch.object(cmd, "pause"),
             patch.object(cmd, "webbrowser") as browser,
         ):
             cmd.anilist_menu(Namespace(debug=False))
-        return watch, download, status, browser
+            yield watch, browser
 
     def test_watch_is_terminal(self, anime_info):
         client = _make_client()
-        watch, download, status, browser = self._run(["watch"], client, anime_info)
+        with self._run(["watch"], client, anime_info) as (watch, _browser):
+            pass
         watch.assert_called_once()
-        download.assert_not_called()
 
     def test_download_then_back(self, anime_info):
         client = _make_client()
-        watch, download, status, browser = self._run(["download", None], client, anime_info)
-        download.assert_called_once_with("cool anime", 12)
+        service = _make_download_service()
+        with (
+            patch.object(dl_service, "AnimeDownloadService", return_value=service),
+            patch.object(builtins, "input", return_value="1-2"),
+            self._run(["download", None], client, anime_info) as (watch, _browser),
+        ):
+            pass
+        # Real _handle_anilist_download ran and invoked the download service
+        # with the anime title and total episodes taken from the AniList client.
+        service.download_episodes.assert_called_once()
+        kwargs = service.download_episodes.call_args.kwargs
+        assert kwargs["anime_title"] == "cool anime"
+        assert kwargs["total_episodes"] == 12
         watch.assert_not_called()
 
     def test_status_then_back(self, anime_info):
         client = _make_client()
-        watch, download, status, browser = self._run(["status", None], client, anime_info)
-        status.assert_called_once_with(42)
+        client.change_status.return_value = True
+        with (
+            patch.object(cmd, "status_select_menu", return_value=Status.PAUSED),
+            self._run(["status", None], client, anime_info),
+        ):
+            pass
+        # Real _handle_status_change ran and called the external client.
+        client.change_status.assert_called_once_with(42, Status.PAUSED)
 
     def test_open_then_back(self, anime_info):
         client = _make_client()
-        watch, download, status, browser = self._run(["open", None], client, anime_info)
+        with self._run(["open", None], client, anime_info) as (_watch, browser):
+            pass
         browser.open_new_tab.assert_called_once_with("https://anilist.co/anime/42")
 
     def test_none_returns_to_list(self, anime_info):
         client = _make_client()
-        watch, download, status, browser = self._run([None], client, anime_info)
+        with self._run([None], client, anime_info) as (watch, _browser):
+            pass
         watch.assert_not_called()
-        download.assert_not_called()
-        status.assert_not_called()
+        client.change_status.assert_not_called()
 
 
 class TestHandleStatusChange:
@@ -158,10 +225,7 @@ class TestHandleDownload:
         result.summary = "2 baixados"
         service.download_episodes.return_value = result
         with (
-            patch(
-                "services.anime.download_service.AnimeDownloadService",
-                return_value=service,
-            ),
+            patch("services.anime.download_service.AnimeDownloadService", return_value=service),
             patch("builtins.input", return_value="1-2"),
             patch.object(cmd, "pause"),
             patch.object(cmd, "show_info") as info,
@@ -174,10 +238,7 @@ class TestHandleDownload:
         service = Mock()
         service.download_episodes.side_effect = RangeParseError("bad")
         with (
-            patch(
-                "services.anime.download_service.AnimeDownloadService",
-                return_value=service,
-            ),
+            patch("services.anime.download_service.AnimeDownloadService", return_value=service),
             patch("builtins.input", return_value="99-1"),
             patch.object(cmd, "pause"),
             patch.object(cmd, "show_error") as err,
