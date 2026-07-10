@@ -33,6 +33,7 @@ from services.manga.reading_flow import (
     build_manga_url,
     compute_resume_point,
     find_chapter_by_number,
+    chapter_number_value,
     find_next_chapter_index,
     match_anilist_progress,
     promote_resume_chapter,
@@ -623,7 +624,8 @@ def _sync_read_to_anilist(selected_manga, selected_chapter, pdf_path, menu) -> N
 
         best_match = search_results[0]
         list_entry = anilist_client.get_manga_list_entry(best_match.id)
-        chapter_num = int(float(selected_chapter.number))
+        chapter_value = chapter_number_value(selected_chapter.number)
+        chapter_num = int(chapter_value) if chapter_value is not None else 0
         if anilist_client.update_manga_progress(best_match.id, chapter_num):
             logger.info(
                 f"✓ Progresso atualizado no AniList: {selected_manga.title} "

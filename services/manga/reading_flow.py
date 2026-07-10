@@ -35,11 +35,25 @@ def build_manga_url(source: str, manga_id: str) -> str | None:
     return template.format(manga_id) if template else None
 
 
+def chapter_number_value(value) -> float | None:
+    """Parse a chapter number (str/int/float) to float, tolerant of commas and junk.
+
+    Single source of truth for chapter-number parsing (previously scattered as
+    ``float(...)`` / ``int(float(...))`` across the manga flow). Returns None when
+    the value is not a usable number so callers can distinguish junk from 0.
+    """
+    if value is None:
+        return None
+    try:
+        return float(str(value).replace(",", "."))
+    except (ValueError, TypeError):
+        return None
+
+
 def _chapter_sort_value(chapter: ChapterData) -> float:
     """Numeric sort key for a chapter, tolerant of commas and junk."""
-    normalized = str(chapter.number).replace(",", ".")
-    stripped = normalized.replace("-", "").replace(".", "")
-    return float(normalized) if stripped.isdigit() else 0.0
+    value = chapter_number_value(chapter.number)
+    return value if value is not None else 0.0
 
 
 def sort_chapters_ascending(chapters: list[ChapterData]) -> list[ChapterData]:
@@ -55,11 +69,9 @@ def sort_chapters_ascending(chapters: list[ChapterData]) -> list[ChapterData]:
 def find_chapter_by_number(chapters: list[ChapterData], number: int) -> ChapterData | None:
     """Return the chapter whose integer number matches, or None."""
     for chapter in chapters:
-        try:
-            if int(float(chapter.number)) == number:
-                return chapter
-        except (ValueError, TypeError):
-            continue
+        value = chapter_number_value(chapter.number)
+        if value is not None and int(value) == number:
+            return chapter
     return None
 
 
@@ -88,10 +100,10 @@ def compute_resume_point(
         return ResumePoint(chapter_number=anilist_progress + 1, source="AniList")
 
     if last_local_chapter:
-        try:
-            return ResumePoint(chapter_number=int(float(last_local_chapter)) + 1, source="local")
-        except (ValueError, TypeError):
-            return None
+        value = chapter_number_value(last_local_chapter)
+        if value is not None:
+            return ResumePoint(chapter_number=int(value) + 1, source="local")
+        return None
 
     return None
 
@@ -112,12 +124,10 @@ def promote_resume_chapter(
 
     recommended_index = None
     for i, chapter in enumerate(chapters):
-        try:
-            if int(float(chapter.number)) == resume_point.chapter_number:
-                recommended_index = i
-                break
-        except (ValueError, TypeError):
-            continue
+        value = chapter_number_value(chapter.number)
+        if value is not None and int(value) == resume_point.chapter_number:
+            recommended_index = i
+            break
 
     index = recommended_index if recommended_index is not None else 0
     if index >= len(chapters):
@@ -132,9 +142,12 @@ def promote_resume_chapter(
 
 def find_next_chapter_index(chapters: list[ChapterData], current_number: str) -> int | None:
     """Return the index of the first chapter numbered greater than current_number."""
-    current_value = float(current_number)
+    current_value = chapter_number_value(current_number)
+    if current_value is None:
+        return None
     for i, chapter in enumerate(chapters):
-        if float(chapter.number) > current_value:
+        value = chapter_number_value(chapter.number)
+        if value is not None and value > current_value:
             return i
     return None
 
