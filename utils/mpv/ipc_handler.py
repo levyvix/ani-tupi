@@ -10,6 +10,8 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
+from collections.abc import Callable
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from utils.logging import get_logger
@@ -18,7 +20,7 @@ if TYPE_CHECKING:
     import subprocess
 
     from utils.mpv.launcher import MPVLauncher
-    from utils.video_player import VideoPlaybackResult, VideoPlayer
+    from utils.video_player import VideoPlaybackResult
 
 logger = get_logger(__name__)
 
@@ -26,9 +28,15 @@ logger = get_logger(__name__)
 class IPCHandler:
     """Handle MPV IPC socket communication and keybinding-driven navigation."""
 
-    def __init__(self, player: VideoPlayer, launcher: MPVLauncher):
-        self._player = player
+    def __init__(
+        self,
+        state: SimpleNamespace,
+        launcher: MPVLauncher,
+        play_legacy: Callable[[str, bool], VideoPlaybackResult],
+    ):
+        self._state = state
         self._launcher = launcher
+        self._play_legacy = play_legacy
 
     def create_ipc_socket_path(self) -> str:
         """Generate platform-specific IPC socket path for MPV communication."""
@@ -87,11 +95,11 @@ class IPCHandler:
                     data={"episode": context.get("episode_number", 0)},
                 )
             case "toggle-autoplay":
-                self._player.autoplay = not self._player.autoplay
+                self._state.autoplay = not self._state.autoplay
                 return VideoPlaybackResult(
                     exit_code=0,
                     action="toggle-autoplay",
-                    data={"enabled": self._player.autoplay},
+                    data={"enabled": self._state.autoplay},
                 )
             case "toggle-sub-dub":
                 return VideoPlaybackResult(
@@ -122,7 +130,7 @@ class IPCHandler:
                 if platform.system() == "Windows":
                     # Fallback to legacy on Windows for now
                     url = episode_context.get("url", "")
-                    return self._player._play_video_legacy(url, debug=False)
+                    return self._play_legacy(url, debug=False)
 
                 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 sock.settimeout(timeout)
@@ -136,7 +144,7 @@ class IPCHandler:
             url = episode_context.get("url", "")
             logger.debug("[PLAYBACK DEBUG] IPC socket failed, falling back to legacy.")
             logger.debug(f"[PLAYBACK DEBUG] Full URL for legacy fallback: {url}")
-            return self._player._play_video_legacy(url, debug=False)
+            return self._play_legacy(url, debug=False)
 
         try:
             buffer = ""
@@ -323,10 +331,8 @@ class IPCHandler:
                                             continue
 
                                     elif action == "toggle-autoplay":
-                                        self._player.autoplay = not self._player.autoplay
-                                        status = (
-                                            "ATIVADO" if self._player.autoplay else "DESATIVADO"
-                                        )
+                                        self._state.autoplay = not self._state.autoplay
+                                        status = "ATIVADO" if self._state.autoplay else "DESATIVADO"
                                         message = f"Auto-play {status} (válido para toda a sessão)"
                                         self.send_mpv_command(sock, "show-text", [message, "3000"])
                                         logger.info(f"{message}")
@@ -408,7 +414,7 @@ class IPCHandler:
                         logger.info("\n   ℹ️  AnimesonlineCC: Token expirado (URLs temporárias)")
                 logger.info("   Tente ativar debug: ANI_TUPI_DEBUG_MPV=1 uv run ani-tupi")
 
-            if self._player.autoplay and exit_code == 0:
+            if self._state.autoplay and exit_code == 0:
                 from services.history_service import save_history_from_event
 
                 anime_title = episode_context.get("anime_title")

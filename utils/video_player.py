@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from typing import NamedTuple
 
 import os
@@ -40,23 +41,31 @@ class VideoPlayer:
         Args:
             autoplay: Whether to automatically play the next episode when current finishes
         """
-        self.autoplay = autoplay
+        self._state = SimpleNamespace(autoplay=autoplay)
         self._log_manager = MPVLogManager()
         self._launcher = MPVLauncher(self._log_manager)
-        self._ipc = IPCHandler(self, self._launcher)
+        self._ipc = IPCHandler(self._state, self._launcher, self._play_video_legacy)
 
     @property
     def _last_mpv_log_file(self) -> str | None:
         """Path of the most recent MPV log file (managed by the launcher)."""
         return self._launcher.last_mpv_log_file
 
+    @property
+    def autoplay(self) -> bool:
+        return self._state.autoplay
+
+    @autoplay.setter
+    def autoplay(self, value: bool) -> None:
+        self._state.autoplay = value
+
     def get_autoplay_state(self) -> bool:
         """Get current auto-play state."""
-        return self.autoplay
+        return self._state.autoplay
 
     def set_autoplay_state(self, enabled: bool) -> None:
         """Set auto-play state."""
-        self.autoplay = enabled
+        self._state.autoplay = enabled
 
     def play_episode(
         self,
