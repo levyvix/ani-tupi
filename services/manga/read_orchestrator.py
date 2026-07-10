@@ -42,10 +42,10 @@ from services.manga.source_selection import (
     research_manga_in_new_source,
     resume_from_other_source,
 )
+from services.manga.selection_preferences import manga_selection_preferences
+from services.manga.source_preferences import manga_source_preferences
 from utils.logging import get_logger
 from utils.manga_reader import is_zathura_running, open_pdf_reader
-from utils.manga_selection_preferences import manga_selection_preferences
-from utils.manga_source_preferences import manga_source_preferences
 from utils.pdf_converter import create_pdf_from_images
 
 logger = get_logger(__name__)
