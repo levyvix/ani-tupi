@@ -395,15 +395,6 @@ def clear_cache_all() -> None:
     cache.clear()
 
 
-def clear_cache_all_with_mappings() -> None:
-    """Clear the global cache and the saved AniList mapping state."""
-    clear_cache_all()
-
-    from services.anime.mappings import clear_anilist_mapping
-
-    clear_anilist_mapping()
-
-
 def get_scraper_cache(anime_title: str):
     """Get cached scraper data for an anime.
 
