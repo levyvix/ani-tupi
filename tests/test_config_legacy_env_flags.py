@@ -38,6 +38,11 @@ def test_debug_mpv_disabled_when_unset(monkeypatch):
     assert _fresh_settings().debug_mpv is False
 
 
+def test_debug_mpv_disabled_for_non_one(monkeypatch):
+    monkeypatch.setenv("ANI_TUPI_DEBUG_MPV", "true")
+    assert _fresh_settings().debug_mpv is False
+
+
 def test_disable_ipc_enabled_when_one(monkeypatch):
     monkeypatch.setenv("ANI_TUPI_DISABLE_IPC", "1")
     assert _fresh_settings().disable_ipc is True
@@ -45,6 +50,11 @@ def test_disable_ipc_enabled_when_one(monkeypatch):
 
 def test_disable_ipc_disabled_when_unset(monkeypatch):
     monkeypatch.delenv("ANI_TUPI_DISABLE_IPC", raising=False)
+    assert _fresh_settings().disable_ipc is False
+
+
+def test_disable_ipc_disabled_for_non_one(monkeypatch):
+    monkeypatch.setenv("ANI_TUPI_DISABLE_IPC", "yes")
     assert _fresh_settings().disable_ipc is False
 
 

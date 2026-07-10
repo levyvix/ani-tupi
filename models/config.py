@@ -16,7 +16,7 @@ import os
 import json
 from pathlib import Path
 
-from pydantic import AliasChoices, BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -544,22 +544,22 @@ class AppSettings(BaseSettings):
     # is replicated precisely (only the literal "1" enables the flag).
     debug_incremental_search_raw: str | None = Field(
         None,
-        validation_alias=AliasChoices("ANI_TUPI_DEBUG_INCREMENTAL_SEARCH"),
+        validation_alias="ANI_TUPI_DEBUG_INCREMENTAL_SEARCH",
         description='Raw value of ANI_TUPI_DEBUG_INCREMENTAL_SEARCH (enabled when "1")',
     )
     debug_mpv_raw: str | None = Field(
         None,
-        validation_alias=AliasChoices("ANI_TUPI_DEBUG_MPV"),
+        validation_alias="ANI_TUPI_DEBUG_MPV",
         description='Raw value of ANI_TUPI_DEBUG_MPV (enabled when "1")',
     )
     disable_ipc_raw: str | None = Field(
         None,
-        validation_alias=AliasChoices("ANI_TUPI_DISABLE_IPC"),
+        validation_alias="ANI_TUPI_DISABLE_IPC",
         description='Raw value of ANI_TUPI_DISABLE_IPC (enabled when "1")',
     )
     mpv_log_file_raw: str | None = Field(
         None,
-        validation_alias=AliasChoices("ANI_TUPI_MPV_LOG_FILE"),
+        validation_alias="ANI_TUPI_MPV_LOG_FILE",
         description="Raw value of ANI_TUPI_MPV_LOG_FILE (explicit MPV log file path)",
     )
 
