@@ -7,7 +7,7 @@ This module handles:
 
 from models.config import settings
 from plugin_manager import get_all_available_plugins
-from ui.components import menu_navigate
+from ui.components import menu_navigate, pause
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -21,7 +21,7 @@ def plugin_management_menu() -> None:
 
     if not all_plugins:
         logger.info("\n❌ Nenhum plugin encontrado!")
-        input("\nPressione Enter para continuar...")
+        pause()
         return
 
     priority_index = {plugin: index for index, plugin in enumerate(priority_order)}
