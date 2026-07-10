@@ -6,8 +6,23 @@ from unittest.mock import Mock, patch
 import pytest
 
 import commands.anilist as cmd
+import ui.anilist_menus as menus
 from models.models import Status
 from utils.episode_range_parser import RangeParseError
+
+
+class TestWireAnilistMenus:
+    """The command layer injects real deps into the pure ui layer."""
+
+    def test_wiring_populates_menu_holders(self):
+        cmd._wire_anilist_menus()
+
+        # ui must never import services/commands; deps arrive via configure().
+        assert menus.anilist_client is not None
+        assert menus.run_anime_actions is cmd.run_anime_actions
+        assert callable(menus.airing_service_factory)
+        assert callable(menus.handle_local_library_playback)
+        assert callable(menus.anilist_anime_flow)
 
 
 @pytest.fixture
