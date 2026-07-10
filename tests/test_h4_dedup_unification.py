@@ -7,7 +7,7 @@ Covers the three unifications:
 """
 
 from services.anilist.formatters import format_title
-from services.manga.reading_flow import _MANGA_URL_TEMPLATES, build_manga_url
+from services.manga.reading_flow import MANGA_URL_TEMPLATES, build_manga_url
 from services.search_repository import SearchRepository
 from utils.title_utils import normalize_title_for_filter
 
@@ -55,11 +55,11 @@ class TestUnifiedMangaUrlTemplates:
     """Both manga URL call paths must produce identical URLs per source."""
 
     def test_single_template_source(self):
-        assert set(_MANGA_URL_TEMPLATES) == {"mugiwaras", "mangadex", "mangalivre"}
+        assert set(MANGA_URL_TEMPLATES) == {"mugiwaras", "mangadex", "mangalivre"}
 
     def test_build_manga_url_matches_template_format(self):
         """build_manga_url (reading_flow) and the template dict produce the same URL."""
-        for source, template in _MANGA_URL_TEMPLATES.items():
+        for source, template in MANGA_URL_TEMPLATES.items():
             expected = template.format("some-id")
             assert build_manga_url(source, "some-id") == expected
 

@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 # Canonical source of manga URL templates. Any module needing to build a
 # base manga URL (reading flow, unified service, source selection) reads from
 # this single dict via ``build_manga_url``.
-_MANGA_URL_TEMPLATES = {
+MANGA_URL_TEMPLATES = {
     "mugiwaras": "https://mugiwarasoficial.com/manga/{}/",
     "mangadex": "https://mangadex.org/title/{}",
     "mangalivre": "https://mangalivre.blog/manga/{}/",
@@ -31,7 +31,7 @@ _MANGA_URL_TEMPLATES = {
 
 def build_manga_url(source: str, manga_id: str) -> str | None:
     """Construct the base manga URL for sources that need it."""
-    template = _MANGA_URL_TEMPLATES.get(source)
+    template = MANGA_URL_TEMPLATES.get(source)
     return template.format(manga_id) if template else None
 
 
