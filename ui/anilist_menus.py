@@ -26,11 +26,19 @@ HISTORY_PATH = get_data_path()
 # implementations at runtime via :func:`configure`. Tests may patch these
 # module attributes directly.
 # ---------------------------------------------------------------------------
-anilist_client = None
-anilist_anime_flow = None
-run_anime_actions = None
-airing_service_factory = None
-handle_local_library_playback = None
+
+
+def _not_configured(*_, **__):
+    raise RuntimeError(
+        "ui.anilist_menus não foi configurado — chame configure() antes de usar os menus"
+    )
+
+
+anilist_client = _not_configured
+anilist_anime_flow = _not_configured
+run_anime_actions = _not_configured
+airing_service_factory = _not_configured
+handle_local_library_playback = _not_configured
 
 
 def configure(
