@@ -39,6 +39,9 @@ class MangaMetadata(BaseModel):
     year: int | None = Field(None, ge=1900, le=2100, description="Publication year")
     tags: list[str] = Field(default_factory=list, description="Tags/genres")
     anilist_id: int | None = Field(None, description="AniList manga ID")
+    # String annotation defers Pydantic resolution; model_rebuild() is called in
+    # models.models after all submodules are imported. Import MangaMetadata via
+    # models.models (not models.manga directly) or call model_rebuild() yourself.
     anilist_data: "AniListManga | None" = Field(None, description="AniList manga data")
     sources: dict[str, str] = Field(
         default_factory=dict,
