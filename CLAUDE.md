@@ -398,25 +398,9 @@ with patch.object(httpx.Client, "get") as mock_http:  # External API mock only
 
 Goal: 80%+ coverage on service layer (business logic). CLI layer and utilities need less coverage (tested manually).
 
-### Running Tests with Subagents
+### Running Tests
 
-When running the full test suite (`uv run pytest`), use a **test-runner** subagent to avoid filling the main context window with large output:
-
-```bash
-# Instead of: uv run pytest -v
-# Use the subagent system to run tests and report failures
-```
-
-The subagent will:
-1. Execute `uv run pytest -v` in isolation
-2. Parse test results and identify failures
-3. Report failures with:
-   - File paths and line numbers
-   - Error messages and stack traces
-   - Suggested fixes or patterns
-4. Return a concise summary (not the raw 88KB output)
-
-This keeps the conversation focused and prevents context bloat while maintaining full access to test diagnostics.
+Always use uv run pytest -v | tail -30. So tests dont corrupt your context
 
 ---
 
@@ -436,6 +420,7 @@ This keeps the conversation focused and prevents context bloat while maintaining
 **Always prefix commands with `rtk`**. If RTK has a dedicated filter, it uses it. If not, it passes through unchanged. This means RTK is always safe to use.
 
 **Important**: Even in command chains with `&&`, use `rtk`:
+
 ```bash
 # ❌ Wrong
 git add . && git commit -m "msg" && git push
