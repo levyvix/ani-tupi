@@ -117,7 +117,8 @@ def resume_from_other_source(
         try:
             with progress(f"Procurando capítulo {chapter_num} em {src}..."):
                 chapters = service.get_chapters(src_id, manga_url=manga_url, source=src)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to get chapters from source '%s': %s", src, exc)
             continue
         if not chapters:
             continue

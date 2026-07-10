@@ -202,7 +202,8 @@ class AnimeTitleResolver:
                 result = AnimeTitleResolution.model_validate(cached)
                 logger.debug("Using cached title resolution for '%s'", query)
                 return result
-            except Exception:
+            except Exception as exc:
+                logger.debug("Failed to validate cached title resolution for '%s': %s", query, exc)
                 pass
 
         for provider in self.providers:

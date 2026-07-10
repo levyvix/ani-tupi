@@ -206,7 +206,8 @@ def _get_anilist_progress(selected_manga) -> int | None:
     try:
         manga_list = anilist_client.get_user_manga_list("CURRENT")
         return match_anilist_progress(manga_list, selected_manga.title, anilist_client.format_title)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to get AniList progress for '%s': %s", selected_manga.title, exc)
         return None
 
 
@@ -249,7 +250,8 @@ def _load_chapters_with_fallback(
                         )
                         logger.info(f"✓ Usando fonte alternativa: {fallback_source}")
                         return chapters, fallback_source, manga_url, updated_manga
-            except Exception:
+            except Exception as exc:
+                logger.debug("Fallback source '%s' failed: %s", fallback_source, exc)
                 continue
         return None, selected_source, manga_url, selected_manga
     except Exception as e:

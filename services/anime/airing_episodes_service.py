@@ -128,7 +128,8 @@ class AiringEpisodesService:
         if cached:
             try:
                 return [AiringAnimeEntry.model_validate(item) for item in cached]
-            except Exception:
+            except Exception as exc:
+                logger.debug("Failed to validate cached airing entries: %s", exc)
                 pass
 
         # Fetch raw API entries

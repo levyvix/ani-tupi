@@ -220,7 +220,8 @@ def _process_local_chapter(
                 ):
                     logger.info("✅ Progresso sincronizado com AniList")
                     anilist_synced = True
-        except Exception:
+        except Exception as exc:
+            logger.debug("AniList sync check failed for '%s': %s", manga_title, exc)
             pass
 
         if anilist_synced and settings.manga.auto_delete_read_chapters:

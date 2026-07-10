@@ -343,7 +343,8 @@ def _validate_anilist_id(
                         anime_title,
                         anilist_id,
                     )
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Failed to clear discovery cache for '%s': %s", anime_title, exc)
                     pass
             return False
 
