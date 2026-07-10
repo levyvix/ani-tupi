@@ -8,6 +8,25 @@ def get_resource_path(relative_path: str) -> str:
     return join(dirname(abspath(__file__)), relative_path)
 
 
+def discover_plugin_names() -> list[str]:
+    """Scan the ``plugins/`` directory for available scraper plugin names.
+
+    Excludes system modules (``__init__.py``, ``utils.py``) and returns the
+    plugin module names (without the ``.py`` suffix), sorted alphabetically.
+
+    Returns:
+        Sorted list of plugin names (e.g. ``["animefire", "sushianimes"]``).
+    """
+    path = get_resource_path("plugins/")
+    system = {"__init__.py", "utils.py"}
+    names = [
+        file[:-3]
+        for file in listdir(path)
+        if isfile(join(path, file)) and file.endswith(".py") and file not in system
+    ]
+    return sorted(names)
+
+
 def load_plugins(register, plugins: list[str] | None = None) -> None:
     """Load anime scraper plugins based on configured preferences.
 
@@ -21,11 +40,7 @@ def load_plugins(register, plugins: list[str] | None = None) -> None:
                  If None, loads all plugins except disabled ones
     """
 
-    path = get_resource_path("plugins/")
-    system = {"__init__.py", "utils.py"}
-    available_plugins = [
-        file[:-3] for file in listdir(path) if isfile(join(path, file)) and file not in system
-    ]
+    available_plugins = discover_plugin_names()
 
     if plugins is None:
         from models.config import settings

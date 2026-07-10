@@ -1,4 +1,5 @@
 import plugin_manager
+from scrapers.loader import discover_plugin_names
 
 
 class PluginSettingsStub:
@@ -24,3 +25,23 @@ def test_plugin_helpers_read_configured_settings(monkeypatch):
         "animesdigital",
         "animefire",
     ]
+
+
+def test_discover_plugin_names_scans_plugins_dir():
+    names = discover_plugin_names()
+
+    # Real plugins present in scrapers/plugins/ are discovered.
+    assert "animefire" in names
+    assert "sushianimes" in names
+    # System modules are excluded.
+    assert "utils" not in names
+    assert "__init__" not in names
+    # Result is sorted.
+    assert names == sorted(names)
+
+
+def test_get_all_available_plugins_uses_shared_discovery():
+    # The pure helper delegates to the shared scanner and returns real names.
+    plugins = plugin_manager.get_all_available_plugins()
+    assert plugins == discover_plugin_names()
+    assert "animefire" in plugins
