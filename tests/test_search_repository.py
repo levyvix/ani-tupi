@@ -1,9 +1,13 @@
 """Tests for SearchRepository."""
 
 from unittest.mock import Mock, patch
+
+import pytest
+
 from services.search_repository import SearchRepository
 from models.models import AnimeMetadata
 from models.models import AniListSearchResult
+from utils.logging import _base_logger
 
 
 class MockPlugin:
@@ -407,3 +411,81 @@ class TestSearchRepository:
 
         assert len(repo2.anime_to_urls) == 0
         assert repo1 is not repo2
+
+
+class TestPopulationOrderingGuard:
+    """Tests for the _populated flag / out-of-order reader warning (M5)."""
+
+    def setup_method(self):
+        SearchRepository.reset_singleton()
+
+    def teardown_method(self):
+        SearchRepository.reset_singleton()
+
+    @pytest.fixture
+    def warnings(self):
+        """Capture loguru WARNING+ messages emitted during the test."""
+        captured: list[str] = []
+        sink_id = _base_logger.add(
+            lambda message: captured.append(message.record["message"]),
+            level="WARNING",
+        )
+        yield captured
+        _base_logger.remove(sink_id)
+
+    def test_reader_before_population_warns_and_returns_empty(self, warnings):
+        """Fresh repo: reading before any search/add logs a warning, returns []."""
+        repo = SearchRepository()
+        repo.clear_search_results()
+
+        result = repo.get_anime_titles()
+
+        assert result == []
+        assert any("get_anime_titles() called before" in w for w in warnings)
+
+    def test_reader_with_sources_before_population_warns(self, warnings):
+        """The with-sources reader also warns when called out of order."""
+        repo = SearchRepository()
+        repo.clear_search_results()
+
+        result = repo.get_anime_titles_with_sources()
+
+        assert result == []
+        assert any("get_anime_titles_with_sources() called before" in w for w in warnings)
+
+    def test_search_that_found_nothing_does_not_warn(self, warnings):
+        """A search that ran but returned no results must NOT warn (ordering ok)."""
+        repo = SearchRepository()
+        # Plugin whose search_anime adds nothing -> zero results, but search ran.
+        plugin = Mock()
+        plugin.name = "empty_source"
+        plugin.search_anime = Mock(return_value=[])
+        repo.register(plugin)
+
+        results = repo.search_anime("nonexistent anime", verbose=False)
+        assert len(results.results) == 0
+
+        titles = repo.get_anime_titles()
+        assert titles == []
+        assert not any("called before" in w for w in warnings)
+
+    def test_normal_populate_then_read_no_warning(self, warnings):
+        """Happy path: populate via add_anime then read -> correct titles, no warning."""
+        repo = SearchRepository()
+        repo.clear_search_results()
+        repo.add_anime("Cowboy Bebop", "http://example.com/cb", "source_a", {})
+
+        titles = repo.get_anime_titles()
+
+        assert titles == ["Cowboy Bebop"]
+        assert not any("called before" in w for w in warnings)
+
+    def test_clear_resets_populated_flag(self, warnings):
+        """After a clear following population, a reader warns again."""
+        repo = SearchRepository()
+        repo.add_anime("Trigun", "http://example.com/tg", "source_a", {})
+        assert repo.get_anime_titles() == ["Trigun"]
+
+        repo.clear_search_results()
+        assert repo.get_anime_titles() == []
+        assert any("called before" in w for w in warnings)
