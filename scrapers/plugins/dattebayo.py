@@ -9,9 +9,8 @@ from utils.logging import get_logger
 import httpx
 from bs4 import BeautifulSoup
 
-from models.models import AnimeMetadata
+from models.models import AnimeMetadata, ScrapedEpisodes
 from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
-from services.repository import rep
 
 logger = get_logger(__name__)
 
@@ -203,7 +202,7 @@ class Dattebayo:
         response.raise_for_status()
         return _parse_episode_items(BeautifulSoup(response.text, "html.parser"))
 
-    def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+    def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
             all_items: list[tuple[str, str]] = []
@@ -227,9 +226,11 @@ class Dattebayo:
             paired = sorted(deduped, key=lambda item: _extract_episode_number(item[0]))
             if paired:
                 titles, urls = zip(*paired, strict=True)
-                rep.add_episode_list(anime, list(titles), list(urls), self.name)
+                return [ScrapedEpisodes(list(titles), list(urls), self.name)]
+            return []
         except httpx.HTTPError as exc:
             logger.debug("Dattebayo search_episodes failed for %r: %s", anime, exc)
+            return []
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
@@ -242,5 +243,5 @@ class Dattebayo:
             raise type(exc)(f"Dattebayo: {exc}") from exc
 
 
-def load() -> None:
-    load_plugin(Dattebayo, rep.register)
+def load(register) -> None:
+    load_plugin(Dattebayo, register)

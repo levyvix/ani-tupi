@@ -182,7 +182,7 @@ def cli() -> None:
     run_startup_update_check()
 
     # Load plugins once at startup
-    loader.load_plugins()
+    loader.load_plugins(rep.register)
 
     # Retry offline AniList syncs on startup
     from models.config import settings

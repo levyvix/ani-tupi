@@ -8,8 +8,7 @@ from bs4 import BeautifulSoup
 
 from scrapers.core.selenium_driver import SeleniumWebDriver
 from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
-from models.models import AnimeMetadata
-from services.repository import rep
+from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
@@ -53,7 +52,7 @@ class AnRoll:
             logger.debug("anroll search_anime falhou: %s", e)
         return results
 
-    def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+    def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
             response = httpx.get(
@@ -78,9 +77,11 @@ class AnRoll:
                 if first_ep_url:
                     titles, urls = self._episodes_from_sidebar(first_ep_url)
             if titles and urls:
-                rep.add_episode_list(anime, titles, urls, self.name)
+                return [ScrapedEpisodes(titles, urls, self.name)]
+            return []
         except httpx.HTTPError as e:
             logger.debug("anroll search_episodes falhou: %s", e)
+            return []
 
     def _find_first_episode_url(self, soup: BeautifulSoup) -> str | None:
         """Return the 'Primeiro Episódio' link from the anime page."""
@@ -184,5 +185,5 @@ class AnRoll:
             raise type(e)(f"Anroll: {e}") from e
 
 
-def load() -> None:
-    load_plugin(AnRoll, rep.register)
+def load(register) -> None:
+    load_plugin(AnRoll, register)

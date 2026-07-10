@@ -3,6 +3,7 @@
 import time
 
 import pytest
+from models.models import ScrapedEpisodes
 from services.episode_repository import EpisodeRepository
 
 
@@ -230,7 +231,9 @@ class TestEpisodeRepository:
 
         class WorkingScraper:
             def search_episodes(self, anime: str, url: str, params):
-                episode_repo.add_episode_list(anime, ["Episode 1"], ["http://ep1.com"], "working")
+                return [
+                    ScrapedEpisodes(titles=["Episode 1"], urls=["http://ep1.com"], source="working")
+                ]
 
         class FailingScraper:
             def search_episodes(self, anime: str, url: str, params):

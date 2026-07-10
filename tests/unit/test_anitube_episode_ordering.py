@@ -38,10 +38,7 @@ class TestAnitubeEpisodeOrdering:
         """Verify that ?ord=1 is appended to URLs without existing query parameters."""
         scraper = AniTube()
 
-        with (
-            patch("scrapers.plugins.anitube.httpx.get") as mock_get,
-            patch("scrapers.plugins.anitube.rep"),
-        ):
+        with patch("scrapers.plugins.anitube.httpx.get") as mock_get:
             mock_get.return_value = _response("<html></html>")
 
             # Call search_episodes with a clean URL
@@ -57,10 +54,7 @@ class TestAnitubeEpisodeOrdering:
         """Verify that ?ord=1 is appended with & when URL has existing query params."""
         scraper = AniTube()
 
-        with (
-            patch("scrapers.plugins.anitube.httpx.get") as mock_get,
-            patch("scrapers.plugins.anitube.rep"),
-        ):
+        with patch("scrapers.plugins.anitube.httpx.get") as mock_get:
             mock_get.return_value = _response("<html></html>")
 
             # Call search_episodes with a URL that already has query params
@@ -76,10 +70,7 @@ class TestAnitubeEpisodeOrdering:
         """Verify that episode extraction still works correctly with ?ord=1."""
         scraper = AniTube()
 
-        with (
-            patch("scrapers.plugins.anitube.httpx.get") as mock_get,
-            patch("scrapers.plugins.anitube.rep") as mock_rep,
-        ):
+        with patch("scrapers.plugins.anitube.httpx.get") as mock_get:
             mock_get.return_value = _response(
                 """
                 <html><body>
@@ -91,27 +82,20 @@ class TestAnitubeEpisodeOrdering:
 
             # Call search_episodes
             base_url = "https://www.anitube.news/video/123/"
-            scraper.search_episodes("Test Anime", base_url, None)
+            result = scraper.search_episodes("Test Anime", base_url, None)
 
-            # Verify that add_episode_list was called with extracted episodes
-            mock_rep.add_episode_list.assert_called_once()
-            call_args = mock_rep.add_episode_list.call_args
-
-            # Check that titles and URLs were extracted
-            assert len(call_args[0]) == 4  # anime, titles, urls, scraper_name
-            assert isinstance(call_args[0][1], list)  # titles list
-            assert isinstance(call_args[0][2], list)  # urls list
-            assert len(call_args[0][1]) == 2  # 2 episodes
-            assert len(call_args[0][2]) == 2  # 2 episodes  # 2 episodes
+            # Verify that episodes were extracted and returned
+            assert len(result) == 1
+            assert isinstance(result[0].titles, list)
+            assert isinstance(result[0].urls, list)
+            assert len(result[0].titles) == 2  # 2 episodes
+            assert len(result[0].urls) == 2  # 2 episodes
 
     def test_episode_extraction_does_not_filter_by_anime_title(self):
         """Verify that valid episode links are kept even when title formatting differs."""
         scraper = AniTube()
 
-        with (
-            patch("scrapers.plugins.anitube.httpx.get") as mock_get,
-            patch("scrapers.plugins.anitube.rep") as mock_rep,
-        ):
+        with patch("scrapers.plugins.anitube.httpx.get") as mock_get:
             mock_get.return_value = _response(
                 """
                 <html><body>
@@ -120,16 +104,14 @@ class TestAnitubeEpisodeOrdering:
                 """
             )
 
-            scraper.search_episodes(
+            result = scraper.search_episodes(
                 "Yomi no Tsugai Dublado", "https://www.anitube.zip/video/1054051/", None
             )
 
-            mock_rep.add_episode_list.assert_called_once_with(
-                "Yomi no Tsugai Dublado",
-                ["Yomi no Tsugai (Dublado) – Episódio 01"],
-                ["https://www.anitube.zip/video/1054054/"],
-                "anitube",
-            )
+            assert len(result) == 1
+            assert result[0].titles == ["Yomi no Tsugai (Dublado) – Episódio 01"]
+            assert result[0].urls == ["https://www.anitube.zip/video/1054054/"]
+            assert result[0].source == "anitube"
 
 
 class TestAnitubeSearchAnimeAndPlayer:

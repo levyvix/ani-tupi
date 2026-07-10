@@ -73,13 +73,10 @@ class TestAnimesDigitalFallbackLogging:
         assert "Error searching AnimesDigital homepage" not in caplog.text
 
     @patch.object(AnimesDigital, "search_homepage_incremental", return_value=[])
-    @patch.object(AnimesDigital, "_scrape_series_page")
-    @patch("scrapers.plugins.animesdigital.rep")
+    @patch.object(AnimesDigital, "_scrape_series_page", return_value=([], []))
     def test_search_episodes_uses_silent_fallback_logs(
-        self, mock_rep, mock_scrape_series_page, mock_homepage_search, caplog
+        self, mock_scrape_series_page, mock_homepage_search, caplog
     ):
-        mock_rep.anime_episodes_urls.get.return_value = []
-
         with caplog.at_level(logging.WARNING):
             self.scraper.search_episodes(
                 "Liar Game", "https://animesdigital.org/anime/a/liar-game", None
@@ -92,12 +89,11 @@ class TestAnimesDigitalFallbackLogging:
         mock_scrape_series_page.assert_called_once()
         mock_homepage_search.assert_called_once_with("Liar Game", audio_type="legendado")
 
-    @patch("scrapers.plugins.animesdigital.rep")
     @patch("scrapers.plugins.animesdigital.httpx.get")
-    def test_scrape_series_page_uses_static_html_and_appends_odr(self, mock_get, mock_rep):
+    def test_scrape_series_page_uses_static_html_and_appends_odr(self, mock_get):
         mock_get.return_value = _html_response(SERIES_PAGE_HTML)
 
-        self.scraper._scrape_series_page(
+        titles, urls = self.scraper._scrape_series_page(
             "Tadaima Ojamasaremasu!",
             "https://animesdigital.org/anime/a/tadaima-ojamasaremasu-todos-episodios",
         )
@@ -107,25 +103,20 @@ class TestAnimesDigitalFallbackLogging:
             mock_get.call_args.args[0]
             == "https://animesdigital.org/anime/a/tadaima-ojamasaremasu-todos-episodios?odr=1"
         )
-        mock_rep.add_episode_list.assert_called_once_with(
-            "Tadaima Ojamasaremasu!",
-            [
-                "Tadaima Ojamasaremasu! Episódio 01",
-                "Tadaima Ojamasaremasu! Episódio 02",
-            ],
-            [
-                "https://animesdigital.org/video/a/135463/",
-                "https://animesdigital.org/video/a/135726/",
-            ],
-            "animesdigital",
-        )
+        assert titles == [
+            "Tadaima Ojamasaremasu! Episódio 01",
+            "Tadaima Ojamasaremasu! Episódio 02",
+        ]
+        assert urls == [
+            "https://animesdigital.org/video/a/135463/",
+            "https://animesdigital.org/video/a/135726/",
+        ]
 
-    @patch("scrapers.plugins.animesdigital.rep")
     @patch("scrapers.plugins.animesdigital.httpx.get")
-    def test_scrape_series_page_preserves_existing_query_string(self, mock_get, mock_rep):
+    def test_scrape_series_page_preserves_existing_query_string(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")
 
-        self.scraper._scrape_series_page(
+        titles, urls = self.scraper._scrape_series_page(
             "Tadaima Ojamasaremasu!",
             "https://animesdigital.org/anime/a/tadaima-ojamasaremasu-todos-episodios?foo=bar",
         )
@@ -134,7 +125,8 @@ class TestAnimesDigitalFallbackLogging:
             mock_get.call_args.args[0]
             == "https://animesdigital.org/anime/a/tadaima-ojamasaremasu-todos-episodios?foo=bar&odr=1"
         )
-        mock_rep.add_episode_list.assert_not_called()
+        assert titles == []
+        assert urls == []
 
 
 IFRAME_PLAYER_HTML = """

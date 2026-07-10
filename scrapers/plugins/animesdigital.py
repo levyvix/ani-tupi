@@ -25,8 +25,7 @@ from scrapers.plugins.utils import (
     load_plugin,
     store_player_source,
 )
-from models.models import AnimeMetadata
-from services.repository import rep
+from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
@@ -310,29 +309,31 @@ class AnimesDigital:
 
         return self._add_deduplicated(all_anime)
 
-    def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+    def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
-            self._scrape_series_page(anime, url)
-
-            animesdigital_urls = []
-            for urls_list, source in rep.anime_episodes_urls.get(anime, []):
-                if source == AnimesDigital.name:
-                    animesdigital_urls = list(urls_list)
-                    break
+            titles, urls = self._scrape_series_page(anime, url)
 
             audio_type = "dublado" if "dublado" in anime.lower() else "legendado"
             homepage_episodes = self.search_homepage_incremental(anime, audio_type=audio_type)
 
             if homepage_episodes:
-                self._merge_homepage_episodes(
+                merged = self._merge_homepage_episodes(
                     anime,
-                    animesdigital_urls,
+                    urls,
                     homepage_episodes,
-                    len(animesdigital_urls),
+                    len(urls),
                 )
+                if merged is not None:
+                    merged_titles, merged_urls = merged
+                    return [ScrapedEpisodes(merged_titles, merged_urls, AnimesDigital.name)]
+
+            if titles:
+                return [ScrapedEpisodes(titles, urls, AnimesDigital.name)]
+            return []
         except Exception as e:
             logger.debug(f"AnimesDigital series page scraping failed for '{anime}': {e}")
+            return []
 
     def _merge_homepage_episodes(
         self,
@@ -340,7 +341,11 @@ class AnimesDigital:
         current_urls: list[str],
         homepage_episodes: list[dict],
         max_episode_on_page: int = 0,
-    ) -> None:
+    ) -> tuple[list[str], list[str]] | None:
+        """Merge newer homepage episodes onto the base list.
+
+        Returns the combined (titles, urls) when new episodes are found, else None.
+        """
         try:
             current_urls_set = set(current_urls)
             new_episodes = [
@@ -351,7 +356,7 @@ class AnimesDigital:
             ]
 
             if not new_episodes:
-                return
+                return None
 
             new_titles = [
                 f"{ep['anime_title']} Episódio {ep['episode_number']}"
@@ -363,9 +368,10 @@ class AnimesDigital:
 
             all_titles = [f"{anime} Episódio {i + 1}" for i in range(len(current_urls))]
             all_titles.extend(new_titles)
-            rep.add_episode_list(anime, all_titles, current_urls + new_urls, AnimesDigital.name)
+            return all_titles, current_urls + new_urls
         except Exception as e:
             logger.debug(f"Error merging homepage episodes: {e}")
+            return None
 
     def _parse_episode_results(self, html_fragments: list[str]) -> list[dict]:
         results = []
@@ -393,7 +399,7 @@ class AnimesDigital:
             del r["_ep_number"]
         return results
 
-    def _scrape_series_page(self, anime: str, url: str) -> None:
+    def _scrape_series_page(self, anime: str, url: str) -> tuple[list[str], list[str]]:
         url = _ensure_odr_param(url)
         response = httpx.get(
             url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
@@ -420,10 +426,9 @@ class AnimesDigital:
             episode_urls.append(href)
             episode_titles.append(title)
 
-        if episode_titles:
-            rep.add_episode_list(anime, episode_titles, episode_urls, AnimesDigital.name)
-        else:
+        if not episode_titles:
             logger.debug(f"No episodes found for '{anime}' in series page scraping")
+        return episode_titles, episode_urls
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
@@ -615,5 +620,5 @@ class AnimesDigital:
             return []
 
 
-def load() -> None:
-    load_plugin(AnimesDigital, rep.register)
+def load(register) -> None:
+    load_plugin(AnimesDigital, register)

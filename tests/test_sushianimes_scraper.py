@@ -123,43 +123,39 @@ class TestSushiAnimesScraper:
         assert results[1].title == "Dorohedoro 2 - Dublado"
         assert results[1].params == {"season": 2}
 
-    @patch("scrapers.plugins.sushianimes.rep")
     @patch("scrapers.plugins.sushianimes.httpx.get")
-    def test_search_episodes_uses_requested_season(self, mock_get, mock_rep):
+    def test_search_episodes_uses_requested_season(self, mock_get):
         mock_get.return_value = _response(ANIME_PAGE_HTML)
 
-        self.scraper.search_episodes(
+        result = self.scraper.search_episodes(
             "Dorohedoro 2 - Dublado",
             "https://sushianimes.com.br/anime/dorohedoro-dublado-963",
             {"season": 2},
         )
 
-        mock_rep.add_episode_list.assert_called_once()
-        _, titles, urls, source = mock_rep.add_episode_list.call_args.args
-        season = mock_rep.add_episode_list.call_args.kwargs["season"]
-        assert source == "sushianimes"
-        assert season == 2
-        assert titles == [
+        assert len(result) == 1
+        assert result[0].source == "sushianimes"
+        assert result[0].season == 2
+        assert result[0].titles == [
             "1º Episódio USEMOS NOSSOS RECURSOS COM CAUTELA",
             "2º Episódio RELAÇÕES MARITAIS",
         ]
-        assert urls[0].startswith("https://sushianimes.com.br/")
+        assert result[0].urls[0].startswith("https://sushianimes.com.br/")
         assert mock_get.call_args.kwargs["headers"] == HEADERS
 
-    @patch("scrapers.plugins.sushianimes.rep")
     @patch("scrapers.plugins.sushianimes.httpx.get")
-    def test_search_episodes_swallows_http_errors(self, mock_get, mock_rep):
+    def test_search_episodes_swallows_http_errors(self, mock_get):
         response = MagicMock()
         response.raise_for_status.side_effect = httpx.HTTPError("403 Client Error")
         mock_get.return_value = response
 
-        self.scraper.search_episodes(
+        result = self.scraper.search_episodes(
             "Dorohedoro 2 - Dublado",
             "https://sushianimes.com.br/anime/dorohedoro-dublado-963",
             {"season": 2},
         )
 
-        mock_rep.add_episode_list.assert_not_called()
+        assert result == []
 
     @patch("scrapers.plugins.sushianimes.httpx.post")
     @patch("scrapers.plugins.sushianimes.httpx.get")

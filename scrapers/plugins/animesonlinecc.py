@@ -7,8 +7,7 @@ from bs4 import BeautifulSoup
 
 from scrapers.core.blogger_resolver import resolve_blogger_token
 from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
-from models.models import AnimeMetadata
-from services.repository import rep
+from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
@@ -44,7 +43,7 @@ class AnimesOnlineCC:
             logger.debug(f"AnimesOnlineCC search request failed for '{query}': {e}")
         return results
 
-    def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+    def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
             r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
@@ -68,9 +67,11 @@ class AnimesOnlineCC:
                 urls.append(ep_url)
 
             if titles and urls:
-                rep.add_episode_list(anime, titles, urls, self.name)
+                return [ScrapedEpisodes(titles, urls, self.name)]
+            return []
         except httpx.HTTPError as e:
             logger.debug(f"AnimesOnlineCC episode fetch failed for '{anime}': {e}")
+            return []
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
@@ -101,5 +102,5 @@ class AnimesOnlineCC:
             raise type(e)(f"AnimesOnlineCC: {e}") from e
 
 
-def load() -> None:
-    load_plugin(AnimesOnlineCC, rep.register)
+def load(register) -> None:
+    load_plugin(AnimesOnlineCC, register)

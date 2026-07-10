@@ -13,7 +13,6 @@ use Blogger/session-bound CDN URLs that are not directly playable by mpv.
 import shutil
 import subprocess
 import threading
-from unittest.mock import patch
 
 import httpx
 import pytest
@@ -157,25 +156,10 @@ def _assert_mpv_plays(video_url: str, referrer: str | None = None) -> None:
     )
 
 
-_SCRAPER_MODULE = {
-    "AnimeFire": "animefire",
-    "AnimesOnlineCC": "animesonlinecc",
-    "AniTube": "anitube",
-    "Goyabu": "goyabu",
-    "AnimesDigital": "animesdigital",
-}
-
-
 def _capture_episodes(scraper, anime_url: str, anime_name: str) -> list[str]:
     captured_urls: list[str] = []
-    module = _SCRAPER_MODULE[scraper.__class__.__name__]
-
-    def _fake_add(*args):
-        captured_urls.extend(args[2])
-
-    with patch(f"scrapers.plugins.{module}.rep") as mock_rep:
-        mock_rep.add_episode_list.side_effect = _fake_add
-        scraper.search_episodes(anime_name, anime_url, None)
+    for batch in scraper.search_episodes(anime_name, anime_url, None) or []:
+        captured_urls.extend(batch.urls)
 
     return captured_urls
 
@@ -353,13 +337,8 @@ class TestAnimesDigitalRealHTTP:
         anime = _pick_anime_for_episode_tests(results, QUERY)
         captured_urls: list[str] = []
 
-        def _fake_add(*args):
-            captured_urls.extend(args[2])
-
-        with patch("scrapers.plugins.animesdigital.rep") as mock_rep:
-            mock_rep.add_episode_list.side_effect = _fake_add
-            mock_rep.anime_episodes_urls.get.return_value = []
-            self.scraper.search_episodes(anime.title, anime.url, None)
+        for batch in self.scraper.search_episodes(anime.title, anime.url, None) or []:
+            captured_urls.extend(batch.urls)
 
         return anime.url, captured_urls
 
