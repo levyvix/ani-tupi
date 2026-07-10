@@ -8,8 +8,11 @@ Extracted from manga_tupi.py. Holds the pure logic that decides *what* to read:
 - computing the recommended "resume" chapter from AniList / local history,
 - moving the resume chapter to the top of a display list.
 
-Everything here is side-effect free and returns immutable data so it can be
-unit-tested without a terminal. Menus and prompts stay in the command layer.
+Pure helpers: free of UI, I/O, and external calls, so they can be unit-tested
+without a terminal. Menus and prompts stay in the command layer.
+
+Note: some helpers mutate their list arguments in place for efficiency — see
+individual function docstrings for details.
 """
 
 from dataclasses import dataclass

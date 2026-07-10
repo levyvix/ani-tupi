@@ -244,6 +244,10 @@ def download_chapters_batch(
         return result
 
     # Parallel download.
+    if on_failure is not None:
+        logger.debug(
+            "on_failure ignorado em modo paralelo — todos os futures completam antes de qualquer retorno"
+        )
     with ThreadPoolExecutor(max_workers=workers) as executor:
         future_to_chapter = {
             executor.submit(
