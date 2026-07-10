@@ -7,7 +7,7 @@ import pytest
 from services.search_repository import SearchRepository
 from models.models import AnimeMetadata
 from models.models import AniListSearchResult
-from utils.logging import _base_logger
+from utils.logging import get_base_logger
 
 
 class MockPlugin:
@@ -426,12 +426,12 @@ class TestPopulationOrderingGuard:
     def warnings(self):
         """Capture loguru WARNING+ messages emitted during the test."""
         captured: list[str] = []
-        sink_id = _base_logger.add(
+        sink_id = get_base_logger().add(
             lambda message: captured.append(message.record["message"]),
             level="WARNING",
         )
         yield captured
-        _base_logger.remove(sink_id)
+        get_base_logger().remove(sink_id)
 
     def test_reader_before_population_warns_and_returns_empty(self, warnings):
         """Fresh repo: reading before any search/add logs a warning, returns []."""

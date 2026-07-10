@@ -197,3 +197,8 @@ def get_logger(name: str):
 
     # Bind the module name to the logger
     return _base_logger.bind(name=name)
+
+
+def get_base_logger():
+    """Return the underlying loguru logger for tests that need to add/remove sinks."""
+    return _base_logger
