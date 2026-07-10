@@ -55,33 +55,33 @@ class TestGetEpisodeUrlUsesAwaitingRegistry:
     """The playback layer must read the explicit registry, not function state."""
 
     @patch("services.anime.playback_service.rep")
-    def test_awaiting_url_extracts_via_repository(self, mock_rep):
-        from services.anime.awaiting_episodes import registry
+    def test_awaiting_url_extracts_via_repository(self, mock_rep, monkeypatch):
+        import services.anime.awaiting_episodes as ae_mod
         from services.anime.playback_service import get_episode_url_and_source
 
-        registry.clear("Dandadan")
-        registry.set("Dandadan", 13, "https://ad.example/video/ep13")
-        try:
-            mock_rep.search_player_from_page.return_value = ["https://cdn.example/ep13.mp4"]
+        fresh = AwaitingEpisodeRegistry()
+        monkeypatch.setattr(ae_mod, "registry", fresh)
 
-            result = get_episode_url_and_source("Dandadan", 13)
+        fresh.set("Dandadan", 13, "https://ad.example/video/ep13")
+        mock_rep.search_player_from_page.return_value = ["https://cdn.example/ep13.mp4"]
 
-            assert result.success is True
-            assert result.player_url == "https://cdn.example/ep13.mp4"
-            assert result.source == "animesdigital"
-            # Routed through the repository, not a direct plugin import.
-            mock_rep.search_player_from_page.assert_called_once_with(
-                "https://ad.example/video/ep13", "animesdigital"
-            )
-        finally:
-            registry.clear("Dandadan")
+        result = get_episode_url_and_source("Dandadan", 13)
+
+        assert result.success is True
+        assert result.player_url == "https://cdn.example/ep13.mp4"
+        assert result.source == "animesdigital"
+        mock_rep.search_player_from_page.assert_called_once_with(
+            "https://ad.example/video/ep13", "animesdigital"
+        )
 
     @patch("services.anime.playback_service.rep")
-    def test_no_awaiting_url_falls_back_to_regular_search(self, mock_rep):
-        from services.anime.awaiting_episodes import registry
+    def test_no_awaiting_url_falls_back_to_regular_search(self, mock_rep, monkeypatch):
+        import services.anime.awaiting_episodes as ae_mod
         from services.anime.playback_service import get_episode_url_and_source
 
-        registry.clear("Dandadan")
+        fresh = AwaitingEpisodeRegistry()
+        monkeypatch.setattr(ae_mod, "registry", fresh)
+
         mock_rep.search_player.return_value = "https://cdn.example/regular.mp4"
         mock_rep.get_episode_url_and_source.return_value = (
             "https://page.example/ep5",

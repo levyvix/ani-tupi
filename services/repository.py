@@ -274,7 +274,7 @@ class Repository:
         """
         plugin = self._search_repo.sources.get(source_name)
         if plugin is None or not hasattr(plugin, "search_homepage_incremental"):
-            logger.warning(f"Source '{source_name}' unavailable for homepage incremental search")
+            logger.debug(f"Source '{source_name}' unavailable for homepage incremental search")
             return []
         return plugin.search_homepage_incremental(title)
 
