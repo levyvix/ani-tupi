@@ -17,6 +17,7 @@ from services.anime.title_normalization import (
     normalize_title_for_dedup,
 )
 from utils.logging import get_logger
+from utils.title_utils import normalize_title_for_filter
 
 logger = get_logger(__name__)
 
@@ -223,10 +224,7 @@ class SearchRepository:
 
     @staticmethod
     def _normalize_for_filter(text: str) -> str:
-        text = text.lower()
-        for char in ["-", ":", "(", ")", "!", "?", ".", "–", "—"]:
-            text = text.replace(char, " ")
-        return " ".join(text.split())
+        return normalize_title_for_filter(text)
 
     @staticmethod
     def _matches_filter_query(title: str, filter_by_query: str) -> bool:

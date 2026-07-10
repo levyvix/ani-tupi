@@ -34,12 +34,6 @@ _STATUS_MAP = {
     "cancelled": MangaStatus.CANCELLED,
 }
 
-_MANGA_URL_TEMPLATES = {
-    "mangadex": "https://mangadex.org/title/{}",
-    "mugiwaras": "https://mugiwarasoficial.com/manga/{}/",
-    "mangalivre": "https://mangalivre.blog/manga/{}/",
-}
-
 
 class MangaError(Exception):
     """Base manga error with user-friendly message."""
@@ -504,8 +498,11 @@ class UnifiedMangaService:
 
         # Some plugins need the URL, others just the ID
         if manga_url is None:
-            template = _MANGA_URL_TEMPLATES.get(source_name, "")
-            manga_url = template.format(manga_id) if template else ""
+            # Local import avoids a package-init import cycle
+            # (services.manga.__init__ -> download -> manga_service).
+            from services.manga.reading_flow import build_manga_url
+
+            manga_url = build_manga_url(source_name, manga_id) or ""
 
         raw_chapters = plugin.get_chapters(manga_id, manga_url)
 

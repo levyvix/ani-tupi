@@ -83,10 +83,8 @@ def _filter_anime_results(titles: list[str], query: str) -> list[str]:
         normalized title, or the compact normalized query appears in the
         compact normalized title
     """
-    from services.search_repository import SearchRepository as _SearchRepository
     from services.anime.title_normalization import get_compact_normalized_title_key
-
-    normalize_fn = _SearchRepository._normalize_for_filter
+    from utils.title_utils import normalize_title_for_filter as normalize_fn
 
     query_normalized = normalize_fn(query)
     query_compact = get_compact_normalized_title_key(query_normalized)
@@ -116,9 +114,10 @@ def _rank_anime_results_by_reference(titles: list[str], reference_title: str) ->
     """Rank title strings using the canonical AniList reference title."""
     from thefuzz import fuzz
     from services.search_repository import SearchRepository
+    from utils.title_utils import normalize_title_for_filter
 
     reference_title = reference_title.split(" / ")[0]
-    reference_normalized = SearchRepository._normalize_for_filter(reference_title)
+    reference_normalized = normalize_title_for_filter(reference_title)
     reference_compact = SearchRepository._normalize_for_similarity(reference_title)
     reference_words = SearchRepository._normalize_words_for_similarity(reference_title)
 
@@ -131,7 +130,7 @@ def _rank_anime_results_by_reference(titles: list[str], reference_title: str) ->
     scored_titles = []
     for title in titles:
         base_title = title.split(" [")[0] if " [" in title else title
-        normalized_title = SearchRepository._normalize_for_filter(base_title)
+        normalized_title = normalize_title_for_filter(base_title)
         compact_title = SearchRepository._normalize_for_similarity(base_title)
         title_words = SearchRepository._normalize_words_for_similarity(base_title)
 
@@ -173,17 +172,18 @@ def _best_similarity_score_for_reference(titles: list[str], reference_title: str
     """Return the best similarity score between results and a reference title."""
     from thefuzz import fuzz
     from services.search_repository import SearchRepository
+    from utils.title_utils import normalize_title_for_filter
 
     if not titles or not reference_title:
         return 0
 
-    reference_normalized = SearchRepository._normalize_for_filter(reference_title)
+    reference_normalized = normalize_title_for_filter(reference_title)
     reference_compact = SearchRepository._normalize_for_similarity(reference_title)
     best_score = 0
 
     for title in titles:
         base_title = title.split(" [")[0] if " [" in title else title
-        normalized_title = SearchRepository._normalize_for_filter(base_title)
+        normalized_title = normalize_title_for_filter(base_title)
         compact_title = SearchRepository._normalize_for_similarity(base_title)
 
         score = max(

@@ -19,9 +19,13 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Canonical source of manga URL templates. Any module needing to build a
+# base manga URL (reading flow, unified service, source selection) reads from
+# this single dict via ``build_manga_url``.
 _MANGA_URL_TEMPLATES = {
     "mugiwaras": "https://mugiwarasoficial.com/manga/{}/",
     "mangadex": "https://mangadex.org/title/{}",
+    "mangalivre": "https://mangalivre.blog/manga/{}/",
 }
 
 

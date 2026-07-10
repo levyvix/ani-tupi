@@ -26,7 +26,7 @@ from models.models import (
     DownloadResult,
     DownloadedEpisode,
 )
-from utils.episode_range_parser import parse_episode_range, RangeParseError
+from utils.range_parser import parse_episode_range, RangeParseError
 
 logger = get_logger(__name__)
 

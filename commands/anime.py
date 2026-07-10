@@ -37,7 +37,7 @@ from ui.components import (
     show_warning,
 )
 from utils.video_player import VideoPlayer
-from utils.episode_range_parser import parse_episode_range, RangeParseError
+from utils.range_parser import parse_episode_range, RangeParseError
 
 logger = get_logger(__name__)
 

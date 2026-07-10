@@ -909,7 +909,7 @@ def _download_episodes(
 ) -> None:
     """Prompt for an episode range and download it."""
     from services.anime.download_service import AnimeDownloadService
-    from utils.episode_range_parser import parse_episode_range, RangeParseError
+    from utils.range_parser import parse_episode_range, RangeParseError
 
     logger.info(f"📥 Baixar episódios: {selected_anime}")
     logger.info(f"   Total de episódios: {num_episodes}")

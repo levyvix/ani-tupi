@@ -55,7 +55,7 @@ def _handle_anilist_download(anime_title: str, total_episodes: int | None) -> No
     """
     from services.anime.download_service import AnimeDownloadService
     from services.anime.playback_service import get_episode_url_and_source
-    from utils.episode_range_parser import RangeParseError
+    from utils.range_parser import RangeParseError
 
     if not total_episodes or total_episodes <= 0:
         show_warning("Número total de episódios desconhecido. Não é possível baixar.")

@@ -8,7 +8,7 @@ import pytest
 import commands.anilist as cmd
 import ui.anilist_menus as menus
 from models.models import Status
-from utils.episode_range_parser import RangeParseError
+from utils.range_parser import RangeParseError
 
 
 class TestWireAnilistMenus:
