@@ -218,7 +218,7 @@ def _process_local_chapter(
                 if local_service.sync_to_anilist_if_ahead(
                     manga_title, chapter.chapter_number, anilist_client
                 ):
-                    logger.info("✅ Progresso sincronizado com AniList")
+                    show_info("✅ Progresso sincronizado com AniList")
                     anilist_synced = True
         except Exception as exc:
             logger.debug("AniList sync check failed for '%s': %s", manga_title, exc)
@@ -231,12 +231,12 @@ def _process_local_chapter(
                     import shutil
 
                     shutil.rmtree(chapter_folder)
-                    logger.info("✓ Capítulo deletado automaticamente: economizando espaço em disco")
+                    show_info("✓ Capítulo deletado automaticamente: economizando espaço em disco")
             except Exception as e:
-                logger.info(f"⚠️  Não foi possível deletar capítulo automaticamente: {e}")
+                show_warning(f"⚠️  Não foi possível deletar capítulo automaticamente: {e}")
 
         if reader_process:
-            logger.info("\n📖 Feche o leitor de PDF para continuar.")
+            show_info("📖 Feche o leitor de PDF para continuar.")
             reader_process.wait()
 
         action = menu_navigate(
@@ -324,7 +324,7 @@ def main() -> None:
     try:
         service = UnifiedMangaService(config)
     except RuntimeError as e:
-        logger.info(f"❌ {e}")
+        show_error(f"❌ {e}")
         return
 
     handlers = {

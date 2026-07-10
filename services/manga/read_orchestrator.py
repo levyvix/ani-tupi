@@ -65,17 +65,17 @@ def start_manga_search(
         with progress(f"Buscando '{search_term}'..."):
             results = service.search_manga(search_term)
     except MangaNotFoundError:
-        logger.info("❌ Mangá não encontrado. Tente outra pesquisa.")
+        ui_bridge.show_warning("❌ Mangá não encontrado. Tente outra pesquisa.")
         return
     except MangaDexError as e:
-        logger.info(f"⚠️  {e.user_message}")
+        ui_bridge.show_warning(f"⚠️  {e.user_message}")
         return
     except Exception as e:
-        logger.info(f"❌ Erro inesperado: {e}")
+        ui_bridge.show_warning(f"❌ Erro inesperado: {e}")
         return
 
     if not results:
-        logger.info("❌ Nenhum mangá encontrado. Tente outra pesquisa.")
+        ui_bridge.show_warning("❌ Nenhum mangá encontrado. Tente outra pesquisa.")
         return
 
     preferred_manga_id = manga_selection_preferences.get_preferred_manga_id(title)
@@ -124,7 +124,7 @@ def start_manga_search(
             selected_manga = results[0]
 
     manga_selection_preferences.set_preferred_manga_id(title, selected_manga.id)
-    logger.info(f"✓ Preferência salva: {selected_manga.title}")
+    ui_bridge.show_info(f"✓ Preferência salva: {selected_manga.title}")
 
     continue_manga_flow(
         service, selected_manga, allow_source_change=True, menu=menu, progress=progress
@@ -185,7 +185,7 @@ def _select_source(
             updated = research_manga_in_new_source(
                 service, selected_manga, new_source, progress=progress
             )
-            logger.info(f"✓ Fonte alterada para: {new_source}")
+            ui_bridge.show_info(f"✓ Fonte alterada para: {new_source}")
             return new_source, updated
     elif action.startswith("🔄 Trocar para:"):
         new_source = action.split(": ")[1]
@@ -194,9 +194,9 @@ def _select_source(
                 service, selected_manga, new_source, progress=progress
             )
             manga_source_preferences.set_preferred_source(updated.title, new_source)
-            logger.info(f"✓ Fonte alterada e salva: {new_source}")
+            ui_bridge.show_info(f"✓ Fonte alterada e salva: {new_source}")
             return new_source, updated
-        logger.info(f"❌ Falha ao alterar fonte para: {new_source}")
+        ui_bridge.show_warning(f"❌ Falha ao alterar fonte para: {new_source}")
         return None, selected_manga
     return current_source, selected_manga
 
@@ -229,7 +229,7 @@ def _load_chapters_with_fallback(
             )
         return chapters, selected_source, manga_url, selected_manga
     except MangaDexError as e:
-        logger.info(f"⚠️  {e.user_message}")
+        ui_bridge.show_warning(f"⚠️  {e.user_message}")
         if not allow_source_change:
             return None, selected_source, manga_url, selected_manga
         logger.info("🔄 Tentando outras fontes...")
@@ -249,14 +249,14 @@ def _load_chapters_with_fallback(
                         manga_source_preferences.set_preferred_source(
                             updated_manga.title, fallback_source
                         )
-                        logger.info(f"✓ Usando fonte alternativa: {fallback_source}")
+                        ui_bridge.show_info(f"✓ Usando fonte alternativa: {fallback_source}")
                         return chapters, fallback_source, manga_url, updated_manga
             except Exception as exc:
                 logger.debug("Fallback source '%s' failed: %s", fallback_source, exc)
                 continue
         return None, selected_source, manga_url, selected_manga
     except Exception as e:
-        logger.info(f"❌ Erro ao carregar capítulos: {e}")
+        ui_bridge.show_warning(f"❌ Erro ao carregar capítulos: {e}")
         return None, selected_source, manga_url, selected_manga
 
 
@@ -305,13 +305,13 @@ def continue_manga_flow(
             return
         if resume_choice and resume_choice.startswith("⮕ Sim, retomar"):
             resume_immediately = True
-            logger.info(f"✓ Retomando capítulo {resume_point.chapter_number}...")
+            ui_bridge.show_info(f"✓ Retomando capítulo {resume_point.chapter_number}...")
 
     chapters, selected_source, manga_url, selected_manga = _load_chapters_with_fallback(
         service, selected_manga, selected_source, allow_source_change, progress
     )
     if not chapters:
-        logger.info("❌ Nenhum capítulo disponível")
+        ui_bridge.show_warning("❌ Nenhum capítulo disponível")
         return
 
     sort_chapters_ascending(chapters)
@@ -319,7 +319,7 @@ def continue_manga_flow(
     if resume_immediately and resume_point is not None:
         recommended = find_chapter_by_number(chapters, resume_point.chapter_number)
         if not recommended or not recommended.url:
-            logger.info(
+            ui_bridge.show_warning(
                 f"⚠️  Capítulo {resume_point.chapter_number} não disponível em "
                 f"{selected_source}. Tentando outras fontes..."
             )
@@ -335,7 +335,7 @@ def continue_manga_flow(
                 manga_source_preferences.set_preferred_source(selected_manga.title, selected_source)
 
         if recommended and recommended.url:
-            logger.info(
+            ui_bridge.show_info(
                 f"✓ Capítulo {resume_point.chapter_number} encontrado em {selected_source}. "
                 "Iniciando leitura..."
             )
@@ -353,7 +353,7 @@ def continue_manga_flow(
                 progress,
             )
             return
-        logger.info(
+        ui_bridge.show_warning(
             f"⚠️  Capítulo {resume_point.chapter_number} não encontrado em nenhuma fonte. "
             "Mostrando lista completa..."
         )
@@ -457,14 +457,14 @@ def handle_download_for_later(
                     selected_manga.id, manga_url=manga_url, source=selected_source
                 )
         except Exception as e:
-            logger.info(f"❌ Erro ao carregar capítulos: {e}")
+            ui_bridge.show_warning(f"❌ Erro ao carregar capítulos: {e}")
             return
         all_chapters.reverse()  # scraper returns descending
     else:
         all_chapters = chapters
 
     if not all_chapters:
-        logger.info("❌ Nenhum capítulo disponível")
+        ui_bridge.show_warning("❌ Nenhum capítulo disponível")
         return
 
     chapters_to_download = prompt_download_range(
@@ -491,7 +491,7 @@ def handle_download_for_later(
             new_chapters = chapters_to_download
 
     if not new_chapters:
-        logger.info(f"✓ Todos os {len(already_downloaded)} capítulo(s) já estão baixados")
+        ui_bridge.show_info(f"✓ Todos os {len(already_downloaded)} capítulo(s) já estão baixados")
         return
 
     logger.info(f"\n📥 Baixando {len(new_chapters)} capítulo(s)...")
@@ -541,9 +541,9 @@ def handle_download_for_later(
                 on_progress=_on_progress,
             )
 
-    logger.info(f"\n✓ Download concluído: {result.successful} capítulo(s) baixados")
+    ui_bridge.show_info(f"✓ Download concluído: {result.successful} capítulo(s) baixados")
     if result.failed_chapters:
-        logger.info(
+        ui_bridge.show_warning(
             f"⚠️  {len(result.failed_chapters)} capítulo(s) falharam: "
             f"{', '.join(result.failed_chapters)}"
         )
@@ -569,21 +569,21 @@ def _prepare_chapter_pdf(selected_manga, selected_chapter, selected_source, serv
                 selected_chapter.id, chapter_url=selected_chapter.url or "", source=selected_source
             )
     except MangaDexError as e:
-        logger.info(f"⚠️  {e.user_message}")
+        ui_bridge.show_warning(f"⚠️  {e.user_message}")
         return None
     except Exception as e:
-        logger.info(f"❌ Erro ao carregar páginas: {e}")
+        ui_bridge.show_warning(f"❌ Erro ao carregar páginas: {e}")
         return None
 
     if not pages:
-        logger.info("❌ Nenhuma página disponível para este capítulo")
+        ui_bridge.show_warning("❌ Nenhuma página disponível para este capítulo")
         return None
 
     logger.info(f"Baixando {len(pages)} páginas...")
     try:
         _download_images(pages, output_path, config)
         if not config.auto_create_pdf:
-            logger.info(f"✓ Capítulo salvo em: {output_path}")
+            ui_bridge.show_info(f"✓ Capítulo salvo em: {output_path}")
             return None
         logger.info("📄 Criando PDF...")
         create_pdf_from_images(output_path, pdf_path, quality=config.pdf_quality)
@@ -595,7 +595,7 @@ def _prepare_chapter_pdf(selected_manga, selected_chapter, selected_source, serv
         logger.info(f"✓ PDF criado: {pdf_path}")
         return pdf_path
     except Exception as e:
-        logger.info(f"❌ Erro ao processar capítulo: {e}")
+        ui_bridge.show_warning(f"❌ Erro ao processar capítulo: {e}")
         if output_path.exists():
             for f in output_path.glob("*"):
                 f.unlink(missing_ok=True)
@@ -614,12 +614,12 @@ def _sync_read_to_anilist(selected_manga, selected_chapter, pdf_path, menu) -> N
             f"Você leu o capítulo {selected_chapter.number} até o final?",
         )
         if confirm != "✅ Sim, li até o final":
-            logger.info("✓ Progresso não atualizado no AniList (capítulo não concluído)")
+            ui_bridge.show_info("✓ Progresso não atualizado no AniList (capítulo não concluído)")
             return
 
         search_results = anilist_client.search_manga(selected_manga.title)
         if not search_results:
-            logger.info(f"⚠️  Mangá não encontrado no AniList: {selected_manga.title}")
+            ui_bridge.show_warning(f"⚠️  Mangá não encontrado no AniList: {selected_manga.title}")
             return
 
         best_match = search_results[0]
@@ -627,26 +627,28 @@ def _sync_read_to_anilist(selected_manga, selected_chapter, pdf_path, menu) -> N
         chapter_value = chapter_number_value(selected_chapter.number)
         chapter_num = int(chapter_value) if chapter_value is not None else 0
         if anilist_client.update_manga_progress(best_match.id, chapter_num):
-            logger.info(
+            ui_bridge.show_info(
                 f"✓ Progresso atualizado no AniList: {selected_manga.title} "
                 f"- Cap. {selected_chapter.number}"
             )
             if not list_entry or list_entry.status == "PLANNING":
                 anilist_client.change_manga_status(best_match.id, Status.CURRENT)
-                logger.info("✓ Status alterado para: Lendo")
+                ui_bridge.show_info("✓ Status alterado para: Lendo")
         else:
-            logger.info("⚠️  Falha ao atualizar progresso no AniList")
+            ui_bridge.show_warning("⚠️  Falha ao atualizar progresso no AniList")
 
         if settings.manga.auto_delete_read_chapters and pdf_path and pdf_path.exists():
             try:
                 import shutil
 
                 shutil.rmtree(pdf_path.parent)
-                logger.info("✓ Capítulo deletado automaticamente: economizando espaço em disco")
+                ui_bridge.show_info(
+                    "✓ Capítulo deletado automaticamente: economizando espaço em disco"
+                )
             except Exception as e:
-                logger.info(f"⚠️  Não foi possível deletar capítulo automaticamente: {e}")
+                ui_bridge.show_warning(f"⚠️  Não foi possível deletar capítulo automaticamente: {e}")
     except Exception as e:
-        logger.info(f"⚠️  Erro ao sincronizar com AniList: {e}")
+        ui_bridge.show_warning(f"⚠️  Erro ao sincronizar com AniList: {e}")
 
 
 def _process_chapter(
@@ -679,12 +681,12 @@ def _process_chapter(
         )
 
         if is_zathura_running():
-            logger.info("📖 Feche o Zathura para continuar.")
+            ui_bridge.show_info("📖 Feche o Zathura para continuar.")
             while is_zathura_running():
                 import time
 
                 time.sleep(1)
-            logger.info("✓ Zathura fechado. Continuando...")
+            ui_bridge.show_info("✓ Zathura fechado. Continuando...")
 
         _sync_read_to_anilist(selected_manga, selected_chapter, pdf_path, menu)
 
@@ -702,7 +704,7 @@ def _process_chapter(
         if action == "Próximo":
             next_index = find_next_chapter_index(chapters, selected_chapter.number)
             if next_index is None:
-                logger.info("Você chegou ao final dos capítulos disponíveis")
+                ui_bridge.show_info("Você chegou ao final dos capítulos disponíveis")
                 return
             current_index = next_index
             chapter_labels[current_index] = chapter_labels[current_index].replace(
@@ -715,7 +717,7 @@ def _process_chapter(
                     "⮕ Retomar - ", ""
                 )
             else:
-                logger.info("Você está no primeiro capítulo")
+                ui_bridge.show_info("Você está no primeiro capítulo")
         # "Ler novamente" re-reads the current chapter (no index change).
 
         selected_chapter = chapters[current_index]
