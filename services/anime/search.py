@@ -19,7 +19,9 @@ from utils.logging import get_logger
 
 
 logger = get_logger(__name__)
-# Sourced from user-tunable settings (ANI_TUPI__SEARCH__INCREMENTAL_MAX_RESULTS).
+# Captured at import time from settings (ANI_TUPI__SEARCH__INCREMENTAL_MAX_RESULTS).
+# To override in tests use monkeypatch.setattr(search, "INCREMENTAL_SEARCH_MAX_RESULTS", N),
+# not monkeypatching the env var after import.
 INCREMENTAL_SEARCH_MAX_RESULTS = settings.search.incremental_max_results
 
 
