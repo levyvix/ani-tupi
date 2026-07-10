@@ -12,7 +12,7 @@ from services.anime_service import anilist_anime_flow
 from services.anime.airing_episodes_service import AiringEpisodesService
 from models.config import get_data_path, settings
 from ui.components import loading, menu_navigate, pause, render_section, show_error, show_info
-from models.models import AniListTitle
+from models.models import AniListTitle, Status
 from utils.cache import get_cache
 from utils.logging import get_logger
 
@@ -95,6 +95,69 @@ def _start_watching_anime(search_title: str, anime_id: int, display_title: str) 
         anilist_progress=anilist_progress,
         display_title=display_title,
     )
+
+
+def anime_actions_menu(display_title: str) -> str | None:
+    """Show per-anime actions menu.
+
+    Args:
+        display_title: Title shown in the menu header
+
+    Returns:
+        One of "watch", "download", "status", "open", or None on ESC
+    """
+    action_options = [
+        "▶️  Assistir agora",
+        "📥 Baixar",
+        "🔄 Mudar status",
+        "🌐 Abrir página no AniList",
+    ]
+
+    action_map = {
+        "▶️  Assistir agora": "watch",
+        "📥 Baixar": "download",
+        "🔄 Mudar status": "status",
+        "🌐 Abrir página no AniList": "open",
+    }
+
+    selection = menu_navigate(action_options, display_title)
+
+    if selection is None:
+        return None
+
+    return action_map.get(selection)
+
+
+def status_select_menu() -> Status | None:
+    """Show status submenu mapping readable labels to Status enum.
+
+    Returns:
+        Selected Status, or None on ESC
+    """
+    status_options = [
+        "📺 Watching (Assistindo)",
+        "📋 Planning (Planejo assistir)",
+        "✅ Completed (Completo)",
+        "⏸️  Paused (Pausado)",
+        "❌ Dropped (Dropado)",
+        "🔁 Repeating (Reassistindo)",
+    ]
+
+    status_map = {
+        "📺 Watching (Assistindo)": Status.CURRENT,
+        "📋 Planning (Planejo assistir)": Status.PLANNING,
+        "✅ Completed (Completo)": Status.COMPLETED,
+        "⏸️  Paused (Pausado)": Status.PAUSED,
+        "❌ Dropped (Dropado)": Status.DROPPED,
+        "🔁 Repeating (Reassistindo)": Status.REPEATING,
+    }
+
+    selection = menu_navigate(status_options, "Escolha o novo status")
+
+    if selection is None:
+        return None
+
+    return status_map.get(selection)
 
 
 def anilist_main_menu() -> tuple[str, int] | None:
@@ -435,7 +498,7 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
         # Import here to avoid circular import
         import argparse
 
-        from services.anime_service import anilist_anime_flow
+        from commands.anilist import run_anime_actions
 
         # Create args object for anilist_anime_flow
         args = argparse.Namespace(debug=False)
@@ -443,10 +506,8 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
         # Convert episodes to int if available (might be "?" for unknown)
         total_episodes = episodes if isinstance(episodes, int) else None
 
-        # Watch the anime (pass both display and search titles)
-        # This will go through the normal playback flow where user can choose
-        # to download or watch after selecting an episode
-        anilist_anime_flow(
+        # Show per-anime actions menu (watch/download/status/open)
+        run_anime_actions(
             search_title,
             anime_id,
             args,
@@ -455,7 +516,7 @@ def _show_anime_list(list_type: str) -> tuple[str, int] | None:
             total_episodes=total_episodes,
         )
 
-        # After watching, loop back to show list again
+        # After the actions menu, loop back to show list again
         # This allows user to select another anime from the same list
 
 
@@ -569,14 +630,14 @@ def _show_recent_history() -> None:
         # Import here to avoid circular import
         import argparse
 
-        from services.anime_service import anilist_anime_flow
+        from commands.anilist import run_anime_actions
 
         # Create args object
         args = argparse.Namespace(debug=False)
 
-        # Watch the anime starting from AniList progress (source of truth)
+        # Show per-anime actions menu starting from AniList progress (source of truth)
         # Use max of AniList and local history to never go backwards
-        anilist_anime_flow(
+        run_anime_actions(
             search_title,
             saved_anilist_id,
             args,
@@ -585,7 +646,7 @@ def _show_recent_history() -> None:
             total_episodes=total_episodes,  # Pass total episodes from AniList
         )
 
-        # After watching, loop back to show recent history again
+        # After the actions menu, loop back to show recent history again
 
 
 def _search_and_add_anime(is_logged_in: bool) -> tuple[str, int] | None:
@@ -859,8 +920,10 @@ def _show_airing_episodes() -> None:
         # Create args object for anilist_anime_flow
         args = argparse.Namespace(debug=False)
 
-        # Watch the anime
-        anilist_anime_flow(
+        from commands.anilist import run_anime_actions
+
+        # Show per-anime actions menu
+        run_anime_actions(
             search_title,
             entry.anilist_id,
             args,
@@ -869,7 +932,7 @@ def _show_airing_episodes() -> None:
             total_episodes=anime_info.episodes,
         )
 
-        # After watching, loop back to show airing episodes list again
+        # After the actions menu, loop back to show airing episodes list again
 
 
 def _show_local_library() -> None:
