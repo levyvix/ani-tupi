@@ -137,10 +137,16 @@ def _sources_suffix(sources) -> str:
 
 def _select_source(
     service: UnifiedMangaService, selected_manga, current_source: str, menu, progress
-) -> str | None:
-    """Interactive source-change menu. Returns chosen source, or None to abort."""
+):
+    """Interactive source-change menu.
+
+    Returns ``(chosen_source, updated_manga)`` where ``updated_manga`` is a
+    (possibly re-searched) copy of ``selected_manga`` for the chosen source, or
+    ``(None, selected_manga)`` to abort. The input ``selected_manga`` is never
+    mutated.
+    """
     if len(service.get_available_sources()) <= 1:
-        return current_source
+        return current_source, selected_manga
 
     manga_sources = list(getattr(selected_manga, "sources", {}) or {})
     saved_source = manga_source_preferences.get_preferred_source(selected_manga.title)
@@ -168,26 +174,30 @@ def _select_source(
     try:
         action = menu(menu_options, menu_title)
     except KeyboardInterrupt:
-        return None
+        return None, selected_manga
 
     if action is None:
-        return None
+        return None, selected_manga
     if action.startswith("⭐ Usar fonte salva:"):
         new_source = action.split(": ")[1]
         if service.set_source(new_source):
-            research_manga_in_new_source(service, selected_manga, new_source, progress=progress)
+            updated = research_manga_in_new_source(
+                service, selected_manga, new_source, progress=progress
+            )
             logger.info(f"✓ Fonte alterada para: {new_source}")
-            return new_source
+            return new_source, updated
     elif action.startswith("🔄 Trocar para:"):
         new_source = action.split(": ")[1]
         if service.set_source(new_source):
-            research_manga_in_new_source(service, selected_manga, new_source, progress=progress)
-            manga_source_preferences.set_preferred_source(selected_manga.title, new_source)
+            updated = research_manga_in_new_source(
+                service, selected_manga, new_source, progress=progress
+            )
+            manga_source_preferences.set_preferred_source(updated.title, new_source)
             logger.info(f"✓ Fonte alterada e salva: {new_source}")
-            return new_source
+            return new_source, updated
         logger.info(f"❌ Falha ao alterar fonte para: {new_source}")
-        return None
-    return current_source
+        return None, selected_manga
+    return current_source, selected_manga
 
 
 def _get_anilist_progress(selected_manga) -> int | None:
@@ -203,18 +213,23 @@ def _get_anilist_progress(selected_manga) -> int | None:
 def _load_chapters_with_fallback(
     service, selected_manga, selected_source, allow_source_change, progress
 ):
-    """Load chapters, trying other sources on failure. Returns (chapters, source, url)."""
+    """Load chapters, trying other sources on failure.
+
+    Returns ``(chapters, source, url, manga)`` where ``manga`` is a
+    (possibly re-sourced) copy of ``selected_manga``. The input
+    ``selected_manga`` is never mutated.
+    """
     manga_url = build_manga_url(selected_source, selected_manga.id)
     try:
         with progress(f"Carregando capítulos de {selected_source}..."):
             chapters = service.get_chapters(
                 selected_manga.id, manga_url=manga_url, source=selected_source
             )
-        return chapters, selected_source, manga_url
+        return chapters, selected_source, manga_url, selected_manga
     except MangaDexError as e:
         logger.info(f"⚠️  {e.user_message}")
         if not allow_source_change:
-            return None, selected_source, manga_url
+            return None, selected_source, manga_url, selected_manga
         logger.info("🔄 Tentando outras fontes...")
         for fallback_source in service.get_available_sources():
             if fallback_source == selected_source:
@@ -228,18 +243,18 @@ def _load_chapters_with_fallback(
                         fb_id, manga_url=manga_url, source=fallback_source
                     )
                     if chapters:
-                        selected_manga.id = fb_id
+                        updated_manga = selected_manga.model_copy(update={"id": fb_id})
                         manga_source_preferences.set_preferred_source(
-                            selected_manga.title, fallback_source
+                            updated_manga.title, fallback_source
                         )
                         logger.info(f"✓ Usando fonte alternativa: {fallback_source}")
-                        return chapters, fallback_source, manga_url
+                        return chapters, fallback_source, manga_url, updated_manga
             except Exception:
                 continue
-        return None, selected_source, manga_url
+        return None, selected_source, manga_url, selected_manga
     except Exception as e:
         logger.info(f"❌ Erro ao carregar capítulos: {e}")
-        return None, selected_source, manga_url
+        return None, selected_source, manga_url, selected_manga
 
 
 def continue_manga_flow(
@@ -256,7 +271,9 @@ def continue_manga_flow(
     )
 
     if allow_source_change:
-        chosen = _select_source(service, selected_manga, selected_source, menu, progress)
+        chosen, selected_manga = _select_source(
+            service, selected_manga, selected_source, menu, progress
+        )
         if chosen is None:
             return
         selected_source = chosen
@@ -287,7 +304,7 @@ def continue_manga_flow(
             resume_immediately = True
             logger.info(f"✓ Retomando capítulo {resume_point.chapter_number}...")
 
-    chapters, selected_source, manga_url = _load_chapters_with_fallback(
+    chapters, selected_source, manga_url, selected_manga = _load_chapters_with_fallback(
         service, selected_manga, selected_source, allow_source_change, progress
     )
     if not chapters:
@@ -311,7 +328,7 @@ def continue_manga_flow(
                 progress=progress,
             )
             if fallback:
-                selected_source, manga_url, chapters, recommended = fallback
+                selected_source, manga_url, chapters, recommended, selected_manga = fallback
                 manga_source_preferences.set_preferred_source(selected_manga.title, selected_source)
 
         if recommended and recommended.url:

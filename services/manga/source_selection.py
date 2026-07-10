@@ -28,26 +28,28 @@ def research_manga_in_new_source(
     selected_manga,
     new_source: str,
     progress=ui_bridge.loading,
-) -> None:
-    """Re-search a manga in a new source and update its id/metadata in place.
+):
+    """Re-search a manga in a new source and return an updated copy.
 
     When switching sources, the manga id may differ. This verifies the manga
-    exists in ``new_source`` and mutates ``selected_manga`` so subsequent
-    chapter fetches target the right source.
+    exists in ``new_source`` and returns a copy of ``selected_manga`` with the
+    corrected id/metadata so subsequent chapter fetches target the right
+    source. The input ``selected_manga`` is never mutated; if no update is
+    needed (or the manga is not found), the original object is returned
+    unchanged.
     """
     try:
         # If the merged search already knows this manga's id in the new source,
         # use it directly — no re-search needed.
         known_id = (getattr(selected_manga, "sources", {}) or {}).get(new_source)
         if known_id:
-            selected_manga.id = known_id
-            return
+            return selected_manga.model_copy(update={"id": known_id})
 
         # First try with the current id (ids may be shared across sources).
         try:
             chapters = service.get_chapters(selected_manga.id, source=new_source)
             if chapters:
-                return
+                return selected_manga
         except (ConnectionError, TimeoutError) as e:
             logger.debug(f"Fonte indisponível: {e}")
         except Exception as e:
@@ -58,7 +60,7 @@ def research_manga_in_new_source(
 
         if not results:
             logger.info(f"⚠️  Manga não encontrado em {new_source}")
-            return
+            return selected_manga
 
         best_match = None
 
@@ -79,13 +81,18 @@ def research_manga_in_new_source(
         if not best_match:
             best_match = min(results, key=lambda x: len(x.title))
 
-        selected_manga.id = best_match.id
-        selected_manga.title = best_match.title
-        selected_manga.description = best_match.description
-        selected_manga.status = best_match.status
         logger.info(f"✓ Encontrado em {new_source}: {best_match.title}")
+        return selected_manga.model_copy(
+            update={
+                "id": best_match.id,
+                "title": best_match.title,
+                "description": best_match.description,
+                "status": best_match.status,
+            }
+        )
     except Exception as e:
         logger.info(f"⚠️  Erro ao buscar em {new_source}: {e}")
+        return selected_manga
 
 
 def resume_from_other_source(
@@ -97,9 +104,11 @@ def resume_from_other_source(
 ):
     """Find a chapter in the manga's other known sources.
 
-    Returns ``(source, manga_url, sorted_chapters, chapter)`` for the first
-    source that has ``chapter_num`` with a usable URL, or None. On success sets
-    the service source and mutates ``selected_manga.id`` to that source's id.
+    Returns ``(source, manga_url, sorted_chapters, chapter, updated_manga)``
+    for the first source that has ``chapter_num`` with a usable URL, or None.
+    On success sets the service source and returns ``updated_manga``, a copy of
+    ``selected_manga`` with its id set to that source's id. The input
+    ``selected_manga`` is never mutated.
     """
     other_sources = [s for s in (selected_manga.sources or {}) if s != current_source]
     for src in other_sources:
@@ -116,6 +125,6 @@ def resume_from_other_source(
         chapter = find_chapter_by_number(chapters, chapter_num)
         if chapter and chapter.url:
             service.set_source(src)
-            selected_manga.id = src_id
-            return src, manga_url, chapters, chapter
+            updated_manga = selected_manga.model_copy(update={"id": src_id})
+            return src, manga_url, chapters, chapter, updated_manga
     return None

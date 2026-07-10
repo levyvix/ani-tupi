@@ -352,6 +352,14 @@ class IncrementalSearchState:
     def toggle_language(self) -> str:
         """Switch to the alternative language and update state.
 
+        NOTE: this intentionally mutates ``self`` in place. Unlike the
+        source-selection helpers, ``IncrementalSearchState`` is loop-owned
+        internal search state (never a caller-passed input to transform), and
+        the interactive search loop that owns it relies on this in-place
+        semantics. Making it return a new copy would be invasive here (and the
+        toggle-language tests assert in-place mutation), so it is not an
+        immutable-data-flow violation.
+
         Returns:
             The new current language after toggle
 

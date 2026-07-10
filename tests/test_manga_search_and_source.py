@@ -128,15 +128,32 @@ class TestResearchMangaInNewSource:
     def test_uses_known_source_id_without_research(self):
         manga = _manga(sources={"mugiwaras": "mug-id"})
         svc = _FakeService()
-        research_manga_in_new_source(svc, manga, "mugiwaras", progress=_noop_progress)
-        assert manga.id == "mug-id"
+        updated = research_manga_in_new_source(svc, manga, "mugiwaras", progress=_noop_progress)
+        assert updated.id == "mug-id"
 
     def test_researches_and_updates_on_exact_title(self):
         manga = _manga(title="Chainsaw Man", mid="old")
         found = _manga(title="Chainsaw Man", mid="new-id")
         svc = _FakeService(search_by_source={"srcB": [found]})
-        research_manga_in_new_source(svc, manga, "srcB", progress=_noop_progress)
-        assert manga.id == "new-id"
+        updated = research_manga_in_new_source(svc, manga, "srcB", progress=_noop_progress)
+        assert updated.id == "new-id"
+
+    def test_does_not_mutate_input_manga(self):
+        # Immutable data flow: the passed-in manga must be left untouched; the
+        # updated copy is returned instead.
+        manga = _manga(title="Chainsaw Man", mid="old", sources={})
+        found = _manga(title="Chainsaw Man Renewed", mid="new-id")
+        svc = _FakeService(search_by_source={"srcB": [found]})
+
+        updated = research_manga_in_new_source(svc, manga, "srcB", progress=_noop_progress)
+
+        # Original unchanged.
+        assert manga.id == "old"
+        assert manga.title == "Chainsaw Man"
+        # Returned copy carries the new source's metadata.
+        assert updated is not manga
+        assert updated.id == "new-id"
+        assert updated.title == "Chainsaw Man Renewed"
 
 
 class TestResumeFromOtherSource:
@@ -148,11 +165,29 @@ class TestResumeFromOtherSource:
             svc, manga, chapter_num=5, current_source="mangadex", progress=_noop_progress
         )
         assert result is not None
-        src, _url, chapters, chapter = result
+        src, _url, chapters, chapter, updated = result
         assert src == "mugiwaras"
         assert chapter.number == "5"
-        assert manga.id == "mug"
+        # Input untouched; new id conveyed via the returned copy.
+        assert manga.id == "m1"
+        assert updated is not manga
+        assert updated.id == "mug"
         assert "mugiwaras" in svc.set_source_calls
+
+    def test_does_not_mutate_input_manga(self):
+        ch = SimpleNamespace(number="5", url="http://x", id="c5")
+        manga = _manga(mid="orig", sources={"mangadex": "md", "mugiwaras": "mug"})
+        svc = _FakeService(chapters_by_source={"mugiwaras": [ch]})
+
+        result = resume_from_other_source(
+            svc, manga, chapter_num=5, current_source="mangadex", progress=_noop_progress
+        )
+
+        assert result is not None
+        *_rest, updated = result
+        assert manga.id == "orig"
+        assert updated is not manga
+        assert updated.id == "mug"
 
     def test_returns_none_when_no_other_source_has_it(self):
         manga = _manga(sources={"mangadex": "md", "mugiwaras": "mug"})
