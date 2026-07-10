@@ -12,6 +12,8 @@ from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
+REQUEST_TIMEOUT = 20
+
 SEARCH_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -75,7 +77,9 @@ class AnimeFire:
 
     def search_anime(self, query: str) -> list[AnimeMetadata]:
         url = "https://animefire.plus/pesquisar/" + "-".join(query.split())
-        response = httpx.get(url, timeout=20, follow_redirects=True, headers=SEARCH_HEADERS)
+        response = httpx.get(
+            url, timeout=REQUEST_TIMEOUT, follow_redirects=True, headers=SEARCH_HEADERS
+        )
         response.raise_for_status()
         tree = BeautifulSoup(response.text, "html.parser")
         return self._parse_search_page(tree)
@@ -83,7 +87,7 @@ class AnimeFire:
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
-            response = httpx.get(url, timeout=20, follow_redirects=True)
+            response = httpx.get(url, timeout=REQUEST_TIMEOUT, follow_redirects=True)
             response.raise_for_status()
             tree = BeautifulSoup(response.text, "html.parser")
 
@@ -110,7 +114,7 @@ class AnimeFire:
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
             # data-video-src is in static HTML — no Selenium needed
-            response = httpx.get(url, timeout=20, follow_redirects=True)
+            response = httpx.get(url, timeout=REQUEST_TIMEOUT, follow_redirects=True)
             response.raise_for_status()
             page = BeautifulSoup(response.text, "html.parser")
 
@@ -121,7 +125,9 @@ class AnimeFire:
                 api_url = video.get("data-video-src")
                 if api_url:
                     try:
-                        response = httpx.get(api_url, timeout=20, follow_redirects=True)
+                        response = httpx.get(
+                            api_url, timeout=REQUEST_TIMEOUT, follow_redirects=True
+                        )
                         response.raise_for_status()
                         video_data = json.loads(response.text)
 

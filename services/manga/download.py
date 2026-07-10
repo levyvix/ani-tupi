@@ -19,6 +19,10 @@ from utils.range_parser import parse_range_input
 
 logger = get_logger(__name__)
 
+# Minimum fraction of a chapter's pages that must download successfully for the
+# chapter to be considered a valid download (below this the chapter is failed).
+MIN_DOWNLOAD_SUCCESS_RATIO = 0.5
+
 
 @dataclass
 class BatchDownloadResult:
@@ -138,7 +142,7 @@ def download_chapter(
                 f"Nenhuma imagem válida baixada para capítulo {chapter.number}",
             )
 
-        if len(image_files) < len(pages) * 0.5:
+        if len(image_files) < len(pages) * MIN_DOWNLOAD_SUCCESS_RATIO:
             return (
                 False,
                 f"Apenas {len(image_files)}/{len(pages)} imagens válidas baixadas para capítulo {chapter.number}",

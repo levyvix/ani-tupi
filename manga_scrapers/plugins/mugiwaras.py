@@ -16,6 +16,8 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+REQUEST_TIMEOUT = 15
+
 
 class MugiwarasOficial:
     """MugiwarasOficial.com scraper plugin."""
@@ -317,7 +319,9 @@ class MugiwarasOficial:
             ),
             "Referer": f"{self.base_url}/",
         }
-        with httpx.Client(headers=headers, timeout=15, follow_redirects=True) as client:
+        with httpx.Client(
+            headers=headers, timeout=REQUEST_TIMEOUT, follow_redirects=True
+        ) as client:
             for n in range(start, start + self._MAX_PAGES):
                 url = f"{prefix}{n:0{width}d}.{ext}"
                 try:

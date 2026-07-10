@@ -19,7 +19,8 @@ from utils.logging import get_logger
 
 
 logger = get_logger(__name__)
-INCREMENTAL_SEARCH_MAX_RESULTS = 20
+# Sourced from user-tunable settings (ANI_TUPI__SEARCH__INCREMENTAL_MAX_RESULTS).
+INCREMENTAL_SEARCH_MAX_RESULTS = settings.search.incremental_max_results
 
 
 def _debug_incremental_search(message: str) -> None:

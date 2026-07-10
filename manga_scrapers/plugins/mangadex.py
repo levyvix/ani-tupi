@@ -12,6 +12,8 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+REQUEST_TIMEOUT = 10
+
 _NETWORK_ERRORS = (httpx.HTTPError, ConnectionError, TimeoutError)
 
 
@@ -38,7 +40,7 @@ class MangaDex:
             resp = httpx.get(
                 f"{self.base_url}/manga",
                 params={"title": query, "limit": 100},
-                timeout=10,
+                timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
             resp.raise_for_status()
@@ -112,7 +114,7 @@ class MangaDex:
                 resp = httpx.get(
                     f"{self.base_url}/manga/{manga_id}/feed",
                     params=params,
-                    timeout=10,
+                    timeout=REQUEST_TIMEOUT,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -174,7 +176,7 @@ class MangaDex:
         try:
             resp = httpx.get(
                 f"{self.base_url}/at-home/server/{chapter_id}",
-                timeout=10,
+                timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
             resp.raise_for_status()

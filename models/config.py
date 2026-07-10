@@ -181,6 +181,11 @@ class SearchSettings(BaseModel):
         ge=1,
         description="Minimum words to use in progressive search",
     )
+    incremental_max_results: int = Field(
+        20,
+        ge=1,
+        description="Result-count threshold that stops incremental search word expansion",
+    )
     top_results_limit: int = Field(
         10,
         ge=5,
