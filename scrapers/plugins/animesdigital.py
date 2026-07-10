@@ -326,10 +326,14 @@ class AnimesDigital:
                 )
                 if merged is not None:
                     merged_titles, merged_urls = merged
-                    return [ScrapedEpisodes(merged_titles, merged_urls, AnimesDigital.name)]
+                    return [
+                        ScrapedEpisodes(
+                            titles=merged_titles, urls=merged_urls, source=AnimesDigital.name
+                        )
+                    ]
 
             if titles:
-                return [ScrapedEpisodes(titles, urls, AnimesDigital.name)]
+                return [ScrapedEpisodes(titles=titles, urls=urls, source=AnimesDigital.name)]
             return []
         except Exception as e:
             logger.debug(f"AnimesDigital series page scraping failed for '{anime}': {e}")

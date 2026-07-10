@@ -80,7 +80,7 @@ class AnimesOnlineIO:
             if episodes:
                 titles = [ep[1] for ep in episodes]
                 urls = [ep[2] for ep in episodes]
-                return [ScrapedEpisodes(titles, urls, self.name)]
+                return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
             return []
         except httpx.HTTPError as e:
             logger.debug(f"AnimesOnlineIO episode fetch failed for '{anime}': {e}")

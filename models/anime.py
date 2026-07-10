@@ -1,6 +1,5 @@
 """Anime, episode, search, and watch-history data models."""
 
-from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -73,8 +72,7 @@ class EpisodeData(BaseModel):
         return self
 
 
-@dataclass
-class ScrapedEpisodes:
+class ScrapedEpisodes(BaseModel):
     """Raw episode batch returned by a scraper plugin.
 
     Plugins are pure adapters: ``search_episodes`` returns these batches instead
@@ -255,8 +253,7 @@ class SearchResults(BaseModel, frozen=True):
         return result_list
 
 
-@dataclass
-class HistoryEntry:
+class HistoryEntry(BaseModel):
     """Watch history entry. Serializes as list for JSON backward compat.
 
     JSON list format: [timestamp, episode_idx, anilist_id, source, total_episodes, urls]
@@ -267,7 +264,7 @@ class HistoryEntry:
     anilist_id: int | None = None
     source: str | None = None
     total_episodes: int | None = None
-    urls: dict[str, str] = field(default_factory=dict)
+    urls: dict[str, str] = Field(default_factory=dict)
 
     @classmethod
     def from_list(cls, data: list) -> "HistoryEntry":

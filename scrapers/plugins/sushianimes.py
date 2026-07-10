@@ -213,7 +213,7 @@ class SushiAnimes:
                 urls.append(_normalize_url(href))
 
             if titles and urls:
-                return [ScrapedEpisodes(titles, urls, self.name, season)]
+                return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name, season=season)]
             return []
         except httpx.HTTPError as e:
             logger.debug("sushianimes search_episodes falhou: %s", e)

@@ -75,7 +75,7 @@ class Goyabu:
                 urls.append(ep_url)
 
             if titles and urls:
-                return [ScrapedEpisodes(titles, urls, self.name)]
+                return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
             return []
         except (httpx.HTTPError, json.JSONDecodeError, ValueError):
             return []

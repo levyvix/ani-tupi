@@ -226,7 +226,7 @@ class Dattebayo:
             paired = sorted(deduped, key=lambda item: _extract_episode_number(item[0]))
             if paired:
                 titles, urls = zip(*paired, strict=True)
-                return [ScrapedEpisodes(list(titles), list(urls), self.name)]
+                return [ScrapedEpisodes(titles=list(titles), urls=list(urls), source=self.name)]
             return []
         except httpx.HTTPError as exc:
             logger.debug("Dattebayo search_episodes failed for %r: %s", anime, exc)

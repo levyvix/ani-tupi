@@ -75,7 +75,7 @@ class AniTube:
                     titles.append(title.strip())
                     urls.append(href)
 
-            return [ScrapedEpisodes(titles, urls, self.name)]
+            return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
         except httpx.HTTPError as e:
             logger.debug(f"AniTube episode fetch failed for '{anime}': {e}")
             return []
