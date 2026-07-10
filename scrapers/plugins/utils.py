@@ -83,7 +83,9 @@ def http_get_with_retry(
                 return response
             if status == 429 and (retry_after := response.headers.get("Retry-After")):
                 try:
-                    delay = float(retry_after)
+                    delay = float(
+                        retry_after
+                    )  # integer seconds; RFC 7231 date format raises ValueError → falls through to backoff
                 except ValueError:
                     delay = backoff_base * 2**attempt
             else:
