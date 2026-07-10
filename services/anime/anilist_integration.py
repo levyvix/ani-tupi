@@ -12,7 +12,7 @@ from models.config import get_data_path
 from services.anilist_service import anilist_client
 from services.repository import rep
 from services import ui_bridge
-from utils.scraper_cache import get_cache, set_cache
+from utils.cache import get_scraper_cache, set_scraper_cache
 from scrapers import loader
 from models.models import Status
 from services.history_service import save_history, reset_history
@@ -153,7 +153,7 @@ def load_episodes_from_cache_or_search(
         Tuple of (search_state, titles_with_sources).
         search_state is None on cache hit.
     """
-    cache_data = get_cache(query)
+    cache_data = get_scraper_cache(query)
 
     if cache_data:
         logger.info(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
@@ -661,7 +661,7 @@ def _load_episode_list(
     Returns ``(episode_list, scraper_episode_count)``. ``episode_list`` is
     ``None`` when loading failed (no episodes could be scraped).
     """
-    cache_data = get_cache(selected_anime)
+    cache_data = get_scraper_cache(selected_anime)
 
     if cache_data:
         logger.info(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
@@ -692,7 +692,7 @@ def _load_episode_list(
         ui_bridge.prompt("\nPressione Enter para voltar...")
         return None, 0
 
-    set_cache(selected_anime, scraper_episode_count, episode_list)
+    set_scraper_cache(selected_anime, scraper_episode_count, episode_list)
     return episode_list, scraper_episode_count
 
 

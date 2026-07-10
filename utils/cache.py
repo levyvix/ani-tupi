@@ -395,6 +395,89 @@ def clear_cache_all() -> None:
     cache.clear()
 
 
+def clear_cache_all_with_mappings() -> None:
+    """Clear the global cache and the saved AniList mapping state."""
+    clear_cache_all()
+
+    from services.anime.mappings import clear_anilist_mapping
+
+    clear_anilist_mapping()
+
+
+def get_scraper_cache(anime_title: str):
+    """Get cached scraper data for an anime.
+
+    Args:
+        anime_title: Normalized anime title
+
+    Returns:
+        ScraperCacheData with episode_urls and episode_count or None if not found
+    """
+    from models.models import ScraperCacheData
+    from utils.anilist_discovery import get_anilist_id_from_title
+
+    # Check if episodes cache is enabled
+    if not settings.cache.episodes_cache_enabled:
+        return None
+
+    try:
+        # Try to discover AniList ID for better cache lookup
+        anilist_id = get_anilist_id_from_title(anime_title)
+
+        if anilist_id:
+            cache_key = f"episodes:{anilist_id}"
+        else:
+            cache_key = f"episodes:{anime_title}"
+
+        # Get from unified cache system
+        cache_obj = get_cache()
+        cached_urls = cache_obj.get(cache_key)
+
+        if cached_urls and isinstance(cached_urls, list):
+            return ScraperCacheData(
+                episode_urls=cached_urls,  # type: ignore[arg-type]  # unified cache returns Any
+                episode_count=len(cached_urls),
+                timestamp=0,  # Not used in new system
+            )
+
+        return None
+
+    except Exception:
+        return None
+
+
+def set_scraper_cache(anime_title: str, episode_count: int, episode_urls: list[str]) -> None:
+    """Save scraper results to cache.
+
+    Args:
+        anime_title: Normalized anime title
+        episode_count: Number of episodes found
+        episode_urls: List of episode URLs
+    """
+    from utils.anilist_discovery import get_anilist_id_from_title
+
+    # Check if episodes cache is enabled
+    if not settings.cache.episodes_cache_enabled:
+        return
+
+    try:
+        cache_obj = get_cache()
+
+        # Try to discover AniList ID for better cache key
+        anilist_id = get_anilist_id_from_title(anime_title)
+
+        if anilist_id:
+            cache_key = f"episodes:{anilist_id}"
+        else:
+            cache_key = f"episodes:{anime_title}"
+
+        # Save to unified cache system
+        cache_obj.set(cache_key, episode_urls, ttl=settings.performance.default_ttl_hours * 3600)
+
+    except Exception:
+        pass  # Silent fail - cache is optional
+
+
 def clear_cache_by_prefix(prefix: str) -> None:
     """Clear cache entries by prefix (limited implementation).
 

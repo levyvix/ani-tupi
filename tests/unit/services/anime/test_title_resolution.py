@@ -154,7 +154,7 @@ def test_anime_title_resolver_ignores_weak_match():
         aliases=("Dandadan Kanzenban", "Dandadan"),
     ),
 )
-@patch("services.anime.search.get_cache")
+@patch("services.anime.search.get_scraper_cache")
 def test_search_anime_flow_cache_hit_prefers_original_query_before_jikan_resolution(
     mock_get_cache,
     mock_resolve_query,
@@ -221,7 +221,7 @@ def test_search_anime_flow_cache_hit_prefers_original_query_before_jikan_resolut
         aliases=("Boku no Hero Academia", "My Hero Academia"),
     ),
 )
-@patch("services.anime.search.get_cache", return_value=None)
+@patch("services.anime.search.get_scraper_cache", return_value=None)
 @patch(
     "services.anime.search.run_dual_contextual_search",
     return_value=DualSearchResults(
@@ -283,7 +283,7 @@ def test_search_anime_flow_retries_with_resolved_title(
         aliases=("Otonari no Tenshi-sama", "The Angel Next Door Spoils Me Rotten"),
     ),
 )
-@patch("services.anime.search.get_cache", return_value=None)
+@patch("services.anime.search.get_scraper_cache", return_value=None)
 @patch(
     "services.anime.search.run_dual_contextual_search",
     return_value=DualSearchResults(
@@ -347,7 +347,7 @@ def test_search_anime_flow_retries_with_resolved_title_when_original_results_are
         aliases=("Otonari no Tenshi-sama", "The Angel Next Door Spoils Me Rotten"),
     ),
 )
-@patch("services.anime.search.get_cache", return_value=None)
+@patch("services.anime.search.get_scraper_cache", return_value=None)
 @patch(
     "services.anime.search.run_dual_contextual_search",
     return_value=DualSearchResults(
@@ -418,7 +418,7 @@ def test_search_anime_flow_retries_with_resolved_title_when_season_missing(
     ),
 )
 @patch(
-    "services.anime.search.get_cache",
+    "services.anime.search.get_scraper_cache",
     return_value=ScraperCacheData(
         episode_urls=["https://example.com/ep1"],
         episode_count=1,
@@ -482,7 +482,7 @@ def test_search_anime_flow_cache_path_prefers_original_query_when_cached(
 
 @patch("services.anime.search.ui_bridge.loading", side_effect=lambda *args, **kwargs: nullcontext())
 @patch("services.anime.search._resolve_search_query", return_value=None)
-@patch("services.anime.search.get_cache", return_value=None)
+@patch("services.anime.search.get_scraper_cache", return_value=None)
 @patch(
     "services.anime.search.incremental_search_anime", return_value=(IncrementalSearchState(), [])
 )

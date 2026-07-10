@@ -14,7 +14,7 @@ from models.models import AnimeTitleResolution
 from services.anime.title_resolution import AnimeTitleResolver
 from services.repository import rep
 from services import ui_bridge
-from utils.scraper_cache import get_cache
+from utils.cache import get_scraper_cache
 from services.anime.title_normalization import normalize_anime_title
 from utils.logging import get_logger
 
@@ -1017,7 +1017,7 @@ def _try_cache_hit(candidate_query: str) -> bool:
     Returns ``True`` when a cache entry was found and loaded (so the caller can
     treat ``candidate_query`` as the selected anime), ``False`` otherwise.
     """
-    cache_data = get_cache(candidate_query)
+    cache_data = get_scraper_cache(candidate_query)
     if not cache_data:
         return False
 

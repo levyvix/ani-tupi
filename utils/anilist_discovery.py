@@ -9,7 +9,7 @@ from thefuzz import fuzz
 
 from models.models import AniListAnime, AniListSearchResult
 from models.config import settings
-from utils.cache_manager import get_cache, clear_cache_by_prefix
+from utils.cache import get_cache, clear_cache_by_prefix
 from utils.logging import get_logger
 
 logger = get_logger(__name__)

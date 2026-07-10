@@ -310,7 +310,7 @@ class SearchRepository:
         """Check cache for query. Returns (cached_data, check_time_ms)."""
         start = time.time()
         try:
-            from utils.cache_manager import get_cache
+            from utils.cache import get_cache
 
             cached = get_cache().get(normalize_search_cache_key(query))
         except Exception as e:
@@ -321,7 +321,7 @@ class SearchRepository:
 
     def _save_cache(self, query: str, verbose: bool) -> None:
         try:
-            from utils.cache_manager import get_cache
+            from utils.cache import get_cache
 
             get_cache().set(
                 normalize_search_cache_key(query),

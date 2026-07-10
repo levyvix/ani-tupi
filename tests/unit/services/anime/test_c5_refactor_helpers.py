@@ -108,7 +108,7 @@ class TestTryCacheHit:
         mock_rep = Mock()
 
         with (
-            patch.object(search, "get_cache", return_value=cache_data),
+            patch.object(search, "get_scraper_cache", return_value=cache_data),
             patch.object(search, "rep", mock_rep),
         ):
             hit = search._try_cache_hit("dandadan")
@@ -123,7 +123,7 @@ class TestTryCacheHit:
         mock_rep = Mock()
 
         with (
-            patch.object(search, "get_cache", return_value=None),
+            patch.object(search, "get_scraper_cache", return_value=None),
             patch.object(search, "rep", mock_rep),
         ):
             hit = search._try_cache_hit("unknown anime")
