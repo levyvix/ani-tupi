@@ -6,6 +6,7 @@ with stealth mode, user-agent rotation, and BeautifulSoup parsing.
 
 import random
 import time
+import weakref
 
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -27,6 +28,20 @@ USER_AGENTS = [
 ]
 
 
+def _quit_driver(driver) -> None:
+    """Quit a WebDriver handle, swallowing any teardown errors.
+
+    Kept at module level so ``weakref.finalize`` can hold a reference to the
+    driver handle without keeping the owning ``SeleniumWebDriver`` alive.
+    """
+    if driver is None:
+        return
+    try:
+        driver.quit()
+    except Exception:
+        pass
+
+
 class SeleniumWebDriver:
     """Selenium WebDriver wrapper with stealth and parsing capabilities.
 
@@ -46,7 +61,11 @@ class SeleniumWebDriver:
         """
         self.timeout = timeout
         self.driver = None
+        self._finalizer = None
         self._init_driver(headless, user_agent)
+        # Deterministic cleanup: runs on GC and at interpreter exit, and is
+        # idempotent. Does not hold a strong reference to ``self``.
+        self._finalizer = weakref.finalize(self, _quit_driver, self.driver)
 
     def _init_driver(self, headless: bool, user_agent: str | None = None) -> None:
         """Initialize Chrome WebDriver with stealth options."""
@@ -128,18 +147,15 @@ class SeleniumWebDriver:
                     ) from e
 
     def close(self) -> None:
-        """Close browser and cleanup resources."""
-        if self.driver:
-            try:
-                self.driver.quit()
-            except Exception:
-                pass
-            finally:
-                self.driver = None
+        """Close browser and cleanup resources.
 
-    def __del__(self):
-        """Ensure cleanup on object destruction."""
-        self.close()
+        Idempotent: running the finalizer also detaches it, so a later GC or
+        interpreter-exit pass will not attempt a second ``quit()``.
+        """
+        if self._finalizer is not None:
+            # Runs _quit_driver(self.driver) exactly once and detaches itself.
+            self._finalizer()
+        self.driver = None
 
     def __enter__(self):
         """Context manager entry."""

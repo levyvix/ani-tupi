@@ -6,7 +6,7 @@ cache integration, and scraper discovery.
 
 import os
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import FIRST_EXCEPTION, ProcessPoolExecutor, wait
 from dataclasses import dataclass, field
 
 from models.config import settings
@@ -832,8 +832,19 @@ def run_dual_contextual_search(user_query: str, official_query: str) -> DualSear
             official_query,
             official_query,
         )
-        user_payload = user_future.result()
-        official_payload = official_future.result()
+        futures = (user_future, official_future)
+        # Wait for both to settle (or for the first failure). This ensures a
+        # failure in one future never leaves the other's result unretrieved.
+        wait(futures, return_when=FIRST_EXCEPTION)
+        try:
+            user_payload = user_future.result()
+            official_payload = official_future.result()
+        except BaseException:
+            # Cancel anything still pending, then let the ``with`` block's
+            # shutdown(wait=True) reap the running worker, and re-raise.
+            for future in futures:
+                future.cancel()
+            raise
 
     return DualSearchResults(
         user_query=user_query,
