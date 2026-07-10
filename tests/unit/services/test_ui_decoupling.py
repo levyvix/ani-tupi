@@ -10,21 +10,21 @@ Only genuine external boundaries (AniList client, filesystem) are stubbed.
 
 from contextlib import nullcontext
 
+from models.models import ScrapedEpisodes
 from utils.persistence import JSONStore
 
 
 class EpisodePlugin:
     """Real-ish scraper plugin that yields a fixed number of episodes."""
 
-    def __init__(self, name: str, episode_count: int, repository):
+    def __init__(self, name: str, episode_count: int):
         self.name = name
         self.episode_count = episode_count
-        self.repository = repository
 
     def search_episodes(self, anime: str, url: str, params):
         titles = [f"Episode {i + 1}" for i in range(self.episode_count)]
         urls = [f"{url}/ep{i + 1}" for i in range(self.episode_count)]
-        self.repository.add_episode_list(anime, titles, urls, self.name)
+        return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
 
 
 def _progress(_msg="Carregando..."):
@@ -59,7 +59,7 @@ class TestLoadHistoryInjectedUI:
         monkeypatch.setattr(history_service, "_history_store", store)
         monkeypatch.setattr(history_service, "rep", repository)
 
-        repository.register(EpisodePlugin("animefire", 3, repository))
+        repository.register(EpisodePlugin("animefire", 3))
         store.set(
             "Goblin Slayer",
             [1234567890, 1, None, "animefire", 13, {"animefire": "https://example.com/animefire"}],

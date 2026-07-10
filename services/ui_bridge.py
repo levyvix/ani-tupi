@@ -8,6 +8,12 @@ the real implementation from ``ui.components`` at call time.
 Resolving lazily (rather than importing the symbols) means:
 - the service module never has a static ``from ui`` dependency, and
 - tests that patch ``ui.components.<name>`` are still honoured.
+
+**Testing note**: functions in this module are used as default argument values
+(e.g. ``progress=ui_bridge.loading``). Default args are captured at class/function
+definition time, so ``monkeypatch.setattr(ui_bridge, "loading", fake)`` will NOT
+affect callers that already have the default bound. Always inject UI callables
+directly (``progress=fake``) in tests rather than monkeypatching this module.
 """
 
 from contextlib import contextmanager
