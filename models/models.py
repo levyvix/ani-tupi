@@ -86,6 +86,27 @@ class EpisodeData(BaseModel):
         return self
 
 
+@dataclass
+class ScrapedEpisodes:
+    """Raw episode batch returned by a scraper plugin.
+
+    Plugins are pure adapters: ``search_episodes`` returns these batches instead
+    of mutating the repository. The episode repository normalizes raw ``titles``
+    to episode numbers and registers the data.
+
+    Attributes:
+        titles: Raw episode labels from the scraper (e.g. "Episódio 1")
+        urls: Episode URLs, aligned 1:1 with ``titles``
+        source: Plugin source name
+        season: Season number (1-indexed); 1 lets the repository infer it
+    """
+
+    titles: list[str]
+    urls: list[str]
+    source: str
+    season: int = 1
+
+
 class AniListSearchResult(BaseModel):
     """AniList search result with score."""
 

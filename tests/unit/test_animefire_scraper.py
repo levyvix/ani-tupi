@@ -121,30 +121,26 @@ class TestAnimeFireScraper:
 
         assert results == []
 
-    @patch("scrapers.plugins.animefire.rep")
     @patch("scrapers.plugins.animefire.httpx.get")
-    def test_search_episodes_adds_episode_list(self, mock_get, mock_rep):
+    def test_search_episodes_returns_episode_list(self, mock_get):
         mock_get.return_value = _Response(EPISODES_HTML)
 
-        self.scraper.search_episodes("Mao", "https://animefire.plus/animes/mao", None)
+        result = self.scraper.search_episodes("Mao", "https://animefire.plus/animes/mao", None)
 
-        mock_rep.add_episode_list.assert_called_once()
-        anime, _, urls, source = mock_rep.add_episode_list.call_args[0]
-        assert anime == "Mao"
-        assert source == "animefire"
-        assert urls == [
+        assert len(result) == 1
+        assert result[0].source == "animefire"
+        assert result[0].urls == [
             "https://animefire.plus/animes/mao/1",
             "https://animefire.plus/animes/mao/2",
         ]
 
-    @patch("scrapers.plugins.animefire.rep")
     @patch("scrapers.plugins.animefire.httpx.get")
-    def test_search_episodes_empty_page_does_not_call_rep(self, mock_get, mock_rep):
+    def test_search_episodes_empty_page_returns_empty(self, mock_get):
         mock_get.return_value = _Response("<html></html>")
 
-        self.scraper.search_episodes("Mao", "https://animefire.plus/animes/mao", None)
+        result = self.scraper.search_episodes("Mao", "https://animefire.plus/animes/mao", None)
 
-        mock_rep.add_episode_list.assert_not_called()
+        assert result == []
 
     @patch("scrapers.plugins.animefire.httpx.get")
     def test_search_player_src_fallbacks_to_video_src(self, mock_get):

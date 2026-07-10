@@ -4,9 +4,8 @@ import urllib.parse
 import httpx
 from bs4 import BeautifulSoup
 
-from models.models import AnimeMetadata
+from models.models import AnimeMetadata, ScrapedEpisodes
 from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
-from services.repository import rep
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -42,7 +41,7 @@ class AnimesOnlineCloud:
             logger.debug(f"AnimesOnlineCloud search request failed for '{query}': {e}")
         return results
 
-    def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+    def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
             r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
@@ -63,9 +62,11 @@ class AnimesOnlineCloud:
                 urls.append(ep_url)
 
             if titles and urls:
-                rep.add_episode_list(anime, titles, urls, self.name)
+                return [ScrapedEpisodes(titles, urls, self.name)]
+            return []
         except httpx.HTTPError as e:
             logger.debug(f"AnimesOnlineCloud episode fetch failed for '{anime}': {e}")
+            return []
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
@@ -110,5 +111,5 @@ class AnimesOnlineCloud:
         return urllib.parse.unquote(source) or None
 
 
-def load() -> None:
-    load_plugin(AnimesOnlineCloud, rep.register)
+def load(register) -> None:
+    load_plugin(AnimesOnlineCloud, register)

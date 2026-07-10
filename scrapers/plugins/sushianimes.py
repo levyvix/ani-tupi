@@ -7,8 +7,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
-from models.models import AnimeMetadata
-from services.repository import rep
+from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
@@ -178,7 +177,7 @@ class SushiAnimes:
             logger.debug("sushianimes search_anime falhou: %s", e)
         return results
 
-    def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+    def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         try:
             response = httpx.get(
                 url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
@@ -196,7 +195,7 @@ class SushiAnimes:
             if season_pane is None:
                 season_pane = soup.select_one(".episodes.tab-content .tab-pane")
             if season_pane is None:
-                return
+                return []
 
             titles: list[str] = []
             urls: list[str] = []
@@ -214,9 +213,11 @@ class SushiAnimes:
                 urls.append(_normalize_url(href))
 
             if titles and urls:
-                rep.add_episode_list(anime, titles, urls, self.name, season=season)
+                return [ScrapedEpisodes(titles, urls, self.name, season)]
+            return []
         except httpx.HTTPError as e:
             logger.debug("sushianimes search_episodes falhou: %s", e)
+            return []
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
@@ -259,5 +260,5 @@ class SushiAnimes:
             logger.debug("sushianimes search_player_src falhou: %s", e)
 
 
-def load() -> None:
-    load_plugin(SushiAnimes, rep.register)
+def load(register) -> None:
+    load_plugin(SushiAnimes, register)

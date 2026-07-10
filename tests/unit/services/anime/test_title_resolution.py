@@ -502,9 +502,9 @@ def test_search_anime_flow_fails_cleanly_when_resolution_fails(
 def test_ensure_anime_sources_in_repo_after_dual_search_worker():
     """Dual search menus must re-register sources in the main process."""
     from scrapers import loader
-
-    loader.load_plugins()
     from services.repository import rep
+
+    loader.load_plugins(rep.register)
 
     rep.clear_search_results()
     selected = "Koko wa Ore ni Makasete Saki ni Ike to Ittekara"

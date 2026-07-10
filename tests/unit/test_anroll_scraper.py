@@ -34,28 +34,25 @@ class TestAnRollEpisodes:
     def setup_method(self):
         self.scraper = AnRoll()
 
-    @patch("scrapers.plugins.anroll.rep")
     @patch("scrapers.plugins.anroll.httpx.get")
-    def test_search_episodes_uses_sidebar_not_id_range(self, mock_get, mock_rep):
+    def test_search_episodes_uses_sidebar_not_id_range(self, mock_get):
         mock_get.side_effect = [
             _html_response(ANIME_PAGE_HTML),
             _html_response(SIDEBAR_HTML),
         ]
 
-        self.scraper.search_episodes(
+        result = self.scraper.search_episodes(
             "Aishiteru Game wo Owarasetai",
             "https://anroll.io/anime/aishiteru-game-wo-owarasetai/",
             None,
         )
 
         assert mock_get.call_count == 2
-        mock_rep.add_episode_list.assert_called_once()
-        anime, _, urls, source = mock_rep.add_episode_list.call_args[0]
-        assert anime == "Aishiteru Game wo Owarasetai"
-        assert source == "anroll"
-        assert len(urls) == 3
-        assert urls[0] == "https://anroll.io/53289/"
-        assert urls[-1] == "https://anroll.io/60098/"
+        assert len(result) == 1
+        assert result[0].source == "anroll"
+        assert len(result[0].urls) == 3
+        assert result[0].urls[0] == "https://anroll.io/53289/"
+        assert result[0].urls[-1] == "https://anroll.io/60098/"
 
     @patch("scrapers.plugins.anroll.httpx.get")
     def test_episodes_from_sidebar_parses_ep_list_box(self, mock_get):

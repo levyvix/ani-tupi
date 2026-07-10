@@ -78,11 +78,17 @@ class EpisodeRepository:
             title_list: List of raw episode labels from the scraper
             url_list: List of episode URLs
             source: Plugin source name
-            season: Season number (default: 1)
+            season: Season number (default: 1, inferred from title if not specified)
 
         Raises:
             ValueError: If title_list and url_list have different lengths.
         """
+        # Infer season from anime title if not explicitly provided
+        if season == 1:  # Only infer if default
+            inferred_season = self._infer_season_from_title(anime)
+            if inferred_season:
+                season = inferred_season
+
         # Normalize raw labels ("Episódio 1", "Episodio - Legendado - 1") to ints
         episode_numbers = [
             parse_episode_number(title, fallback=i + 1) for i, title in enumerate(title_list)
@@ -117,6 +123,38 @@ class EpisodeRepository:
             self.anime_episodes_numbers[anime].append(episode_data.episode_numbers)
             self.anime_episodes_urls[anime].append((episode_data.episode_urls, source))
             self.anime_episodes_seasons[anime].append(season)
+
+    @staticmethod
+    def _infer_season_from_title(title: str) -> int | None:
+        """Infer season number from anime title.
+
+        Detects patterns like "Season 2", "temporada 12", "2nd Season", "7ª".
+        Works for any season number 2-99. Returns None for season 1 (default).
+        """
+        title_lower = title.lower()
+
+        # Patterns to detect season numbers, ordered by specificity
+        patterns = [
+            r"season\s+(\d+)",  # "Season 2", "season 7"
+            r"(\d+)(?:st|nd|rd|th)\s+season",  # "2nd season", "7th season"
+            r"season\s+(\d+)(?:st|nd|rd|th)",  # "season 2nd"
+            r"temporada\s+(\d+)",  # "temporada 2"
+            r"(\d+)º\s+temporada",  # "2º temporada"
+            r"(\d+)ª\s+temporada",  # "2ª temporada"
+            r"temp\s+(\d+)",  # "temp 2"
+            r"\s-\s(\d+)(?:\s|$|[^0-9])",  # " - 2 "
+            r"\|\s(\d+)(?:\s|$|[^0-9])",  # "| 2 "
+            r"\s([2-9]|[1-9]\d)(?:\s|$)",  # 2-99 at end
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, title_lower)
+            if match:
+                season_num = int(match.group(1))
+                if season_num >= 2:
+                    return season_num
+
+        return None  # Default to season 1
 
     def get_episode_list(self, anime: str, season: int | None = None) -> list[int]:
         """Get episode list for anime (returns longest list if multiple sources).
@@ -395,9 +433,17 @@ class EpisodeRepository:
                     episode_params: dict | None = params,
                 ) -> None:
                     try:
-                        self.sources[source_name].search_episodes(
+                        batches = self.sources[source_name].search_episodes(
                             anime, episode_url, episode_params
                         )
+                        for batch in batches or []:
+                            self.add_episode_list(
+                                anime,
+                                batch.titles,
+                                batch.urls,
+                                batch.source,
+                                batch.season,
+                            )
                     except Exception as exc:
                         with self._failure_lock:
                             self.last_search_failures[anime].append((source_name, str(exc)))

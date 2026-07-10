@@ -70,27 +70,23 @@ class TestGoyabuScraper:
 
         assert results == []
 
-    @patch("scrapers.plugins.goyabu.rep")
     @patch("scrapers.plugins.goyabu.httpx.get")
-    def test_search_episodes_adds_episode_list(self, mock_get, mock_rep):
+    def test_search_episodes_returns_episode_list(self, mock_get):
         mock_get.return_value = _html_response(EPISODES_JS)
 
-        self.scraper.search_episodes("Mao", "https://goyabu.io/anime/mao/", None)
+        result = self.scraper.search_episodes("Mao", "https://goyabu.io/anime/mao/", None)
 
-        mock_rep.add_episode_list.assert_called_once()
-        anime, _, urls, source = mock_rep.add_episode_list.call_args[0]
-        assert anime == "Mao"
-        assert source == "goyabu"
-        assert len(urls) == 2
+        assert len(result) == 1
+        assert result[0].source == "goyabu"
+        assert len(result[0].urls) == 2
 
-    @patch("scrapers.plugins.goyabu.rep")
     @patch("scrapers.plugins.goyabu.httpx.get")
-    def test_search_episodes_no_episodes_does_not_call_rep(self, mock_get, mock_rep):
+    def test_search_episodes_no_episodes_returns_empty(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")
 
-        self.scraper.search_episodes("Mao", "https://goyabu.io/anime/mao/", None)
+        result = self.scraper.search_episodes("Mao", "https://goyabu.io/anime/mao/", None)
 
-        mock_rep.add_episode_list.assert_not_called()
+        assert result == []
 
     @patch("scrapers.plugins.goyabu.resolve_blogger_token")
     @patch("scrapers.plugins.goyabu.httpx.get")

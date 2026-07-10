@@ -99,5 +99,5 @@ def extract_blogger_from_bg_mp4(
 
 
 def load_plugin(plugin_cls, register) -> None:
-    """Register an anime plugin."""
+    """Register an anime plugin with the caller-supplied registration callback."""
     register(plugin_cls())

@@ -545,7 +545,7 @@ def anilist_anime_flow(
         english_title = anime_info.title.english
         romaji_title = anime_info.title.romaji
 
-    loader.load_plugins()
+    loader.load_plugins(rep.register)
     rep.clear_search_results()
 
     if anilist_id:

@@ -8,8 +8,7 @@ from bs4 import BeautifulSoup
 
 from scrapers.core.blogger_resolver import resolve_blogger_token
 from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
-from models.models import AnimeMetadata
-from services.repository import rep
+from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
@@ -48,7 +47,7 @@ class Goyabu:
             logger.debug("goyabu search_anime falhou: %s", e)
         return results
 
-    def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+    def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
             response = httpx.get(
@@ -58,7 +57,7 @@ class Goyabu:
 
             match = _ALL_EPISODES_RE.search(response.text)
             if not match:
-                return
+                return []
 
             episodes = json.loads(match.group(1))
             titles = []
@@ -77,9 +76,10 @@ class Goyabu:
                 urls.append(ep_url)
 
             if titles and urls:
-                rep.add_episode_list(anime, titles, urls, self.name)
+                return [ScrapedEpisodes(titles, urls, self.name)]
+            return []
         except (httpx.HTTPError, json.JSONDecodeError, ValueError):
-            pass
+            return []
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
@@ -110,5 +110,5 @@ class Goyabu:
             raise type(e)(f"Goyabu: {e}") from e
 
 
-def load() -> None:
-    load_plugin(Goyabu, rep.register)
+def load(register) -> None:
+    load_plugin(Goyabu, register)

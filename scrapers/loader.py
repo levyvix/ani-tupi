@@ -8,13 +8,15 @@ def get_resource_path(relative_path: str) -> str:
     return join(dirname(abspath(__file__)), relative_path)
 
 
-def load_plugins(plugins: list[str] | None = None) -> None:
+def load_plugins(register, plugins: list[str] | None = None) -> None:
     """Load anime scraper plugins based on configured preferences.
 
     Respects plugin priority order from preferences if configured.
     Plugins are loaded in priority order (highest priority first).
 
     Args:
+        register: Callback each plugin uses to register itself (e.g. ``rep.register``).
+                  Injected so plugins stay pure adapters, free of service imports.
         plugins: Optional list of specific plugins to load (overrides preferences)
                  If None, loads all plugins except disabled ones
     """
@@ -43,4 +45,4 @@ def load_plugins(plugins: list[str] | None = None) -> None:
             plugins = enabled_plugins
 
     for plugin in plugins:
-        importlib.import_module(f"scrapers.plugins.{plugin}").load()
+        importlib.import_module(f"scrapers.plugins.{plugin}").load(register)

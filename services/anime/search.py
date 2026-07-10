@@ -759,7 +759,7 @@ def _parallel_contextual_search_worker(query: str, reference_title: str) -> dict
     """Run a contextual search in an isolated process and return serializable data."""
     from scrapers import loader
 
-    loader.load_plugins()
+    loader.load_plugins(rep.register)
     result = contextual_incremental_search(query, reference_title=reference_title)
     return {
         "used_query": result.used_query,

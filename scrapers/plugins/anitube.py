@@ -10,8 +10,7 @@ from scrapers.plugins.utils import (
     load_plugin,
     store_player_source,
 )
-from models.models import AnimeMetadata
-from services.repository import rep
+from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
@@ -55,7 +54,7 @@ class AniTube:
         _do_search(f"{query} todos os episodios")
         return collected
 
-    def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+    def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
             separator = "&" if "?" in url else "?"
@@ -75,10 +74,10 @@ class AniTube:
                     titles.append(title.strip())
                     urls.append(href)
 
-            rep.add_episode_list(anime, titles, urls, self.name)
+            return [ScrapedEpisodes(titles, urls, self.name)]
         except httpx.HTTPError as e:
             logger.debug(f"AniTube episode fetch failed for '{anime}': {e}")
-            return
+            return []
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
@@ -97,5 +96,5 @@ class AniTube:
             raise Exception(f"Could not extract video from AniTube: {e}") from e
 
 
-def load() -> None:
-    load_plugin(AniTube, rep.register)
+def load(register) -> None:
+    load_plugin(AniTube, register)

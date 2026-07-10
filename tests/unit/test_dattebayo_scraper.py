@@ -118,9 +118,8 @@ class TestDattebayoEpisodes:
     def setup_method(self):
         self.scraper = Dattebayo()
 
-    @patch("scrapers.plugins.dattebayo.rep")
     @patch("scrapers.plugins.dattebayo.httpx.get")
-    def test_episodes_paginate_until_empty_page(self, mock_get, mock_rep):
+    def test_episodes_paginate_until_empty_page(self, mock_get):
         mock_get.side_effect = [
             _html_response(EPISODES_HTML),
             _html_response("<html><body></body></html>"),

@@ -8,8 +8,7 @@ from bs4 import BeautifulSoup
 
 from scrapers.core.blogger_resolver import resolve_blogger_token
 from scrapers.plugins.utils import load_plugin, store_player_source
-from models.models import AnimeMetadata
-from services.repository import rep
+from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
@@ -81,7 +80,7 @@ class AnimeFire:
         tree = BeautifulSoup(response.text, "html.parser")
         return self._parse_search_page(tree)
 
-    def search_episodes(self, anime: str, url: str, params: dict | None) -> None:
+    def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
             response = httpx.get(url, timeout=20, follow_redirects=True)
@@ -91,21 +90,22 @@ class AnimeFire:
             ep_links = tree.select("a.lEp")
             if not ep_links:
                 logger.debug(f"AnimeFire: no episodes found for '{anime}' at {url}")
-                return
+                return []
 
             episode_links = [a.get("href") for a in ep_links if a.get("href")]
             if not episode_links:
                 logger.debug(f"AnimeFire: no valid hrefs for '{anime}' at {url}")
-                return
+                return []
 
             opts = []
             for href in episode_links:
                 m = re.search(r"/(\d+(?:\.\d+)?)$", href)
                 opts.append(m.group(1) if m else href.split("/")[-1])
 
-            rep.add_episode_list(anime, opts, episode_links, self.name)
+            return [ScrapedEpisodes(opts, episode_links, self.name)]
         except Exception as e:
             logger.debug(f"AnimeFire episode fetch failed for '{anime}': {e}")
+            return []
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
@@ -178,5 +178,5 @@ class AnimeFire:
             raise Exception(f"Could not extract video from AnimeFire: {e}") from e
 
 
-def load() -> None:
-    load_plugin(AnimeFire, rep.register)
+def load(register) -> None:
+    load_plugin(AnimeFire, register)
