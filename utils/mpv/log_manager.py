@@ -1,11 +1,10 @@
 """MPV log management: directory, rotation, preparation, and error classification."""
 
-import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 
-from models.config import get_data_path
+from models.config import get_data_path, settings
 
 
 class MPVLogManager:
@@ -64,7 +63,7 @@ class MPVLogManager:
 
     def prepare_mpv_log_file(self) -> str:
         """Create a new MPV log file path and rotate old logs."""
-        configured_log = os.environ.get("ANI_TUPI_MPV_LOG_FILE", "").strip()
+        configured_log = settings.mpv_log_file
         if configured_log:
             return configured_log
 

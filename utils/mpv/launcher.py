@@ -1,9 +1,9 @@
 """MPV process launcher and input.conf generation."""
 
-import os
 import subprocess
 import tempfile
 
+from models.config import settings
 from utils.logging import get_logger
 from utils.mpv.log_manager import MPVLogManager
 from utils.playback_hints import resolve_mpv_stream_options
@@ -75,7 +75,7 @@ shift+t script-message toggle-sub-dub
         Returns:
             MPV subprocess handle
         """
-        debug_mode = os.environ.get("ANI_TUPI_DEBUG_MPV") == "1"
+        debug_mode = settings.debug_mpv
         self.last_mpv_log_file = None
 
         referrer, demuxer_lavf_o = resolve_mpv_stream_options(url, referrer)

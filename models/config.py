@@ -16,7 +16,7 @@ import os
 import json
 from pathlib import Path
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -537,6 +537,52 @@ class AppSettings(BaseSettings):
     performance: PerformanceSettings = PerformanceSettings()  # type: ignore[call-arg]
     airing: AiringSettings = AiringSettings()  # type: ignore[call-arg]
     updates: UpdateCheckSettings = UpdateCheckSettings()  # type: ignore[call-arg]
+
+    # Legacy single-underscore debug/runtime flags.
+    # Kept as top-level fields with explicit aliases to preserve the exact
+    # historical env var names. Stored as raw strings so the "== '1'" truthiness
+    # is replicated precisely (only the literal "1" enables the flag).
+    debug_incremental_search_raw: str | None = Field(
+        None,
+        validation_alias=AliasChoices("ANI_TUPI_DEBUG_INCREMENTAL_SEARCH"),
+        description='Raw value of ANI_TUPI_DEBUG_INCREMENTAL_SEARCH (enabled when "1")',
+    )
+    debug_mpv_raw: str | None = Field(
+        None,
+        validation_alias=AliasChoices("ANI_TUPI_DEBUG_MPV"),
+        description='Raw value of ANI_TUPI_DEBUG_MPV (enabled when "1")',
+    )
+    disable_ipc_raw: str | None = Field(
+        None,
+        validation_alias=AliasChoices("ANI_TUPI_DISABLE_IPC"),
+        description='Raw value of ANI_TUPI_DISABLE_IPC (enabled when "1")',
+    )
+    mpv_log_file_raw: str | None = Field(
+        None,
+        validation_alias=AliasChoices("ANI_TUPI_MPV_LOG_FILE"),
+        description="Raw value of ANI_TUPI_MPV_LOG_FILE (explicit MPV log file path)",
+    )
+
+    @property
+    def debug_incremental_search(self) -> bool:
+        """True when ANI_TUPI_DEBUG_INCREMENTAL_SEARCH is exactly '1'."""
+        return self.debug_incremental_search_raw == "1"
+
+    @property
+    def debug_mpv(self) -> bool:
+        """True when ANI_TUPI_DEBUG_MPV is exactly '1'."""
+        return self.debug_mpv_raw == "1"
+
+    @property
+    def disable_ipc(self) -> bool:
+        """True when ANI_TUPI_DISABLE_IPC is exactly '1'."""
+        return self.disable_ipc_raw == "1"
+
+    @property
+    def mpv_log_file(self) -> str | None:
+        """Configured MPV log file path, or None if unset/blank."""
+        stripped = (self.mpv_log_file_raw or "").strip()
+        return stripped or None
 
 
 # Singleton instance - import and use throughout the app

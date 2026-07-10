@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import platform
 import socket
 import tempfile
@@ -12,6 +11,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from models.config import settings
 from utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -345,7 +345,7 @@ class IPCHandler:
 
             exit_code = mpv_process.returncode or 0
             stderr_output = ""
-            debug_mode = os.environ.get("ANI_TUPI_DEBUG_MPV") == "1"
+            debug_mode = settings.debug_mpv
             if hasattr(mpv_process, "stderr") and mpv_process.stderr:
                 try:
                     stderr_output = mpv_process.stderr.read()

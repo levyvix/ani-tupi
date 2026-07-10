@@ -4,7 +4,6 @@ Handles manual anime search with progressive word reduction,
 cache integration, and scraper discovery.
 """
 
-import os
 import time
 from concurrent.futures import FIRST_EXCEPTION, ProcessPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -25,7 +24,7 @@ INCREMENTAL_SEARCH_MAX_RESULTS = 20
 
 def _debug_incremental_search(message: str) -> None:
     """Emit opt-in debug logs for incremental search investigations."""
-    if os.getenv("ANI_TUPI_DEBUG_INCREMENTAL_SEARCH") == "1":
+    if settings.debug_incremental_search:
         logger.info(f"🔎 [incremental] {message}")
 
 

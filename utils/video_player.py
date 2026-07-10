@@ -1,9 +1,9 @@
 from typing import NamedTuple
 
-import os
 import subprocess
 from pathlib import Path
 
+from models.config import settings
 from utils.logging import get_logger
 from utils.mpv import IPCHandler, MPVLauncher, MPVLogManager
 from utils.playback_hints import resolve_mpv_stream_options
@@ -88,7 +88,7 @@ class VideoPlayer:
             VideoPlaybackResult with exit code, action, and optional data
         """
         # Check if IPC should be disabled globally
-        if os.environ.get("ANI_TUPI_DISABLE_IPC") == "1":
+        if settings.disable_ipc:
             use_ipc = False
 
         if debug:
