@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from manga_scrapers.plugins.mangadex import MangaDex
-from utils.logging import _base_logger
+from utils.logging import get_base_logger
 
 
 @pytest.fixture
@@ -24,12 +24,12 @@ def scraper():
 def warnings():
     """Capture loguru WARNING+ records emitted during the test."""
     captured: list[str] = []
-    sink_id = _base_logger.add(
+    sink_id = get_base_logger().add(
         lambda message: captured.append(message.record["message"]),
         level="WARNING",
     )
     yield captured
-    _base_logger.remove(sink_id)
+    get_base_logger().remove(sink_id)
 
 
 def test_search_manga_logs_warning_on_timeout(scraper, monkeypatch, warnings):

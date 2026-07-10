@@ -12,7 +12,7 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-_NETWORK_ERRORS = (httpx.HTTPError, ConnectionError, TimeoutError)
+_NETWORK_ERRORS = (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException)
 
 
 class MangaDex:
