@@ -3,7 +3,6 @@
 Consolidated utilities:
 - video_player: MPV integration for video playback with IPC support for episode navigation
 - cache: Unified cache system with pluggable backends
-- anilist_discovery: AniList ID discovery
 
 Key exports from video_player:
 - play_episode(): New IPC-aware playback with episode navigation
@@ -12,7 +11,6 @@ Key exports from video_player:
 """
 
 from utils import (
-    anilist_discovery,
     cache,
     video_player,
 )
@@ -23,7 +21,6 @@ from utils.video_player import (
 )
 
 __all__ = [
-    "anilist_discovery",
     "cache",
     "video_player",
     # New IPC-aware exports

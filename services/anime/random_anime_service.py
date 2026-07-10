@@ -12,7 +12,7 @@ import random
 from dataclasses import dataclass
 
 from models.models import AniListMediaListEntry
-from services.anilist_service import anilist_client
+from services.anilist import anilist_client
 from services.repository import rep
 from services.anime.playback_service import (
     prepare_playback_from_search,

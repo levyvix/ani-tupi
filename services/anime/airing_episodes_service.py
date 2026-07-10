@@ -15,7 +15,7 @@ from datetime import datetime, UTC
 
 from models.config import settings
 from models.models import AiringAnimeEntry, AniListTitle
-from services.anilist_service import anilist_client
+from services.anilist import anilist_client
 from utils.cache import get_cache
 
 

@@ -14,7 +14,7 @@ from models.models import AnimeTitleResolution
 from services.anime.title_resolution import AnimeTitleResolver
 from services.repository import rep
 from services import ui_bridge
-from utils.cache import get_scraper_cache
+from services.anilist.scraper_cache import get_scraper_cache
 from services.anime.title_normalization import normalize_anime_title
 from utils.logging import get_logger
 
@@ -420,7 +420,7 @@ def _perform_scraper_search(partial_query: str) -> _ScraperSearchOutcome:
     anilist_reference_title: str | None = None
     anilist_results = None
     try:
-        from utils.anilist_discovery import auto_discover_anilist_id
+        from services.anilist.discovery import auto_discover_anilist_id
 
         anilist_results = auto_discover_anilist_id(used_query)
         if anilist_results:

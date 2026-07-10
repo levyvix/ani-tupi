@@ -9,10 +9,10 @@ from collections.abc import Callable
 from typing import Any
 
 from models.config import get_data_path
-from services.anilist_service import anilist_client
+from services.anilist import anilist_client
 from services.repository import rep
 from services import ui_bridge
-from utils.cache import get_scraper_cache, set_scraper_cache
+from services.anilist.scraper_cache import get_scraper_cache, set_scraper_cache
 from scrapers import loader
 from models.models import Status
 from services.history_service import save_history, reset_history

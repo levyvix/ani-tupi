@@ -6,7 +6,8 @@ and mocking only the external AniList lookup.
 """
 
 from utils import cache as cache_module
-from utils.cache import DiskCache, get_scraper_cache, set_scraper_cache
+from utils.cache import DiskCache
+from services.anilist.scraper_cache import get_scraper_cache, set_scraper_cache
 
 
 def test_scraper_cache_round_trip(temp_dir, monkeypatch):
@@ -16,7 +17,9 @@ def test_scraper_cache_round_trip(temp_dir, monkeypatch):
     monkeypatch.setattr(cache_module, "_global_cache", disk_cache)
 
     # No AniList ID available -> key falls back to the anime title.
-    monkeypatch.setattr("utils.anilist_discovery.get_anilist_id_from_title", lambda _title: None)
+    monkeypatch.setattr(
+        "services.anilist.scraper_cache.get_anilist_id_from_title", lambda _title: None
+    )
     monkeypatch.setattr(cache_module.settings.cache, "episodes_cache_enabled", True)
 
     episode_urls = ["http://example.com/ep1", "http://example.com/ep2"]
@@ -33,7 +36,9 @@ def test_scraper_cache_miss_returns_none(temp_dir, monkeypatch):
     """get_scraper_cache returns None when nothing is cached."""
     disk_cache = DiskCache(cache_dir=temp_dir / "cache")
     monkeypatch.setattr(cache_module, "_global_cache", disk_cache)
-    monkeypatch.setattr("utils.anilist_discovery.get_anilist_id_from_title", lambda _title: None)
+    monkeypatch.setattr(
+        "services.anilist.scraper_cache.get_anilist_id_from_title", lambda _title: None
+    )
     monkeypatch.setattr(cache_module.settings.cache, "episodes_cache_enabled", True)
 
     assert get_scraper_cache("Unknown Anime") is None

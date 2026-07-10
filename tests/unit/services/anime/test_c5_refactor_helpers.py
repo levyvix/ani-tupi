@@ -169,7 +169,7 @@ class TestPerformScraperSearch:
         with (
             patch.object(search, "rep", mock_rep),
             patch(
-                "utils.anilist_discovery.auto_discover_anilist_id",
+                "services.anilist.discovery.auto_discover_anilist_id",
                 return_value=None,
             ),
         ):
@@ -193,7 +193,7 @@ class TestPerformScraperSearch:
         with (
             patch.object(search, "rep", mock_rep),
             patch(
-                "utils.anilist_discovery.auto_discover_anilist_id",
+                "services.anilist.discovery.auto_discover_anilist_id",
                 return_value=[anilist_match],
             ),
         ):

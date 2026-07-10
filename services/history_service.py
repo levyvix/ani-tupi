@@ -9,7 +9,7 @@ from utils.persistence import JSONStore
 from utils.title_utils import clean_title_for_display
 from utils.exceptions import PersistenceError
 from utils.logging import get_logger
-from utils.anilist_discovery import get_anilist_id_with_interactive_fallback
+from services.anilist.discovery import get_anilist_id_with_interactive_fallback
 from models.models import HistoryEntry, Status
 from services.anime.mappings import load_anilist_urls
 
@@ -51,7 +51,7 @@ def _resolve_anilist_progress(anilist_id, saved_source, anime, progress=ui_bridg
     anilist_ep_idx = -1
 
     if anilist_id:
-        from services.anilist_service import anilist_client
+        from services.anilist import anilist_client
 
         info = anilist_client.get_anime_by_id(anilist_id)
         if info:
@@ -63,7 +63,7 @@ def _resolve_anilist_progress(anilist_id, saved_source, anime, progress=ui_bridg
         with progress(f"Buscando '{anime}' no AniList..."):
             anilist_id = get_anilist_id_with_interactive_fallback(anime, strict_threshold=95)
         if anilist_id:
-            from services.anilist_service import anilist_client
+            from services.anilist import anilist_client
 
             info = anilist_client.get_anime_by_id(anilist_id)
             if info:
@@ -460,7 +460,7 @@ def save_history_from_event(
     logger.info(f"Saved history for '{anime_title}' Ep {episode_idx + 1} (action: {action})")
 
     if anilist_id and action == "watched":
-        from services.anilist_service import anilist_client
+        from services.anilist import anilist_client
 
         if anilist_client.is_authenticated():
             try:

@@ -216,7 +216,7 @@ def cli() -> None:
     # Handle --clear-cache before other commands
     if args.clear_cache:
         from utils.cache import clear_cache_all_with_mappings, clear_cache_by_prefix
-        from utils.anilist_discovery import auto_discover_anilist_id
+        from services.anilist.discovery import auto_discover_anilist_id
         from services.anime.mappings import clear_anilist_mapping
 
         if args.clear_cache is True:

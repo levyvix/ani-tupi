@@ -54,7 +54,7 @@ def configure(
     Called by the command layer so ``ui`` never imports ``services``/``commands``.
 
     Args:
-        client: AniList client instance (``services.anilist_service.anilist_client``)
+        client: AniList client instance (``services.anilist.anilist_client``)
         anime_flow: Playback flow callable (``anilist_anime_flow``)
         anime_actions: Per-anime actions callback (``run_anime_actions``)
         airing_service: Zero-arg factory returning an airing-episodes service

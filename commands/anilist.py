@@ -30,7 +30,7 @@ def _wire_anilist_menus() -> None:
     Keeps ``ui`` free of ``services``/``commands`` imports (breaks the
     dependency cycle) while preserving production behaviour.
     """
-    from services.anilist_service import anilist_client
+    from services.anilist import anilist_client
     from services.anime.airing_episodes_service import AiringEpisodesService
     from commands.local_anime import handle_local_library_playback
 
@@ -98,7 +98,7 @@ def _handle_status_change(anilist_id: int) -> None:
     Args:
         anilist_id: AniList anime ID to update
     """
-    from services.anilist_service import anilist_client
+    from services.anilist import anilist_client
 
     if not anilist_client.is_authenticated():
         show_warning("Você precisa estar autenticado no AniList para mudar o status.")
@@ -178,7 +178,7 @@ def anilist_menu(args) -> None:
     Allows users to browse and watch anime from AniList,
     with automatic progress synchronization.
     """
-    from services.anilist_service import anilist_client
+    from services.anilist import anilist_client
 
     _wire_anilist_menus()
 

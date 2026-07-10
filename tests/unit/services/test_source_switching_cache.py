@@ -76,7 +76,7 @@ def setup_mocks():
     patches.append(mock_open_patch)
 
     # Patch anilist client (it's imported inside the function)
-    mock_anilist_client_patch = patch("services.anilist_service.anilist_client")
+    mock_anilist_client_patch = patch("services.anilist.anilist_client")
     mock_anilist_client = mock_anilist_client_patch.start()
     mock_anilist_client.is_authenticated.return_value = False
     patches.append(mock_anilist_client_patch)

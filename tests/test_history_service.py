@@ -184,7 +184,7 @@ class TestSaveHistoryFromEvent:
             mock_rep.get_episode_list.return_value = []
             mock_rep.anime_to_urls = {}
 
-            with patch("services.anilist_service.anilist_client", mock_anilist):
+            with patch("services.anilist.anilist_client", mock_anilist):
                 save_history_from_event(
                     "Jujutsu Kaisen",
                     episode_idx=4,
@@ -247,7 +247,7 @@ class TestSaveHistoryFromEvent:
             mock_anilist = MagicMock()
             mock_anilist.is_authenticated.return_value = False
 
-            with patch("services.anilist_service.anilist_client", mock_anilist):
+            with patch("services.anilist.anilist_client", mock_anilist):
                 save_history_from_event(
                     "Mob Psycho 100",
                     episode_idx=5,

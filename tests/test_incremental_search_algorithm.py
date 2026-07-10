@@ -56,7 +56,7 @@ def patch_repository(mock_rep):
 def no_anilist():
     """Patch AniList discovery to avoid external calls."""
     with patch(
-        "utils.anilist_discovery.auto_discover_anilist_id",
+        "services.anilist.discovery.auto_discover_anilist_id",
         side_effect=ConnectionError("No AniList"),
     ):
         yield
@@ -771,7 +771,7 @@ def test_incremental_search_small_base_results_stops():
         mock_rep.get_anime_titles_with_sources = Mock(return_value=["T1", "T2", "T3"])
 
         with patch(
-            "utils.anilist_discovery.auto_discover_anilist_id",
+            "services.anilist.discovery.auto_discover_anilist_id",
             side_effect=ConnectionError("No AniList"),
         ):
             state, results = incremental_search_anime("test anime series long")

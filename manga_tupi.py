@@ -9,7 +9,7 @@ from InquirerPy import inquirer
 
 from models.config import settings
 from models.models import LocalChapter
-from services.anilist_service import anilist_client
+from services.anilist import anilist_client
 from services.local_manga_service import LocalMangaService
 from services.manga_service import (
     MangaDexError,

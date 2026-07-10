@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from utils.logging import get_logger
 
 from models.models import Status
-from services.anime.anilist_discovery_service import (
+from services.anilist.discovery import (
     discover_anilist_info,
 )
-from services.anilist_service import anilist_client
+from services.anilist import anilist_client
 from services.history_service import load_history
 from services.repository import rep
 
@@ -334,7 +334,7 @@ def _validate_anilist_id(
             )
             # Clear the invalid cached mapping if provided
             if anime_title:
-                from utils.anilist_discovery import clear_discovery_cache
+                from services.anilist.discovery import clear_discovery_cache
 
                 try:
                     clear_discovery_cache(anime_title)

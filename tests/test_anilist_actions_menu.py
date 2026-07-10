@@ -55,7 +55,7 @@ class TestActionLoop:
         """
         client.get_anime_by_id.return_value = anime_info
         with (
-            patch("services.anilist_service.anilist_client", client),
+            patch("services.anilist.anilist_client", client),
             patch.object(cmd, "anilist_main_menu", side_effect=[("cool anime", 42), None]),
             patch.object(cmd, "anime_actions_menu", side_effect=actions),
             patch.object(cmd.anime_service, "anilist_anime_flow") as watch,
@@ -104,7 +104,7 @@ class TestHandleStatusChange:
         client.is_authenticated.return_value = True
         client.change_status.return_value = True
         with (
-            patch("services.anilist_service.anilist_client", client),
+            patch("services.anilist.anilist_client", client),
             patch.object(cmd, "status_select_menu", return_value=Status.PAUSED),
             patch.object(cmd, "pause"),
             patch.object(cmd, "show_success") as ok,
@@ -118,7 +118,7 @@ class TestHandleStatusChange:
         client.is_authenticated.return_value = True
         client.change_status.return_value = False
         with (
-            patch("services.anilist_service.anilist_client", client),
+            patch("services.anilist.anilist_client", client),
             patch.object(cmd, "status_select_menu", return_value=Status.DROPPED),
             patch.object(cmd, "pause"),
             patch.object(cmd, "show_error") as err,
@@ -130,7 +130,7 @@ class TestHandleStatusChange:
         client = Mock()
         client.is_authenticated.return_value = False
         with (
-            patch("services.anilist_service.anilist_client", client),
+            patch("services.anilist.anilist_client", client),
             patch.object(cmd, "pause"),
             patch.object(cmd, "show_warning") as warn,
         ):
@@ -142,7 +142,7 @@ class TestHandleStatusChange:
         client = Mock()
         client.is_authenticated.return_value = True
         with (
-            patch("services.anilist_service.anilist_client", client),
+            patch("services.anilist.anilist_client", client),
             patch.object(cmd, "status_select_menu", return_value=None),
         ):
             cmd._handle_status_change(42)
