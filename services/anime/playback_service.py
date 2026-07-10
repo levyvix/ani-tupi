@@ -250,45 +250,29 @@ def get_episode_url_and_source(
             except Exception as e:
                 logger.debug("Episode URL pattern error for %s ep %d: %s", anime_title, episode, e)
 
-        # Check if this is an awaiting episode with a direct URL from incremental search
-        from services.anime import anilist_integration
-        from scrapers.plugins.animesdigital import AnimesDigital
-        from threading import Event
+        # Check if this is an awaiting episode with a direct URL from homepage search
+        from services.anime.awaiting_episodes import registry as awaiting_registry
 
-        if hasattr(anilist_integration.anilist_anime_flow, "_awaiting_episode_urls"):
-            awaiting_urls = anilist_integration.anilist_anime_flow._awaiting_episode_urls
-            if anime_title in awaiting_urls and episode in awaiting_urls[anime_title]:
-                # Use the direct episode URL from AnimesDigital homepage search
-                episode_url = awaiting_urls[anime_title][episode]
-
-                # Extract player URL from the AnimesDigital episode page
-                try:
-                    scraper = AnimesDigital()
-                    container = []
-                    event = Event()
-
-                    # Call search_player_src to extract the video URL
-                    scraper.search_player_src(episode_url, container, event)
-
-                    if container:
-                        player_url = container[0]
-                        return EpisodePlaybackResult(
-                            player_url=player_url,
-                            source="animesdigital",
-                            success=True,
-                            error_message=None,
-                        )
-                    else:
-                        # If we couldn't extract player from the direct URL, fall back to regular search
-                        logger.debug(
-                            f"Could not extract player from direct AnimesDigital URL for {anime_title} ep {episode}, trying regular search"
-                        )
-                except Exception as e:
-                    logger.debug(
-                        f"Error extracting player from AnimesDigital awaiting episode: {e}"
+        episode_url = awaiting_registry.get(anime_title, episode)
+        if episode_url:
+            # Extract player URL from the AnimesDigital episode page via the
+            # repository (no direct plugin import).
+            try:
+                candidates = rep.search_player_from_page(episode_url, "animesdigital")
+                if candidates:
+                    return EpisodePlaybackResult(
+                        player_url=candidates[0],
+                        source="animesdigital",
+                        success=True,
+                        error_message=None,
                     )
-                    # Fall back to regular search
-                    pass
+                # If we couldn't extract player from the direct URL, fall back to regular search
+                logger.debug(
+                    f"Could not extract player from direct AnimesDigital URL for {anime_title} ep {episode}, trying regular search"
+                )
+            except Exception as e:
+                logger.debug(f"Error extracting player from AnimesDigital awaiting episode: {e}")
+                # Fall back to regular search
 
         # Regular path: Get episode URL and source info
         episode_info = rep.get_episode_url_and_source(anime_title, episode)
