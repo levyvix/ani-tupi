@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from utils.logging import get_logger
-
-logger = get_logger(__name__)
+import services.ui_bridge as ui_bridge
 
 
 def handle_clear_cache(target) -> None:
@@ -20,7 +18,7 @@ def handle_clear_cache(target) -> None:
 
     if target is True:
         clear_cache_all_with_mappings()
-        logger.info("✅ Cache completamente limpo!")
+        ui_bridge.show_info("✅ Cache completamente limpo!")
         return
 
     # Try to discover AniList ID for more precise clearing
@@ -28,8 +26,8 @@ def handle_clear_cache(target) -> None:
     if anilist_id:
         clear_cache_by_prefix(f":{anilist_id}:")
         clear_anilist_mapping(anilist_id)
-        logger.info(f"✅ Cache de '{target}' (AniList ID {anilist_id}) foi limpo!")
+        ui_bridge.show_info(f"✅ Cache de '{target}' (AniList ID {anilist_id}) foi limpo!")
     else:
         # Fallback: clear by title prefix
         clear_cache_by_prefix(f":{target}:")
-        logger.info(f"✅ Cache de '{target}' foi limpo!")
+        ui_bridge.show_info(f"✅ Cache de '{target}' foi limpo!")
