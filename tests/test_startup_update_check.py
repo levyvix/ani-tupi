@@ -4,8 +4,14 @@ from unittest.mock import patch
 
 import pytest
 
+import importlib
+
 import main
 from models.models import UpdateCheckResult
+
+# commands/__init__ rebinds the name `update` to the function, shadowing the
+# submodule attribute; fetch the real module object from sys.modules.
+_update_cmd = importlib.import_module("commands.update")
 
 
 def test_startup_notice_is_shown_when_update_available():
@@ -18,7 +24,7 @@ def test_startup_notice_is_shown_when_update_available():
     )
 
     with patch("services.update_check_service.UpdateCheckService.check_for_updates") as mock_check:
-        with patch.object(main.logger, "info") as mock_info:
+        with patch.object(_update_cmd.logger, "info") as mock_info:
             mock_check.return_value = result
             main.run_startup_update_check()
 
@@ -35,7 +41,7 @@ def test_startup_notice_is_hidden_when_no_update():
     )
 
     with patch("services.update_check_service.UpdateCheckService.check_for_updates") as mock_check:
-        with patch.object(main.logger, "info") as mock_info:
+        with patch.object(_update_cmd.logger, "info") as mock_info:
             mock_check.return_value = result
             main.run_startup_update_check()
 
@@ -66,7 +72,7 @@ def test_notice_not_shown_without_message_payload(message: str | None):
     )
 
     with patch("services.update_check_service.UpdateCheckService.check_for_updates") as mock_check:
-        with patch.object(main.logger, "info") as mock_info:
+        with patch.object(_update_cmd.logger, "info") as mock_info:
             mock_check.return_value = result
             main.run_startup_update_check()
 

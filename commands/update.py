@@ -11,6 +11,33 @@ from utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+def run_startup_update_check() -> None:
+    """Check for updates and render a startup notice when one is available."""
+    try:
+        result = UpdateCheckService().check_for_updates()
+        if result.update_available and result.message:
+            logger.info(result.message)
+    except Exception as exc:
+        logger.debug(f"Startup update check skipped due to unexpected error: {exc}")
+
+
+def show_version_info() -> None:
+    """Show local version and compare with the latest remote release."""
+    service = UpdateCheckService()
+    local_version, latest_version = service.get_version_info()
+
+    logger.info(f"ani-tupi local: {local_version}")
+    if not latest_version:
+        logger.info("ani-tupi remoto: indisponível (falha ao consultar release)")
+        return
+
+    logger.info(f"ani-tupi remoto: {latest_version}")
+    if service.is_remote_newer(local_version, latest_version):
+        logger.info(f"⬆️  Atualização disponível. Execute: {settings.updates.update_command}")
+    else:
+        logger.info("✅ Você já está na versão mais recente.")
+
+
 def update(args) -> int:
     """Check for a newer release and run the configured update command."""
     service = UpdateCheckService()
