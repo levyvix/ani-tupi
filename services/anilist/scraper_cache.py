@@ -9,6 +9,7 @@ discovery, which is itself a service-layer concern.
 """
 
 from models.config import settings
+from models.models import ScraperCacheData
 from utils.cache import get_cache
 
 from services.anilist.discovery import get_anilist_id_from_title
@@ -23,8 +24,6 @@ def get_scraper_cache(anime_title: str):
     Returns:
         ScraperCacheData with episode_urls and episode_count or None if not found
     """
-    from models.models import ScraperCacheData
-
     # Check if episodes cache is enabled
     if not settings.cache.episodes_cache_enabled:
         return None

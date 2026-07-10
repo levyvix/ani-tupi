@@ -316,7 +316,7 @@ def discover_anilist_info(anime_title: str) -> AniListDiscoveryResult:
     try:
         anilist_results = auto_discover_anilist_id(normalized_title)
     except Exception as e:
-        logger.warning("AniList search failed for '%s': %s", anime_title, e)
+        logger.debug("AniList search failed for '%s': %s", anime_title, e)
         return AniListDiscoveryResult(
             anilist_id=None,
             anilist_title=None,
@@ -343,7 +343,7 @@ def discover_anilist_info(anime_title: str) -> AniListDiscoveryResult:
     try:
         metadata = get_anilist_metadata(anilist_id)
     except Exception as e:
-        logger.warning("AniList metadata fetch failed for ID %d: %s", anilist_id, e)
+        logger.debug("AniList metadata fetch failed for ID %d: %s", anilist_id, e)
         # Return partial result with ID but no title/episodes
         return AniListDiscoveryResult(
             anilist_id=anilist_id,
