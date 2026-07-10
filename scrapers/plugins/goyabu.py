@@ -7,7 +7,12 @@ import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.core.blogger_resolver import resolve_blogger_token
-from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
+from scrapers.plugins.utils import (
+    DEFAULT_HEADERS,
+    http_get_with_retry,
+    load_plugin,
+    store_player_source,
+)
 from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
@@ -29,10 +34,7 @@ class Goyabu:
         results = []
         try:
             url = f"{BASE_URL}/?s={urllib.parse.quote(query)}"
-            response = httpx.get(
-                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
-            )
-            response.raise_for_status()
+            response = http_get_with_retry(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
             soup = BeautifulSoup(response.text, "html.parser")
             for article in soup.select("article.boxAN"):
                 a = article.select_one("a[href*='/anime/']")
@@ -50,10 +52,7 @@ class Goyabu:
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
-            response = httpx.get(
-                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
-            )
-            response.raise_for_status()
+            response = http_get_with_retry(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
 
             match = _ALL_EPISODES_RE.search(response.text)
             if not match:

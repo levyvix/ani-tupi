@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from scrapers.plugins.utils import (
     DEFAULT_HEADERS,
     extract_anivideo_hls,
+    http_get_with_retry,
     load_plugin,
     store_player_source,
 )
@@ -29,10 +30,7 @@ class AniTube:
         def _do_search(q: str) -> None:
             try:
                 url = f"{self.base_url}/wp-json/wp/v2/posts?search={urllib.parse.quote(q)}&per_page=20"
-                response = httpx.get(
-                    url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
-                )
-                response.raise_for_status()
+                response = http_get_with_retry(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 posts = response.json()
             except httpx.HTTPError as e:
                 logger.debug(f"AniTube search request failed for '{q}': {e}")
@@ -64,10 +62,7 @@ class AniTube:
             separator = "&" if "?" in url else "?"
             episodes_url = f"{url}{separator}ord=1"
 
-            response = httpx.get(
-                episodes_url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
-            )
-            response.raise_for_status()
+            response = http_get_with_retry(episodes_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
             page = BeautifulSoup(response.text, "html.parser")
 
             episode_links = page.select("a[title*='Episódio']")
