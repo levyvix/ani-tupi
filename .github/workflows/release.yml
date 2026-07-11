@@ -82,12 +82,14 @@ jobs:
           echo "release_mode=${mode} bump=${bump:-<auto>}"
 
       - name: Bump version and create tag
+        id: bump
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          before="$(git rev-parse HEAD)"
           if [[ "${{ steps.release_strategy.outputs.mode }}" == "forced" ]]; then
             bump="${{ steps.release_strategy.outputs.bump }}"
             echo "Using forced bump mode: --${bump}"
@@ -96,11 +98,24 @@ jobs:
             echo "Using normal semantic-release mode"
             uv run semantic-release version --push
           fi
+          after="$(git rev-parse HEAD)"
+          # semantic-release creates a version-bump commit+tag only when a release happens.
+          # If HEAD is unchanged (e.g. chore/docs-only commits), skip build & publish to
+          # avoid re-publishing the already-released version to PyPI.
+          if [[ "${before}" != "${after}" ]]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "New release created (${before} -> ${after})"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "No new version released; skipping build & publish"
+          fi
 
       - name: Build Python package
+        if: steps.bump.outputs.released == 'true'
         run: uv build
 
       - name: Publish to TestPyPI
+        if: steps.bump.outputs.released == 'true'
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.TESTPYPI_API_TOKEN }}
         run: |
@@ -114,6 +129,7 @@ jobs:
             --check-url https://test.pypi.org/simple/
 
       - name: Publish to PyPI
+        if: steps.bump.outputs.released == 'true'
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
           PYPI_PUBLISH_ENABLED: ${{ vars.PYPI_PUBLISH_ENABLED }}
@@ -132,6 +148,7 @@ jobs:
             --check-url https://pypi.org/simple/
 
       - name: Publish GitHub Release
+        if: steps.bump.outputs.released == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
