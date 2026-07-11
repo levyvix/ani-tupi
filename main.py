@@ -170,7 +170,7 @@ def cli() -> None:
     # Show active sources
     active_sources = rep.get_active_sources()
     if active_sources:
-        logger.info(f"ℹ️  Fontes ativas: {', '.join(active_sources)}")
+        logger.debug(f"ℹ️  Fontes ativas: {', '.join(active_sources)}")
 
     # Handle --list-sources before other commands
     if args.list_sources:

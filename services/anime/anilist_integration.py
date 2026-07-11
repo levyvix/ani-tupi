@@ -1178,7 +1178,7 @@ def anilist_anime_flow(
 
     active_sources = rep.get_active_sources()
     if active_sources:
-        logger.info(f"ℹ️  Fontes ativas: {', '.join(active_sources)}")
+        logger.debug(f"ℹ️  Fontes ativas: {', '.join(active_sources)}")
 
     # 1. Resolve which anime/source to play (saved choice, or search + select).
     saved_title, saved_source, saved_url = (
