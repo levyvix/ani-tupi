@@ -123,6 +123,20 @@ check_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["--strict-markers", "--tb=short", "--disable-warnings"]
+log_cli = false
+log_cli_level = "INFO"
+markers = [
+    "unit: Unit tests (isolated, fast)",
+    "integration: Integration tests (component interactions)",
+    "e2e: End-to-end tests (complete workflows)",
+    "slow: Tests that take >1 second",
+    "requires_selenium: Tests requiring Selenium/geckodriver",
+    "requires_http: Tests requiring HTTP/network access",
+]
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
