@@ -15,8 +15,27 @@ BASE_URL = "https://animesonlinecc.to"
 HEADERS = DEFAULT_HEADERS
 REQUEST_TIMEOUT = 15
 
-_EPISODE_NUM_RE = re.compile(r"-episodio-(\d+)/?$")
+_EPISODE_PARTS_RE = re.compile(r"/episodio/(?P<slug>.+?)-episodio-(?P<num>\d+)/?$")
+_ANIME_SLUG_RE = re.compile(r"/anime/([^/]+)")
 _TOKEN_RE = re.compile(r"token=([^&\s\"']+)")
+
+
+def _season_from_slug(episode_slug: str, anime_slug: str) -> int:
+    """Infer the season of an episode from its URL slug.
+
+    AnimesOnlineCC lists every season of a series on the same anime page.
+    Season 1 episodes reuse the anime slug ("mato-seihei-no-slave"), while later
+    seasons append the season number ("mato-seihei-no-slave-2"). Anchoring on the
+    known anime slug keeps series whose title ends in a number from being
+    misread as a season.
+    """
+    if not anime_slug or episode_slug == anime_slug:
+        return 1
+    if episode_slug.startswith(f"{anime_slug}-"):
+        suffix = episode_slug[len(anime_slug) + 1 :]
+        if suffix.isdigit():
+            return int(suffix)
+    return 1
 
 
 class AnimesOnlineCC:
@@ -44,30 +63,45 @@ class AnimesOnlineCC:
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
-        _ = params
+        target_season = 1
+        if isinstance(params, dict) and params.get("season"):
+            target_season = int(params["season"])
+
+        anime_slug_match = _ANIME_SLUG_RE.search(url)
+        anime_slug = anime_slug_match.group(1) if anime_slug_match else ""
+
         try:
             r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "html.parser")
 
+            # The anime page mixes every season together; group by season so a
+            # single source never merges S1 + S2 into one continuous list.
             seen = set()
-            titles = []
-            urls = []
+            episodes: list[tuple[int, str]] = []  # (episode number, url)
             for a in soup.find_all("a", href=re.compile(r"/episodio/")):
                 ep_url = str(a.get("href", ""))
                 if ep_url.startswith("//"):
                     ep_url = "https:" + ep_url
-                num_match = _EPISODE_NUM_RE.search(ep_url)
+                parts = _EPISODE_PARTS_RE.search(ep_url)
                 # Skip nav links (no episode number) and relative URLs
-                if not ep_url.startswith("http") or not num_match or ep_url in seen:
+                if not ep_url.startswith("http") or not parts or ep_url in seen:
+                    continue
+                if _season_from_slug(parts.group("slug"), anime_slug) != target_season:
                     continue
                 seen.add(ep_url)
-                title = a.get_text(strip=True) or f"Episódio {num_match.group(1)}"
-                titles.append(title)
-                urls.append(ep_url)
+                episodes.append((int(parts.group("num")), ep_url))
+
+            episodes.sort(key=lambda item: item[0])
+            titles = [f"Episódio {num}" for num, _ in episodes]
+            urls = [ep_url for _, ep_url in episodes]
 
             if titles and urls:
-                return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
+                return [
+                    ScrapedEpisodes(
+                        titles=titles, urls=urls, source=self.name, season=target_season
+                    )
+                ]
             return []
         except httpx.HTTPError as e:
             logger.debug(f"AnimesOnlineCC episode fetch failed for '{anime}': {e}")

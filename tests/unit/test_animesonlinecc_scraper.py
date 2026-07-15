@@ -22,6 +22,16 @@ EPISODES_HTML = """
 </body></html>
 """
 
+MULTI_SEASON_HTML = """
+<html><body>
+  <a href="https://animesonlinecc.to/episodio/mao-episodio-1/">Episódio 1</a>
+  <a href="https://animesonlinecc.to/episodio/mao-episodio-2/">Episódio 2</a>
+  <a href="https://animesonlinecc.to/episodio/mao-2-episodio-1/">Episódio 1</a>
+  <a href="https://animesonlinecc.to/episodio/mao-2-episodio-2/">Episódio 2</a>
+  <a href="https://animesonlinecc.to/episodio/mao-2-episodio-3/">Episódio 3</a>
+</body></html>
+"""
+
 PLAYER_HTML = """
 <html><body>
   <iframe src="https://www.blogger.com/video.g?token=ABC123"></iframe>
@@ -73,6 +83,37 @@ class TestAnimesOnlineCCScraper:
         assert len(result) == 1
         assert result[0].source == "animesonlinecc"
         assert len(result[0].urls) == 2
+
+    @patch("scrapers.plugins.animesonlinecc.httpx.get")
+    def test_search_episodes_returns_only_season_one_by_default(self, mock_get):
+        mock_get.return_value = _html_response(MULTI_SEASON_HTML)
+
+        result = self.scraper.search_episodes("Mao", "https://animesonlinecc.to/anime/mao/", None)
+
+        assert len(result) == 1
+        batch = result[0]
+        assert batch.season == 1
+        assert batch.urls == [
+            "https://animesonlinecc.to/episodio/mao-episodio-1/",
+            "https://animesonlinecc.to/episodio/mao-episodio-2/",
+        ]
+
+    @patch("scrapers.plugins.animesonlinecc.httpx.get")
+    def test_search_episodes_returns_requested_season(self, mock_get):
+        mock_get.return_value = _html_response(MULTI_SEASON_HTML)
+
+        result = self.scraper.search_episodes(
+            "Mao", "https://animesonlinecc.to/anime/mao/", {"season": 2}
+        )
+
+        assert len(result) == 1
+        batch = result[0]
+        assert batch.season == 2
+        assert batch.urls == [
+            "https://animesonlinecc.to/episodio/mao-2-episodio-1/",
+            "https://animesonlinecc.to/episodio/mao-2-episodio-2/",
+            "https://animesonlinecc.to/episodio/mao-2-episodio-3/",
+        ]
 
     @patch("scrapers.plugins.animesonlinecc.httpx.get")
     def test_search_episodes_no_episodes_returns_empty(self, mock_get):
