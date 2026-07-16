@@ -2,11 +2,13 @@
 
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from scrapers.plugins.dattebayo import (
     Dattebayo,
     _extract_episode_number,
+    extract_unsigned_video_urls,
     extract_video_id,
     resolve_signed_video_url,
     sign_video_url,
@@ -46,6 +48,15 @@ EPISODES_HTML = """
   </div>
 </div>
 </body></html>
+"""
+
+PLAYER_HTML = """
+<script>var vid = 'https://[bad.r2.cloudflarestorage.com/fful/560174.mp4';</script>
+<script>var vid = 'https://dynamic.r2.cloudflarestorage.com/fiphonec/560174.mp4';</script>
+<script>var vid = 'https://evil.example.com/fful/560174.mp4';</script>
+<script>var vid = 'https://dynamic.r2.cloudflarestorage.com/f333/560174.mp4';</script>
+<script>var vid = 'https://dynamic.r2.cloudflarestorage.com/fful/999999.mp4';</script>
+<script>var vid = 'https://dynamic.r2.cloudflarestorage.com/fful/560174.mp4';</script>
 """
 
 
@@ -134,6 +145,22 @@ class TestDattebayoSigning:
     def test_extract_video_id(self):
         assert extract_video_id("https://www.dattebayo-br.com/videos/560174") == "560174"
 
+    def test_extract_video_id_rejects_untrusted_episode_origin(self):
+        with pytest.raises(ValueError, match="URL de episódio inválida"):
+            extract_video_id("http://127.0.0.1/videos/560174")
+
+    def test_extract_unsigned_video_urls_validates_and_orders_candidates(self):
+        urls = extract_unsigned_video_urls(
+            PLAYER_HTML,
+            "https://www.dattebayo-br.com/videos/560174",
+        )
+
+        assert urls == [
+            "https://dynamic.r2.cloudflarestorage.com/fful/560174.mp4",
+            "https://dynamic.r2.cloudflarestorage.com/f333/560174.mp4",
+            "https://dynamic.r2.cloudflarestorage.com/fiphonec/560174.mp4",
+        ]
+
     def test_unsigned_video_url_fullhd(self):
         url = unsigned_video_url("560174", quality="fullhd")
         assert url == (
@@ -154,7 +181,76 @@ class TestDattebayoSigning:
 
         assert signed.endswith("?sig=abc")
 
-    def test_resolve_signed_video_url_fallback(self):
+    def test_resolve_signed_video_url_uses_dynamic_storage_host(self):
+        episode_url = "https://www.dattebayo-br.com/videos/560174"
+        dynamic_fullhd = "https://dynamic.r2.cloudflarestorage.com/fful/560174.mp4"
+
+        client = MagicMock()
+
+        def get_side_effect(url, **kwargs):
+            if url == episode_url:
+                return _html_response(PLAYER_HTML)
+            if "ads.animeyabu.net" in url:
+                return _json_response([{"ads": "OK", "publicidade": "?sig=dynamic"}])
+            response = MagicMock()
+            response.status_code = 206 if url.startswith(dynamic_fullhd) else 404
+            return response
+
+        client.get.side_effect = get_side_effect
+
+        resolved = resolve_signed_video_url(client, episode_url)
+
+        assert resolved.startswith(dynamic_fullhd)
+        assert "sig=dynamic" in resolved
+        page_call, sign_call, playable_call = client.get.call_args_list
+        assert page_call.kwargs["follow_redirects"] is False
+        assert sign_call.kwargs["follow_redirects"] is False
+        assert playable_call.kwargs["follow_redirects"] is False
+
+    def test_resolve_signed_video_url_falls_back_after_dynamic_candidates_fail(self):
+        episode_url = "https://www.dattebayo-br.com/videos/560174"
+        dynamic_fullhd = "https://dynamic.r2.cloudflarestorage.com/fful/560174.mp4"
+        fallback_hd = unsigned_video_url("560174", quality="hd")
+        page_html = f"<script>var vid = '{dynamic_fullhd}';</script>"
+
+        client = MagicMock()
+
+        def get_side_effect(url, **kwargs):
+            if url == episode_url:
+                return _html_response(page_html)
+            if "ads.animeyabu.net" in url:
+                return _json_response([{"ads": "OK", "publicidade": "?sig=test"}])
+            response = MagicMock()
+            response.status_code = 206 if url.startswith(fallback_hd) else 404
+            return response
+
+        client.get.side_effect = get_side_effect
+
+        resolved = resolve_signed_video_url(client, episode_url)
+
+        assert resolved.startswith(fallback_hd)
+
+    def test_resolve_signed_video_url_falls_back_when_page_request_fails(self):
+        episode_url = "https://www.dattebayo-br.com/videos/560174"
+        fullhd = unsigned_video_url("560174", quality="fullhd")
+        client = MagicMock()
+
+        def get_side_effect(url, **kwargs):
+            if url == episode_url:
+                raise httpx.ConnectError("offline")
+            if "ads.animeyabu.net" in url:
+                return _json_response([{"ads": "OK", "publicidade": "?sig=fallback"}])
+            response = MagicMock()
+            response.status_code = 206 if url.startswith(fullhd) else 404
+            return response
+
+        client.get.side_effect = get_side_effect
+
+        resolved = resolve_signed_video_url(client, episode_url)
+
+        assert resolved.startswith(fullhd)
+
+    def test_resolve_signed_video_url_falls_back_when_page_has_no_candidates(self):
         episode_url = "https://www.dattebayo-br.com/videos/560174"
         fullhd = unsigned_video_url("560174", quality="fullhd")
         hd = unsigned_video_url("560174", quality="hd")
@@ -162,6 +258,8 @@ class TestDattebayoSigning:
         client = MagicMock()
 
         def get_side_effect(url, **kwargs):
+            if url == episode_url:
+                return _html_response("<html></html>")
             if "ads.animeyabu.net" in url and "fful" in url:
                 return _json_response([{"ads": "OK", "publicidade": "?sig=full"}])
             if "ads.animeyabu.net" in url and "f333" in url:
