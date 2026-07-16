@@ -136,7 +136,9 @@ class TestDattebayoSigning:
 
     def test_unsigned_video_url_fullhd(self):
         url = unsigned_video_url("560174", quality="fullhd")
-        assert url.endswith("/fful/560174.mp4")
+        assert url == (
+            "https://1db850bdcbe958d7be70519d81551be4.r2.cloudflarestorage.com/fful/560174.mp4"
+        )
 
     @patch("scrapers.plugins.dattebayo.httpx.Client")
     def test_sign_video_url(self, mock_client_cls):
