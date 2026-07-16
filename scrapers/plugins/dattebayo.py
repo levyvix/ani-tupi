@@ -20,7 +20,12 @@ SIGN_API = "https://ads.animeyabu.net/"
 HEADERS = DEFAULT_HEADERS
 REQUEST_TIMEOUT = 20
 
-VIDEO_ID_RE = re.compile(r"/videos/(\d+)")
+VIDEO_PATH_RE = re.compile(r"/videos/(\d+)/?")
+PLAYER_VIDEO_URL_RE = re.compile(
+    r"var\s+vid\s*=\s*(['\"])(https://[^'\"]+\.mp4)\1",
+    re.IGNORECASE,
+)
+R2_HOST_SUFFIX = ".r2.cloudflarestorage.com"
 QUALITY_PATHS = {
     "fullhd": "fful",
     "hd": "f333",
@@ -56,9 +61,21 @@ def _request_headers(referer: str) -> dict[str, str]:
 
 
 def extract_video_id(episode_url: str) -> str:
-    match = VIDEO_ID_RE.search(episode_url)
-    if not match:
-        raise ValueError(f"URL de episódio inválida (esperado .../videos/{{id}}): {episode_url}")
+    try:
+        parsed = urllib.parse.urlsplit(episode_url)
+    except ValueError as exc:
+        raise ValueError(f"URL de episódio inválida: {episode_url}") from exc
+
+    expected_origin = urllib.parse.urlsplit(BASE_URL)
+    match = VIDEO_PATH_RE.fullmatch(parsed.path)
+    if (
+        parsed.scheme != expected_origin.scheme
+        or parsed.netloc != expected_origin.netloc
+        or parsed.query
+        or parsed.fragment
+        or not match
+    ):
+        raise ValueError(f"URL de episódio inválida: {episode_url}")
     return match.group(1)
 
 
@@ -69,6 +86,46 @@ def unsigned_video_url(video_id: str, *, quality: str = "fullhd") -> str:
     return f"{R2_BASE}/{path}/{video_id}.mp4"
 
 
+def extract_unsigned_video_urls(
+    page_html: str,
+    episode_url: str,
+    *,
+    qualities: tuple[str, ...] = PLAYBACK_QUALITIES,
+) -> list[str]:
+    """Extract validated R2 video URLs from an episode page, ordered by quality."""
+    video_id = extract_video_id(episode_url)
+    quality_by_path = {
+        QUALITY_PATHS[quality]: quality for quality in qualities if quality in QUALITY_PATHS
+    }
+    candidates: dict[str, str] = {}
+
+    for match in PLAYER_VIDEO_URL_RE.finditer(page_html):
+        candidate = match.group(2)
+        try:
+            parsed = urllib.parse.urlsplit(candidate)
+        except ValueError:
+            continue
+        host = parsed.hostname or ""
+        path_parts = parsed.path.strip("/").split("/")
+
+        if (
+            parsed.scheme != "https"
+            or not host.endswith(R2_HOST_SUFFIX)
+            or parsed.netloc != host
+            or parsed.query
+            or parsed.fragment
+            or len(path_parts) != 2
+            or path_parts[1] != f"{video_id}.mp4"
+        ):
+            continue
+
+        quality = quality_by_path.get(path_parts[0])
+        if quality:
+            candidates.setdefault(quality, candidate)
+
+    return [candidates[quality] for quality in qualities if quality in candidates]
+
+
 def sign_video_url(
     client: httpx.Client,
     unsigned_url: str,
@@ -76,7 +133,11 @@ def sign_video_url(
     referer: str,
 ) -> str:
     sign_url = f"{SIGN_API}?url={urllib.parse.quote(unsigned_url, safe='')}"
-    response = client.get(sign_url, headers=_request_headers(referer))
+    response = client.get(
+        sign_url,
+        headers=_request_headers(referer),
+        follow_redirects=False,
+    )
     response.raise_for_status()
 
     payload = response.json()
@@ -96,6 +157,7 @@ def _is_playable(client: httpx.Client, video_url: str, *, referer: str) -> bool:
             video_url,
             headers={**_request_headers(referer), "Range": "bytes=0-0"},
             timeout=10,
+            follow_redirects=False,
         )
         return response.status_code in (200, 206)
     except httpx.HTTPError:
@@ -109,8 +171,30 @@ def resolve_signed_video_url(
     qualities: tuple[str, ...] = PLAYBACK_QUALITIES,
 ) -> str:
     video_id = extract_video_id(episode_url)
-    for quality in qualities:
-        unsigned = unsigned_video_url(video_id, quality=quality)
+
+    try:
+        response = client.get(
+            episode_url,
+            headers=_request_headers(episode_url),
+            follow_redirects=False,
+        )
+        response.raise_for_status()
+        unsigned_urls = extract_unsigned_video_urls(
+            response.text,
+            episode_url,
+            qualities=qualities,
+        )
+    except httpx.HTTPError as exc:
+        logger.debug("Dattebayo player page failed for %s: %s", video_id, exc)
+        unsigned_urls = []
+
+    fallback_urls = [unsigned_video_url(video_id, quality=quality) for quality in qualities]
+    unsigned_urls = list(dict.fromkeys([*unsigned_urls, *fallback_urls]))
+
+    quality_by_path = {path: quality for quality, path in QUALITY_PATHS.items()}
+    for unsigned in unsigned_urls:
+        quality_path = urllib.parse.urlsplit(unsigned).path.strip("/").split("/", 1)[0]
+        quality = quality_by_path.get(quality_path, "unknown")
         try:
             signed = sign_video_url(client, unsigned, referer=episode_url)
         except (httpx.HTTPError, ValueError) as exc:
