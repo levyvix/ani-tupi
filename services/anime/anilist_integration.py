@@ -989,6 +989,9 @@ def _run_playback_loop(
     current_episode_idx = start_episode_idx
     episode_idx = start_episode_idx
     num_episodes = len(episode_list)
+    # Reuse one player for the whole playback loop so session state (notably
+    # autoplay toggled from MPV) survives when loading the next episode.
+    player = VideoPlayer()
 
     while True:
         episode = current_episode_idx + 1
@@ -1008,7 +1011,6 @@ def _run_playback_loop(
         else:
             logger.info(f"   Fonte: {source_names[0]}")
 
-        player = VideoPlayer()
         fallback_result = play_episode_with_fallback(
             player=player,
             sources=all_sources,
