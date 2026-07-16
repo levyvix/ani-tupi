@@ -79,3 +79,5 @@ vendor/
 coverage/
 .cache/
 tmp/
+/.pi
+/.pi-subagents/artifacts
