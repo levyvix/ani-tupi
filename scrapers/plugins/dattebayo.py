@@ -15,7 +15,7 @@ from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_so
 logger = get_logger(__name__)
 
 BASE_URL = "https://www.dattebayo-br.com"
-R2_BASE = "https://842e802996826993acdd6d2f7385b287.r2.cloudflarestorage.com"
+R2_BASE = "https://1db850bdcbe958d7be70519d81551be4.r2.cloudflarestorage.com"
 SIGN_API = "https://ads.animeyabu.net/"
 HEADERS = DEFAULT_HEADERS
 REQUEST_TIMEOUT = 20
