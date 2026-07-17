@@ -16,6 +16,7 @@ REQUEST_TIMEOUT = 20
 
 _PLAYER_OPTION_RE = re.compile(r"data-type='([^']+)' data-post='(\d+)' data-nume='([^']+)'")
 _EPISODE_NUM_RE = re.compile(r"-episodio-(\d+)/?$")
+_ALL_EPISODES_SUFFIX_RE = re.compile(r"\s+todos\s+os\s+epis[oó]dios\s*$", re.IGNORECASE)
 
 
 class AnimesOnlineCloud:
@@ -33,7 +34,7 @@ class AnimesOnlineCloud:
                 a = article.select_one(".details .title a[href*='/anime/']")
                 if not a:
                     continue
-                title = a.get_text(strip=True)
+                title = _ALL_EPISODES_SUFFIX_RE.sub("", a.get_text(strip=True)).strip()
                 link = a.get("href", "")
                 if title and link:
                     results.append(AnimeMetadata(title=title, url=link, source=self.name))
