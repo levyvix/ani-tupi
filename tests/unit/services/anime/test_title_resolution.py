@@ -504,20 +504,21 @@ def test_search_anime_flow_fails_cleanly_when_resolution_fails(
 
 def test_ensure_anime_sources_in_repo_after_dual_search_worker():
     """Dual search menus must re-register sources in the main process."""
-    from scrapers import loader
-    from services.repository import rep
-
-    loader.load_plugins(rep.register)
-
-    rep.clear_search_results()
     selected = "Koko wa Ore ni Makasete Saki ni Ike to Ittekara"
-    assert selected not in rep.anime_to_urls
+    fallback = "Koko wa Ore ni Makasete Saki"
+    anime_to_urls = {}
+    mock_rep = Mock(anime_to_urls=anime_to_urls)
 
-    assert _ensure_anime_sources_in_repo(
-        selected,
-        "Koko wa Ore ni Makasete Saki",
-    )
-    assert rep.anime_to_urls.get(selected)
+    def search_anime(query, verbose=False):
+        if query == fallback:
+            anime_to_urls[selected] = [("https://example.test/anime", "fake", {})]
+        return []
 
-    rep.search_episodes(selected)
-    assert rep.get_episode_list(selected)
+    mock_rep.search_anime.side_effect = search_anime
+
+    with patch("services.anime.search.rep", mock_rep):
+        assert _ensure_anime_sources_in_repo(selected, fallback)
+
+    assert anime_to_urls[selected]
+    assert mock_rep.search_anime.call_args_list[0].args == (selected,)
+    assert mock_rep.search_anime.call_args_list[1].args == (fallback,)

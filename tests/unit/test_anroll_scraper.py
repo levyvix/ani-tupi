@@ -100,9 +100,10 @@ class TestAnRollSearchAnimeAndPlayer:
         assert results[0].url == "https://anroll.io/anime/mao/"
         assert results[0].source == "anroll"
 
+    @patch("scrapers.plugins.anroll.time.sleep")
     @patch("scrapers.plugins.anroll.store_player_source")
     @patch("scrapers.plugins.anroll.SeleniumWebDriver")
-    def test_search_player_src_extracts_video_url(self, mock_selenium_cls, mock_store):
+    def test_search_player_src_extracts_video_url(self, mock_selenium_cls, mock_store, mock_sleep):
         mock_store.return_value = True
         event = MagicMock()
         event.is_set.return_value = False
