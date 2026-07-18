@@ -6,7 +6,6 @@ from pathlib import Path
 from models.config import settings
 from utils.logging import get_logger
 from utils.mpv import IPCHandler, MPVLauncher, MPVLogManager
-from utils.playback_hints import resolve_mpv_stream_options
 
 logger = get_logger(__name__)
 
@@ -96,10 +95,9 @@ class VideoPlayer:
             return VideoPlaybackResult(exit_code=0, action="quit", data=None)
 
         if not use_ipc:
-            # Use legacy blocking playback
-            return self._play_video_legacy(url, debug=False, referrer=referrer)
+            return self._play_video_without_ipc(url, debug=False, referrer=referrer)
 
-        # Try IPC-based playback with fallback
+        # Try IPC-based playback, then fall back to a plain MPV subprocess.
         input_conf_path = None
         socket_path = None
         mpv_process = None
@@ -145,9 +143,8 @@ class VideoPlayer:
 
             return result
 
-        except (FileNotFoundError, OSError, Exception) as e:
-            # IPC launch failed, fallback to legacy
-            logger.info(f"⚠️  IPC playback unavailable: {e}. Using legacy mode.")
+        except Exception as e:
+            logger.info(f"⚠️  IPC playback unavailable: {e}. Using MPV without IPC.")
 
             # Clean up any dangling process
             if mpv_process and mpv_process.poll() is None:
@@ -157,7 +154,7 @@ class VideoPlayer:
                 except subprocess.TimeoutExpired:
                     mpv_process.kill()
 
-            return self._play_video_legacy(url, debug=False, referrer=referrer)
+            return self._play_video_without_ipc(url, debug=False, referrer=referrer)
 
         finally:
             # Clean up temporary files
@@ -170,20 +167,12 @@ class VideoPlayer:
             if socket_path:
                 self._cleanup_ipc_socket(socket_path)
 
-    def _play_video_legacy(
+    def _play_video_without_ipc(
         self, url: str, debug: bool = False, referrer: str | None = None
     ) -> VideoPlaybackResult:
-        """Play video using legacy python-mpv blocking mode (fallback)."""
-        logger.debug("_play_video_legacy called")
-        logger.debug(f"Full URL: {url}")
-        if debug:
-            logger.info("Skipping video playback")
-            return VideoPlaybackResult(exit_code=0, action="quit", data=None)
-
+        """Play video through the system MPV process without IPC."""
         try:
-            logger.debug("Calling play_video_raw...")
-            exit_code = self.play_video_raw(url, debug=False, referrer=referrer)
-            logger.debug(f"play_video_raw returned exit_code={exit_code}")
+            exit_code = self.play_video_raw(url, debug=debug, referrer=referrer)
             return VideoPlaybackResult(exit_code=exit_code, action="quit", data=None)
         except Exception as e:
             logger.info(f"⚠️  Playback error: {e}")
@@ -196,84 +185,43 @@ class VideoPlayer:
         ytdl_format: str | None = None,
         referrer: str | None = None,
     ) -> int:
-        """Play video using python-mpv and return exit code."""
-        logger.debug("play_video_raw: Starting")
-        logger.debug(f"Full URL: {url}")
+        """Play video through the system MPV process and return its exit code."""
+        logger.debug(f"Playing through system MPV: {url}")
         if debug:
             logger.info("DEBUG MODE: Skipping video playback")
             return 0
 
-        import mpv
-
-        # Generate custom ani-tupi keybindings
-        input_conf_path, _ = self._generate_input_conf()
-
-        referrer, demuxer_lavf_o = resolve_mpv_stream_options(url, referrer)
-
-        player = None
+        process = None
         try:
-            # Create MPV instance with current settings
-            logger.debug("play_video_raw: Creating MPV instance...")
-            mpv_kwargs = dict(
-                fullscreen=True,
-                cursor_autohide_fs_only=True,
-                log_handler=print,
-                ytdl=True,
-                ytdl_format=ytdl_format or "bestvideo[height<=1080]+bestaudio/best",
-                ytdl_raw_options="concurrent-fragments=5",
-                cache=True,
-                demuxer_max_bytes="400M",
-                demuxer_max_back_bytes="100M",
-                demuxer_readahead_secs=40,
-                stream_buffer_size="2M",
-                hwdec="no",
-                input_default_bindings=True,
-                input_vo_keyboard=True,
-                input_conf=input_conf_path,
-                osc=True,
+            process = self._launcher.launch_mpv_without_ipc(
+                url,
+                ytdl_format=ytdl_format,
                 referrer=referrer,
-                user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
             )
-            if demuxer_lavf_o:
-                mpv_kwargs["demuxer_lavf_o"] = demuxer_lavf_o
-            player = mpv.MPV(**mpv_kwargs)
+            _, stderr_output = process.communicate()
+            exit_code = process.returncode or 0
 
-            # Start playback (blocking)
-            logger.debug(" play_video_raw: Calling player.play()...")
-            player.play(url)
-            logger.debug(" play_video_raw: Calling player.wait_for_playback()...")
-            player.wait_for_playback()
-            logger.debug(" play_video_raw: Playback finished normally (exit code 0)")
-
-            return 0  # Normal playback completion
-
-        except mpv.ShutdownError:
-            # User aborted (Ctrl+C or window close)
-            logger.debug(" play_video_raw: ShutdownError (user abort)")
-            return 3
-        except FileNotFoundError as e:
-            logger.debug(" play_video_raw: MPV not found in PATH")
-            msg = "Error: 'mpv' is not installed or not found in the system PATH."
-            raise OSError(msg) from e
-        except Exception as e:
-            # Playback error
-            logger.debug(f" play_video_raw: Exception: {type(e).__name__}: {e}")
-            logger.info(f"⚠️  MPV error: {e}")
-            return 2
-        finally:
-            # Clean up player instance
-            try:
-                if player is not None:
-                    player.terminate()
-            except OSError:
-                pass
-
-            # Clean up temporary input.conf file
-            if input_conf_path:
+            log_output = ""
+            if self._last_mpv_log_file:
                 try:
-                    Path(input_conf_path).unlink()
+                    log_output = Path(self._last_mpv_log_file).read_text(
+                        encoding="utf-8", errors="ignore"
+                    )
                 except OSError:
                     pass
+
+            if exit_code == 0 and self._has_mpv_load_error(stderr_output or "", log_output):
+                return 2
+            return exit_code
+        except KeyboardInterrupt:
+            if process and process.poll() is None:
+                process.terminate()
+            return 3
+        except FileNotFoundError as e:
+            raise OSError("Error: 'mpv' is not installed or not found in PATH.") from e
+        except Exception as e:
+            logger.info(f"⚠️  MPV error: {e}")
+            return 2
 
     # ------------------------------------------------------------------
     # Delegation to collaborators (kept as methods for API/test stability)
@@ -372,7 +320,7 @@ def set_autoplay_state(enabled: bool) -> None:
 
 
 def play_video(url: str, debug=False, ytdl_format: str | None = None) -> int:
-    """Play video using python-mpv and return exit code."""
+    """Play video through the system MPV process and return its exit code."""
     return _default_player.play_video_raw(url, debug=debug, ytdl_format=ytdl_format)
 
 

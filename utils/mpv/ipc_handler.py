@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import platform
 import socket
+import subprocess
 import tempfile
 import time
 import uuid
@@ -15,8 +16,6 @@ from models.config import settings
 from utils.logging import get_logger
 
 if TYPE_CHECKING:
-    import subprocess
-
     from utils.mpv.launcher import MPVLauncher
     from utils.video_player import VideoPlaybackResult, VideoPlayer
 
@@ -102,6 +101,25 @@ class IPCHandler:
             case _:
                 return None
 
+    def _restart_without_ipc(
+        self,
+        mpv_process: subprocess.Popen,
+        episode_context: dict,
+    ) -> VideoPlaybackResult:
+        """Stop the IPC process and restart MPV without IPC."""
+        if mpv_process.poll() is None:
+            mpv_process.terminate()
+            try:
+                mpv_process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                mpv_process.kill()
+
+        return self._player._play_video_without_ipc(
+            episode_context.get("url", ""),
+            debug=False,
+            referrer=episode_context.get("referrer"),
+        )
+
     def ipc_event_loop(
         self,
         mpv_process: subprocess.Popen,
@@ -120,9 +138,7 @@ class IPCHandler:
         while time.time() - start_time < max_wait:
             try:
                 if platform.system() == "Windows":
-                    # Fallback to legacy on Windows for now
-                    url = episode_context.get("url", "")
-                    return self._player._play_video_legacy(url, debug=False)
+                    return self._restart_without_ipc(mpv_process, episode_context)
 
                 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 sock.settimeout(timeout)
@@ -133,10 +149,8 @@ class IPCHandler:
                 continue
 
         if not sock:
-            url = episode_context.get("url", "")
-            logger.debug("[PLAYBACK DEBUG] IPC socket failed, falling back to legacy.")
-            logger.debug(f"[PLAYBACK DEBUG] Full URL for legacy fallback: {url}")
-            return self._player._play_video_legacy(url, debug=False)
+            logger.debug("[PLAYBACK DEBUG] IPC socket failed; restarting without IPC.")
+            return self._restart_without_ipc(mpv_process, episode_context)
 
         try:
             buffer = ""

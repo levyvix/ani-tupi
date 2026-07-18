@@ -27,14 +27,13 @@ dependencies = [
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
     "diskcache>=5.6.3",
-    "python-mpv>=1.0.8",
     "loguru>=0.7.3",
     "httpx>=0.28.1",
     "pillow>=12.1.0",
     "yt-dlp>=2026.1.31",
     "selenium>=4.0.0",
-    "bs4>=0.0.2",
     "thefuzz>=0.22.1",
+    "beautifulsoup4>=4.15.0",
 ]
 
 [project.urls]
@@ -53,7 +52,6 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "deptry>=0.25.1",
-    "mypy>=1.19.1",
     "prek>=0.3.0",
     "pyright>=1.1.407",
     "pytest>=9.0.2",
@@ -114,12 +112,6 @@ ignore = [
     "S112",      # Log without exc_info
     "B904",      # raise within except without from
 ]
-
-[tool.mypy]
-disallow_untyped_defs = false
-disallow_untyped_calls = false
-disallow_untyped_decorators = false
-check_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

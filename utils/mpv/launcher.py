@@ -62,40 +62,64 @@ shift+t script-message toggle-sub-dub
         episode_number: int | None = None,
         referrer: str | None = None,
     ) -> subprocess.Popen:
-        """Launch MPV process with IPC socket support.
+        """Launch MPV with an IPC socket for episode navigation."""
+        return self._launch_mpv(
+            url,
+            socket_path=socket_path,
+            input_conf=input_conf,
+            anime_title=anime_title,
+            episode_number=episode_number,
+            referrer=referrer,
+        )
 
-        Args:
-            url: Video URL to play
-            socket_path: Path to IPC socket
-            input_conf: Path to input.conf file
-            anime_title: Anime title for window title
-            episode_number: Episode number for window title
-            source: Source name for window title
+    def launch_mpv_without_ipc(
+        self,
+        url: str,
+        *,
+        ytdl_format: str | None = None,
+        referrer: str | None = None,
+    ) -> subprocess.Popen:
+        """Launch the system MPV process without episode-navigation IPC."""
+        return self._launch_mpv(url, ytdl_format=ytdl_format, referrer=referrer)
 
-        Returns:
-            MPV subprocess handle
-        """
+    def _launch_mpv(
+        self,
+        url: str,
+        *,
+        socket_path: str | None = None,
+        input_conf: str | None = None,
+        anime_title: str | None = None,
+        episode_number: int | None = None,
+        ytdl_format: str | None = None,
+        referrer: str | None = None,
+    ) -> subprocess.Popen:
+        """Build and start an MPV subprocess."""
         debug_mode = settings.debug_mpv
         self.last_mpv_log_file = None
 
         referrer, demuxer_lavf_o = resolve_mpv_stream_options(url, referrer)
 
-        mpv_args = [
-            "mpv",
-            f"--input-ipc-server={socket_path}",
-            f"--input-conf={input_conf}",
-            "--fullscreen=yes",
-            "--osc=yes",
-            "--cache=yes",
-            "--demuxer-max-bytes=400M",
-            "--demuxer-max-back-bytes=100M",
-            "--demuxer-readahead-secs=40",
-            "--stream-buffer-size=2M",
-            "--hwdec=no",
-            "--ytdl=yes",
-            "--ytdl-format=bestvideo[height<=1080]+bestaudio/best",
-            "--user-agent=Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
-        ]
+        mpv_args = ["mpv"]
+        if socket_path:
+            mpv_args.append(f"--input-ipc-server={socket_path}")
+        if input_conf:
+            mpv_args.append(f"--input-conf={input_conf}")
+
+        mpv_args.extend(
+            [
+                "--fullscreen=yes",
+                "--osc=yes",
+                "--cache=yes",
+                "--demuxer-max-bytes=400M",
+                "--demuxer-max-back-bytes=100M",
+                "--demuxer-readahead-secs=40",
+                "--stream-buffer-size=2M",
+                "--hwdec=no",
+                "--ytdl=yes",
+                f"--ytdl-format={ytdl_format or 'bestvideo[height<=1080]+bestaudio/best'}",
+                "--user-agent=Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
+            ]
+        )
 
         # Keep MPV log enabled by default for debugging playback failures.
         log_file = self._log_manager.prepare_mpv_log_file()

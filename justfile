@@ -55,6 +55,14 @@ push:
 @format:
     uv run ruff format .
 
+# Run all static quality checks
+@check:
+    uv run ruff check .
+    uv run ruff format --check .
+    uv run pyright
+    uv run deptry .
+    uv run vulture commands manga_scrapers models scrapers services ui utils main.py manga_tupi.py plugin_manager.py --min-confidence 90
+
 # Install as global CLI
 @install:
     python3 install-cli.py

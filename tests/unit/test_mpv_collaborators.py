@@ -6,6 +6,7 @@ These exercise the now-isolated pure/near-pure pieces directly:
 """
 
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -106,6 +107,24 @@ class TestMPVLogManagerErrorClassification:
 
     def test_classify_returns_none_for_clean_output(self):
         assert MPVLogManager.classify_mpv_error("all good", "playing") is None
+
+
+class TestMPVLauncherProcess:
+    """MPV command construction for IPC and plain playback."""
+
+    @patch("utils.mpv.launcher.subprocess.Popen")
+    def test_plain_launch_omits_ipc_and_keeps_requested_format(self, mock_popen):
+        launcher = MPVLauncher(MPVLogManager())
+
+        launcher.launch_mpv_without_ipc(
+            "https://example.com/video.m3u8",
+            ytdl_format="best",
+        )
+
+        args = mock_popen.call_args.args[0]
+        assert "--ytdl-format=best" in args
+        assert not any(arg.startswith("--input-ipc-server=") for arg in args)
+        assert not any(arg.startswith("--input-conf=") for arg in args)
 
 
 class TestMPVLauncherInputConf:
