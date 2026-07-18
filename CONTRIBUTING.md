@@ -102,10 +102,13 @@ PR como esses três pontos foram preservados.
 ## Comandos de desenvolvimento
 
 ```bash
-uv run ruff check .      # Lint
-uv run ruff format .     # Format
+just check               # Lint, tipos, dependências e código morto
+uv run ruff format .     # Formata o código
 uv run pytest            # Testes
 ```
+
+`just check` executa Ruff, Pyright, Deptry e Vulture. A CI roda os mesmos
+checks antes dos testes.
 
 Use sempre `uv`. Nunca edite `pyproject.toml` à mão para dependências — use
 `uv add` / `uv remove`. Commits seguem Conventional Commits (`feat:`, `fix:`, …).

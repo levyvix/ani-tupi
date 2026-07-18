@@ -59,6 +59,17 @@ jobs:
     - name: Run ruff format check
       run: uv run ruff format --check .
 
+    - name: Run pyright
+      run: uv run pyright
+
+    - name: Check dependency declarations
+      run: uv run deptry .
+
+    - name: Check for dead source code
+      run: >-
+        uv run vulture commands manga_scrapers models scrapers services ui utils
+        main.py manga_tupi.py plugin_manager.py --min-confidence 90
+
     - name: Instalar mpv para teste de playback
       run: sudo apt-get update && sudo apt-get install -y mpv
 

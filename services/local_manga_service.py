@@ -4,6 +4,8 @@ Scans ~/.manga_tupi/ directory to discover downloaded manga and chapters.
 Provides functionality for PDF auto-creation and AniList sync (forward-only).
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -14,7 +16,7 @@ from models.config import settings
 from utils.pdf_converter import create_pdf_from_images
 
 if TYPE_CHECKING:
-    from services.anilist.client import AniListClient as AniListService
+    from services.anilist.client import AniListClient
 
 
 class LocalMangaService:
@@ -206,7 +208,7 @@ class LocalMangaService:
         self,
         manga_title: str,
         local_chapter_num: str,
-        anilist_service: Optional["AniListService"] = None,
+        anilist_service: Optional[AniListClient] = None,
     ) -> bool:
         """Sync local progress to AniList if local is ahead (forward-only).
 

@@ -68,6 +68,59 @@ class TestVideoPlayer:
         # Verify that the loop was called (the state is used inside it)
         assert mock_loop.called
 
+    def test_play_video_raw_uses_mpv_subprocess(self, monkeypatch):
+        """Should use the system MPV process instead of a Python binding."""
+
+        class FakeProcess:
+            returncode = 0
+
+            @staticmethod
+            def communicate():
+                return "", ""
+
+        player = VideoPlayer()
+        calls = []
+
+        def launch(url, *, ytdl_format=None, referrer=None):
+            calls.append((url, ytdl_format, referrer))
+            return FakeProcess()
+
+        monkeypatch.setattr(player._launcher, "launch_mpv_without_ipc", launch)
+
+        exit_code = player.play_video_raw(
+            "https://example.com/video.m3u8",
+            ytdl_format="best",
+            referrer="https://example.com/",
+        )
+
+        assert exit_code == 0
+        assert calls == [
+            ("https://example.com/video.m3u8", "best", "https://example.com/"),
+        ]
+
+    def test_play_video_raw_detects_load_error(self, monkeypatch, tmp_path):
+        """Should map an MPV load failure with exit code zero to code two."""
+
+        class FakeProcess:
+            returncode = 0
+
+            @staticmethod
+            def communicate():
+                return "", ""
+
+        log_file = tmp_path / "mpv.log"
+        log_file.write_text("Exiting... (Errors when loading file)", encoding="utf-8")
+
+        player = VideoPlayer()
+        player._launcher.last_mpv_log_file = str(log_file)
+        monkeypatch.setattr(
+            player._launcher,
+            "launch_mpv_without_ipc",
+            lambda *args, **kwargs: FakeProcess(),
+        )
+
+        assert player.play_video_raw("https://example.com/missing.m3u8") == 2
+
     def test_detects_mpv_load_error_signature(self):
         """Should detect load failures even when MPV exits with code 0."""
         stderr = ""
