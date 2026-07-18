@@ -31,3 +31,25 @@ def test_main_menu_flow_returns_to_main_menu_after_submenu(monkeypatch):
         pass
 
     assert seen == ["local", "sources"]
+
+
+def test_continue_watching_does_not_mutate_shared_arguments(monkeypatch):
+    args = SimpleNamespace(continue_watching=False)
+    received = []
+
+    monkeypatch.setattr(main, "show_main_menu", lambda: "▶️  Continuar Assistindo")
+
+    def fake_anime(command_args):
+        received.append(command_args)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(main, "anime_cmd", fake_anime)
+
+    try:
+        main.main_menu_flow(args)
+    except SystemExit:
+        pass
+
+    assert args.continue_watching is False
+    assert received[0].continue_watching is True
+    assert received[0] is not args

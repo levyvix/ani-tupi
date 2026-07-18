@@ -42,6 +42,20 @@ from utils.range_parser import parse_episode_range, RangeParseError
 logger = get_logger(__name__)
 
 
+def episode_index(episode_number: int, total_episodes: int) -> int:
+    """Convert a user-facing episode number to a zero-based index.
+
+    Raises:
+        ValueError: if the requested episode is outside the available range.
+    """
+    if total_episodes < 1 or not 1 <= episode_number <= total_episodes:
+        raise ValueError(
+            f"Episódio {episode_number} não existe ou ainda não foi ao ar. "
+            f"Episódios disponíveis: 1-{total_episodes}"
+        )
+    return episode_number - 1
+
+
 def build_post_playback_options(ctx: "PlaybackContext") -> list[str]:
     """Build post-playback action options for current context."""
     has_next = ctx.episode_idx < ctx.num_episodes - 1
@@ -270,17 +284,16 @@ def anime(args) -> None:
                     show_error("Nao foi possivel carregar episodios para este anime.")
                     return
 
-                # Validate episode number is within bounds
-                if args.episode < 1 or args.episode > total_episodes:
-                    show_error(
-                        f"Episódio {args.episode} não existe ou ainda não foi ao ar. Episódios disponíveis: 1-{total_episodes}"
-                    )
+                try:
+                    requested_episode = episode_index(args.episode, total_episodes)
+                except ValueError as exc:
+                    show_error(str(exc))
                     return
 
-                # Replace context with new episode (convert to 0-indexed)
+                # Replace context with the requested episode.
                 ctx = prepare_playback_from_search(
                     ctx.anime_title,
-                    args.episode - 1,
+                    requested_episode,
                     ctx.source,
                 )
                 if ctx is None:
@@ -312,15 +325,11 @@ def anime(args) -> None:
                 logger.error("❌ Nao foi possivel carregar episodios para este anime.")
                 return
 
-            # Validate episode number is within bounds
-            if args.episode < 1 or args.episode > total_episodes:
-                show_error(
-                    f"Episódio {args.episode} não existe ou ainda não foi ao ar. Episódios disponíveis: 1-{total_episodes}"
-                )
+            try:
+                episode_idx = episode_index(args.episode, total_episodes)
+            except ValueError as exc:
+                show_error(str(exc))
                 return
-
-            # Convert to 0-indexed
-            episode_idx = args.episode - 1
 
         # Prepare playback context from search results
         ctx = prepare_playback_from_search(selected_anime, episode_idx, source)

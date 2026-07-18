@@ -4,13 +4,15 @@ import sys
 from scrapers import loader
 from services.repository import rep
 from ui.components import menu
-from commands import anime as anime_cmd
-from commands import anilist_menu as anilist_menu_cmd
-from commands import anilist_auth as anilist_auth_cmd
-from commands import manga as manga_cmd
-from commands import manage_sources as manage_sources_cmd
-from commands import config as config_cmd
-from commands import update as update_cmd
+from commands import (
+    anime as anime_cmd,
+    anilist_auth as anilist_auth_cmd,
+    anilist_menu as anilist_menu_cmd,
+    config as config_cmd,
+    manage_sources as manage_sources_cmd,
+    manga as manga_cmd,
+    update as update_cmd,
+)
 from commands.cache import handle_clear_cache
 from commands.update import run_startup_update_check, show_version_info
 from utils.logging import get_logger
@@ -49,12 +51,10 @@ def main_menu_flow(args) -> None:
         if choice == "🔍 Buscar Anime":
             anime_cmd(args)
         elif choice == "▶️  Continuar Assistindo":
-            # Set continue_watching flag only for this invocation.
-            args.continue_watching = True
-            try:
-                anime_cmd(args)
-            finally:
-                args.continue_watching = False
+            # Keep the menu's shared namespace immutable between handlers.
+            continue_values = vars(args).copy()
+            continue_values["continue_watching"] = True
+            anime_cmd(argparse.Namespace(**continue_values))
         elif choice == "📂 Biblioteca Local":
             handle_local_library(args)
         elif choice == "📺 AniList":
@@ -65,17 +65,14 @@ def main_menu_flow(args) -> None:
             manage_sources_cmd(args)
 
 
-def cli() -> None:
-    """Entry point for CLI."""
+def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser without executing application startup."""
     parser = argparse.ArgumentParser(
         prog="ani-tupi",
         description="Veja anime sem sair do terminal.",
     )
-
-    # Create subparsers for commands
     subparsers = parser.add_subparsers(dest="command", help="Comandos disponíveis")
 
-    # AniList command
     anilist_parser = subparsers.add_parser("anilist", help="Integração com AniList")
     anilist_parser.add_argument(
         "action",
@@ -84,27 +81,15 @@ def cli() -> None:
         choices=["auth", "menu"],
         help="auth: fazer login | menu: navegar listas (padrão)",
     )
-
-    # Update command
     subparsers.add_parser("update", help="Verificar e atualizar ani-tupi")
     subparsers.add_parser("config", help="Configurar o ani-tupi interativamente")
 
-    # Main anime command arguments (default)
+    parser.add_argument("--query", "-q")
     parser.add_argument(
-        "--query",
-        "-q",
+        "-e", "--episode", type=int, help="Número do episódio para assistir (ex: 5)"
     )
     parser.add_argument(
-        "-e",
-        "--episode",
-        type=int,
-        help="Número do episódio para assistir (ex: 5)",
-    )
-    parser.add_argument(
-        "-S",
-        "--season",
-        type=int,
-        help="Número da estação para anime com múltiplas estações (ex: -S 2 | -S 2 -e 5 para estação 2 episódio 5)",
+        "-S", "--season", type=int, help="Número da estação para anime com múltiplas estações"
     )
     parser.add_argument("--debug", "-d", action="store_true")
     parser.add_argument(
@@ -115,9 +100,7 @@ def cli() -> None:
     parser.add_argument("--continue-watching", "-c", action="store_true", dest="continue_watching")
     parser.add_argument("--manga", "-m", action="store_true")
     parser.add_argument(
-        "--list-sources",
-        action="store_true",
-        help="Listar todas as fontes de anime disponíveis",
+        "--list-sources", action="store_true", help="Listar todas as fontes de anime disponíveis"
     )
     parser.add_argument(
         "--random",
@@ -126,14 +109,14 @@ def cli() -> None:
         help="Sortear um anime aleatório da lista do AniList e reproduzir",
     )
     parser.add_argument(
-        "--clear-cache",
-        nargs="?",
-        const=True,
-        metavar="[anime_name]",
-        help="Limpar cache (sem argumentos limpa tudo, ou especifique anime para limpar apenas um)",
+        "--clear-cache", nargs="?", const=True, metavar="[anime_name]", help="Limpar cache"
     )
+    return parser
 
-    args = parser.parse_args()
+
+def cli() -> None:
+    """Entry point for CLI."""
+    args = build_parser().parse_args()
 
     # Configure logging early, before any other imports or operations
     from utils.logging import configure_logging
