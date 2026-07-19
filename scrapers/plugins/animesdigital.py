@@ -145,7 +145,7 @@ class AnimesDigital:
                 img = link.find("img") if link else None
                 image = img.get("src") if img else ""
                 results.append({"title": title, "url": url, "image": image})
-            except Exception as e:
+            except (AttributeError, KeyError, ValueError, IndexError, UnicodeDecodeError) as e:
                 logger.debug(f"Failed to parse HTML fragment: {e}")
         return results
 
@@ -173,7 +173,13 @@ class AnimesDigital:
                 if href and not href.startswith("http"):
                     href = f"https://animesdigital.org{href}"
                 return href
-        except Exception as e:
+        except (
+            httpx.TimeoutException,
+            httpx.ConnectError,
+            AttributeError,
+            KeyError,
+            ValueError,
+        ) as e:
             logger.debug(f"Failed to extract series URL from {episode_url}: {e}")
         return None
 
@@ -210,7 +216,7 @@ class AnimesDigital:
                             result["url"],
                             result.get("image", ""),
                         )
-            except Exception as e:
+            except (AttributeError, KeyError, ValueError, IndexError) as e:
                 logger.error(f"❌ AnimesDigital API search failed for '{incremental_query}': {e}")
         return all_anime
 
@@ -261,7 +267,7 @@ class AnimesDigital:
 
                 if tree.select("div.item_ep"):
                     self._merge_into(all_anime, query, audio_type, url)
-            except Exception as e:
+            except (AttributeError, KeyError, ValueError, IndexError) as e:
                 logger.debug(f"Complete slug failed for '{slug}': {e}")
         return all_anime
 
@@ -336,7 +342,13 @@ class AnimesDigital:
             if titles:
                 return [ScrapedEpisodes(titles=titles, urls=urls, source=AnimesDigital.name)]
             return []
-        except Exception as e:
+        except (
+            httpx.TimeoutException,
+            httpx.ConnectError,
+            AttributeError,
+            KeyError,
+            ValueError,
+        ) as e:
             logger.debug(f"AnimesDigital series page scraping failed for '{anime}': {e}")
             return []
 
@@ -374,7 +386,7 @@ class AnimesDigital:
             all_titles = [f"{anime} Episódio {i + 1}" for i in range(len(current_urls))]
             all_titles.extend(new_titles)
             return all_titles, current_urls + new_urls
-        except Exception as e:
+        except (KeyError, IndexError, ValueError, TypeError) as e:
             logger.debug(f"Error merging homepage episodes: {e}")
             return None
 
@@ -396,7 +408,7 @@ class AnimesDigital:
                 ep_number = int(ep_match.group(1)) if ep_match else float("inf")
                 results.append({"title": title, "url": url, "_ep_number": ep_number})
                 seen_urls.add(url)
-            except Exception as e:
+            except (AttributeError, KeyError, ValueError, IndexError) as e:
                 logger.debug(f"Failed to parse episode HTML fragment: {e}")
 
         results.sort(key=lambda x: x["_ep_number"])
@@ -456,7 +468,7 @@ class AnimesDigital:
                     if match:
                         try:
                             mp4_decoded = base64.b64decode(match.group(1)).decode("utf-8")
-                        except Exception:
+                        except (ValueError, UnicodeDecodeError):
                             pass
                     break
 
@@ -470,7 +482,13 @@ class AnimesDigital:
             logger.debug("No direct video sources found, falling back to iframe method")
             self._extract_iframe_src(html_content, container, event)
 
-        except Exception as e:
+        except (
+            httpx.TimeoutException,
+            httpx.ConnectError,
+            AttributeError,
+            KeyError,
+            ValueError,
+        ) as e:
             raise Exception(f"Could not extract video from AnimesDigital: {e}") from e
 
     def _extract_iframe_src(self, html_content: str, container: list, event) -> None:
@@ -482,7 +500,7 @@ class AnimesDigital:
                         return
             if iframe_matches:
                 store_player_source(container, event, iframe_matches[0])
-        except Exception as e:
+        except (AttributeError, KeyError, ValueError, IndexError) as e:
             logger.debug(f"Could not extract iframe src: {e}")
 
     def _fetch_homepage_episodes(self) -> list[dict]:
@@ -528,7 +546,7 @@ class AnimesDigital:
                             "episode_url": url,
                         }
                     )
-            except Exception as e:
+            except (AttributeError, KeyError, ValueError, IndexError) as e:
                 logger.debug(f"Error parsing episode link: {e}")
 
         return all_episodes
@@ -617,7 +635,7 @@ class AnimesDigital:
         except httpx.TimeoutException:
             logger.debug("AnimesDigital homepage fetch timed out")
             return []
-        except Exception as e:
+        except (AttributeError, KeyError, ValueError, IndexError) as e:
             logger.debug(f"Error searching AnimesDigital homepage: {e}")
             return []
 
