@@ -80,7 +80,7 @@ class LocalMangaService:
 
             return library
 
-        except Exception as e:
+        except (FileNotFoundError, PermissionError, IOError, OSError) as e:
             logger.error(f"Error scanning local library: {e}")
             return {}
 
@@ -143,7 +143,7 @@ class LocalMangaService:
 
             return chapters
 
-        except Exception as e:
+        except (FileNotFoundError, PermissionError, IOError, OSError) as e:
             logger.error(f"Error getting chapters for {manga_title}: {e}")
             return []
 
@@ -200,7 +200,7 @@ class LocalMangaService:
 
             return pdf_path
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError, UnicodeDecodeError, IOError, OSError) as e:
             logger.error(f"Failed to create PDF: {e}")
             return None
 
@@ -263,7 +263,7 @@ class LocalMangaService:
                     from services.anilist.discovery import get_anilist_id_from_title
 
                     anilist_id = get_anilist_id_from_title(manga_title)
-                except Exception as search_error:
+                except (ValueError, KeyError, AttributeError, UnicodeDecodeError) as search_error:
                     logger.debug(f"AniList search failed: {search_error}")
                     anilist_id = None
 
@@ -279,7 +279,7 @@ class LocalMangaService:
                     return False
 
                 anilist_chapter = anilist_entry.progress
-            except Exception as e:
+            except (ValueError, KeyError, AttributeError, UnicodeDecodeError) as e:
                 logger.warning(f"Failed to get AniList entry: {e}")
                 return False
 
@@ -297,7 +297,7 @@ class LocalMangaService:
                 )
                 return False
 
-        except Exception as e:
+        except (FileNotFoundError, PermissionError, IOError, OSError) as e:
             logger.error(f"AniList sync failed: {e}")
             return False
 
@@ -378,7 +378,7 @@ class LocalMangaService:
                 file_size_mb=round(file_size_mb, 1),
             )
 
-        except Exception as e:
+        except (FileNotFoundError, PermissionError, IOError, OSError) as e:
             logger.error(f"Error building LocalChapter for {chapter_dir}: {e}")
             return None
 

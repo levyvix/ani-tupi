@@ -11,6 +11,8 @@ All errors are handled gracefully - functions never raise exceptions.
 """
 
 from dataclasses import dataclass
+import json
+import httpx
 from utils.logging import get_logger
 
 from models.models import Status
@@ -111,7 +113,7 @@ def prepare_playback_from_search(
             anilist_id = anilist_result.anilist_id
             anilist_title = anilist_result.anilist_title
             total_episodes_anilist = anilist_result.total_episodes
-    except Exception as e:
+    except (httpx.TimeoutException, httpx.ConnectError, json.JSONDecodeError, ValueError) as e:
         logger.warning("Failed to discover AniList info for '%s': %s", selected_anime, e)
         # Continue without AniList info
 
@@ -163,7 +165,7 @@ def prepare_playback_from_history() -> PlaybackContext | None:
             anilist_id = anilist_result.anilist_id
             anilist_title = anilist_result.anilist_title
             total_episodes_anilist = anilist_result.total_episodes
-    except Exception as e:
+    except (httpx.TimeoutException, httpx.ConnectError, json.JSONDecodeError, ValueError) as e:
         logger.warning("Failed to discover AniList info for '%s': %s", anime_title, e)
         # Continue with info from history
 
@@ -247,7 +249,12 @@ def get_episode_url_and_source(
                             anime_title,
                             episode,
                         )
-            except Exception as e:
+            except (
+                httpx.TimeoutException,
+                httpx.ConnectError,
+                json.JSONDecodeError,
+                ValueError,
+            ) as e:
                 logger.debug("Episode URL pattern error for %s ep %d: %s", anime_title, episode, e)
 
         # Check if this is an awaiting episode with a direct URL from homepage search
@@ -270,7 +277,12 @@ def get_episode_url_and_source(
                 logger.debug(
                     f"Could not extract player from direct AnimesDigital URL for {anime_title} ep {episode}, trying regular search"
                 )
-            except Exception as e:
+            except (
+                httpx.TimeoutException,
+                httpx.ConnectError,
+                json.JSONDecodeError,
+                ValueError,
+            ) as e:
                 logger.debug(f"Error extracting player from AnimesDigital awaiting episode: {e}")
                 # Fall back to regular search
 
@@ -295,7 +307,7 @@ def get_episode_url_and_source(
                 success=False,
                 error_message="Nenhuma fonte conseguiu extrair o video.",
             )
-    except Exception as e:
+    except (httpx.TimeoutException, httpx.ConnectError, json.JSONDecodeError, ValueError) as e:
         logger.error("Failed to get episode URL for '%s' ep %d: %s", anime_title, episode, e)
         return EpisodePlaybackResult(
             player_url=None,
@@ -343,9 +355,8 @@ def _validate_anilist_id(
                         anime_title,
                         anilist_id,
                     )
-                except Exception as exc:
+                except (OSError, IOError, ValueError) as exc:
                     logger.debug("Failed to clear discovery cache for '%s': %s", anime_title, exc)
-                    pass
             return False
 
         # Check if episode number is reasonable
@@ -361,7 +372,7 @@ def _validate_anilist_id(
             return False
 
         return True
-    except Exception as e:
+    except (httpx.TimeoutException, httpx.ConnectError, json.JSONDecodeError, ValueError) as e:
         logger.error("Failed to validate anime_id=%d: %s", anilist_id, e)
         return False
 
@@ -477,7 +488,7 @@ def sync_progress_to_anilist(
 
         return True
 
-    except Exception as e:
+    except (httpx.TimeoutException, httpx.ConnectError, json.JSONDecodeError, ValueError) as e:
         logger.error("Failed to sync progress to AniList for anime %d: %s", anilist_id, e)
         return False
 
@@ -592,7 +603,7 @@ def build_episode_sources(
                 seen_sources.add(source_name)
             else:
                 logger.debug("search_player_from_page returned no URLs for %s", source_name)
-        except Exception as e:
+        except (httpx.TimeoutException, httpx.ConnectError, json.JSONDecodeError, ValueError) as e:
             logger.debug("Exception extracting from %s: %s", source_name, e)
             continue
 
