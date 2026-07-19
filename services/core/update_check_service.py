@@ -199,7 +199,7 @@ class UpdateCheckService:
         return "0.0.0"
 
     def _read_version_from_pyproject(self) -> str | None:
-        pyproject_path = Path(__file__).resolve().parent.parent / "pyproject.toml"
+        pyproject_path = Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
         if not pyproject_path.exists():
             return None
 

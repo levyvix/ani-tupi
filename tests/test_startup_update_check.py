@@ -23,7 +23,9 @@ def test_startup_notice_is_shown_when_update_available():
         message="⬆️  Nova versão disponível: 0.8.0 -> 0.9.0. Atualize com: uv tool upgrade ani-tupi",
     )
 
-    with patch("services.update_check_service.UpdateCheckService.check_for_updates") as mock_check:
+    with patch(
+        "services.core.update_check_service.UpdateCheckService.check_for_updates"
+    ) as mock_check:
         with patch.object(_update_cmd.logger, "info") as mock_info:
             mock_check.return_value = result
             main.run_startup_update_check()
@@ -40,7 +42,9 @@ def test_startup_notice_is_hidden_when_no_update():
         message=None,
     )
 
-    with patch("services.update_check_service.UpdateCheckService.check_for_updates") as mock_check:
+    with patch(
+        "services.core.update_check_service.UpdateCheckService.check_for_updates"
+    ) as mock_check:
         with patch.object(_update_cmd.logger, "info") as mock_info:
             mock_check.return_value = result
             main.run_startup_update_check()
@@ -50,7 +54,9 @@ def test_startup_notice_is_hidden_when_no_update():
 
 def test_startup_continues_when_update_check_raises():
     """Unexpected update-check errors never break startup flow."""
-    with patch("services.update_check_service.UpdateCheckService.check_for_updates") as mock_check:
+    with patch(
+        "services.core.update_check_service.UpdateCheckService.check_for_updates"
+    ) as mock_check:
         mock_check.side_effect = RuntimeError("boom")
         main.run_startup_update_check()
 
@@ -71,7 +77,9 @@ def test_notice_not_shown_without_message_payload(message: str | None):
         message=message,
     )
 
-    with patch("services.update_check_service.UpdateCheckService.check_for_updates") as mock_check:
+    with patch(
+        "services.core.update_check_service.UpdateCheckService.check_for_updates"
+    ) as mock_check:
         with patch.object(_update_cmd.logger, "info") as mock_info:
             mock_check.return_value = result
             main.run_startup_update_check()

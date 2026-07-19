@@ -1,7 +1,7 @@
 """Tests for PlayerRepository class."""
 
 import pytest
-from services.player_repository import PlayerRepository
+from services.repository.player_repository import PlayerRepository
 
 
 class MockPlugin:

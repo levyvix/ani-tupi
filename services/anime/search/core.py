@@ -11,7 +11,7 @@ from models.config import settings
 from models.models import AnimeTitleResolution
 from services.anime.title_resolution import AnimeTitleResolver
 from services.repository import rep
-from services import ui_bridge
+from services.core import ui_bridge
 from services.anilist.scraper_cache import get_scraper_cache
 from services.anime.title_normalization import normalize_anime_title
 from services.anime.search.incremental_search_state import IncrementalSearchState

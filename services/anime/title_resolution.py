@@ -11,7 +11,7 @@ from thefuzz import fuzz
 from models.config import settings
 from models.models import AniListAnime, AnimeTitleResolution, JikanAnimeEntry
 from services.anilist import anilist_client
-from services.jikan_client import jikan_client
+from services.anime.jikan_client import jikan_client
 from services.anime.title_normalization import normalize_search_cache_key
 from utils.cache import get_cache
 from utils.logging import get_logger

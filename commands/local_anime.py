@@ -11,7 +11,7 @@ from pathlib import Path
 
 from commands._shared import build_nav_options, is_next, is_prev, is_replay
 from models.config import get_data_path
-from services.local_anime_service import LocalAnimeService
+from services.anime.local_anime_service import LocalAnimeService
 from services.anilist.discovery import (
     get_anilist_id_from_title,
     get_anilist_id_with_interactive_fallback,

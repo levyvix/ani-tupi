@@ -20,7 +20,7 @@ from services.anilist.discovery import (
     discover_anilist_info,
 )
 from services.anilist import anilist_client
-from services.history_service import load_history
+from services.core.history_service import load_history
 from services.repository import rep
 
 logger = get_logger(__name__)

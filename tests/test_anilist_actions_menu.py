@@ -108,7 +108,7 @@ class TestActionLoop:
             patch.object(svc_anilist, "anilist_client", client),
             patch.object(cmd, "anilist_main_menu", side_effect=[("cool anime", 42), None]),
             patch.object(menus, "menu_navigate", side_effect=action_selections),
-            patch.object(cmd.anime_service, "anilist_anime_flow") as watch,
+            patch.object(cmd, "anilist_anime_flow") as watch,
             patch.object(cmd, "pause"),
             patch.object(cmd, "webbrowser") as browser,
         ):

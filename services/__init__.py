@@ -1,25 +1,25 @@
 """Business logic services layer.
 
-Core services for ani-tupi:
-- anime_service: Anime search and playback logic
+Core services for ani-tupi, one package per domain:
+- anime: Anime search, playback, local library, and AniList flows
 - anilist: AniList API client, discovery, and cache adapters
-- history_service: Watch history management
-- manga_service: Manga search and reading
-- repository: Central data store
+- repository: Central data store (search, episodes, playback, players)
+- manga: Manga search, reading, downloads, and local library
+- core: Cross-cutting services (history, settings, update check, UI bridge)
 """
 
 from services import (
-    anime_service,
+    anime,
     anilist,
-    history_service,
-    manga_service,
     repository,
+    manga,
+    core,
 )
 
 __all__ = [
-    "anime_service",
+    "anime",
     "anilist",
-    "history_service",
-    "manga_service",
     "repository",
+    "manga",
+    "core",
 ]

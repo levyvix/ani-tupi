@@ -11,7 +11,7 @@ import webbrowser
 from rich.console import Console
 from rich.prompt import Confirm
 
-from services import anime_service
+from services.anime import anilist_anime_flow
 from ui import anilist_menus
 from ui.anilist_menus import (
     anilist_main_menu,
@@ -36,7 +36,7 @@ def _wire_anilist_menus() -> None:
 
     anilist_menus.configure(
         client=anilist_client,
-        anime_flow=anime_service.anilist_anime_flow,
+        anime_flow=anilist_anime_flow,
         anime_actions=run_anime_actions,
         airing_service=AiringEpisodesService,
         local_library_playback=handle_local_library_playback,
@@ -148,7 +148,7 @@ def run_anime_actions(
             return  # ESC → back to anime list
 
         if action == "watch":
-            anime_service.anilist_anime_flow(
+            anilist_anime_flow(
                 anime_title,
                 anilist_id,
                 args,

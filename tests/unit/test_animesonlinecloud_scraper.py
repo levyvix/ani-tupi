@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from scrapers.plugins.animesonlinecloud import AnimesOnlineCloud
-from services.search_repository import SearchRepository
+from services.repository.search_repository import SearchRepository
 
 
 SEARCH_HTML = """

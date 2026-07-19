@@ -6,9 +6,9 @@ Coordinates between specialized repositories:
 - PlaybackCoordinator: video extraction from sources
 """
 
-from services.search_repository import SearchRepository
-from services.episode_repository import EpisodeRepository
-from services.playback_coordinator import PlaybackCoordinator
+from services.repository.search_repository import SearchRepository
+from services.repository.episode_repository import EpisodeRepository
+from services.anime.playback_coordinator import PlaybackCoordinator
 from utils.logging import get_logger
 
 logger = get_logger(__name__)

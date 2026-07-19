@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from services.search_repository import SearchRepository
+from services.repository.search_repository import SearchRepository
 from models.models import AnimeMetadata
 from models.models import AniListSearchResult
 from utils.logging import _base_logger
@@ -366,7 +366,7 @@ class TestSearchRepository:
         assert len(results.results) == 1
         assert results.results[0].title == "Anime A"
 
-    @patch("services.search_repository.logger")
+    @patch("services.repository.search_repository.logger")
     def test_search_anime_no_plugins(self, mock_logger):
         """search_anime should log error when no plugins registered."""
         repo = SearchRepository()
@@ -374,7 +374,7 @@ class TestSearchRepository:
 
         assert len(results.results) == 0
 
-    @patch("services.search_repository.logger")
+    @patch("services.repository.search_repository.logger")
     def test_search_anime_with_word_limit(self, mock_logger):
         """search_anime_with_word_limit should limit words in search."""
         repo = SearchRepository()

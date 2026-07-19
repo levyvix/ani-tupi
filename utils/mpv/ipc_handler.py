@@ -173,7 +173,7 @@ class IPCHandler:
                                 if args:
                                     action = args[0]
                                     if action == "mark-next":
-                                        from services.history_service import (
+                                        from services.core.history_service import (
                                             save_history_from_event,
                                         )
                                         from services.repository import rep
@@ -423,7 +423,7 @@ class IPCHandler:
                 logger.info("   Tente ativar debug: ANI_TUPI_DEBUG_MPV=1 uv run ani-tupi")
 
             if self._player.autoplay and exit_code == 0:
-                from services.history_service import save_history_from_event
+                from services.core.history_service import save_history_from_event
 
                 anime_title = episode_context.get("anime_title")
                 episode_number = episode_context.get("episode_number", 1)

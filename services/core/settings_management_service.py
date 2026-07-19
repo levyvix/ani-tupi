@@ -143,9 +143,9 @@ def _deep_merge(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]
 
 
 def _get_available_plugin_names() -> set[str]:
-    plugins_dir = Path(__file__).parent.parent / "scrapers" / "plugins"
-    skip = {"__init__.py", "utils.py"}
-    return {f.stem for f in plugins_dir.glob("*.py") if f.name not in skip}
+    from scrapers.loader import discover_plugin_names
+
+    return set(discover_plugin_names())
 
 
 def _parse_priority_order(raw_value: str, current_order: list[Any]) -> list[Any]:

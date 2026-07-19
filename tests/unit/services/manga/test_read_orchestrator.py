@@ -189,7 +189,7 @@ class TestStartMangaSearch:
 
     def test_manga_not_found_error_shows_warning(self, monkeypatch):
         from services.manga.read_orchestrator import start_manga_search
-        from services.manga_service import MangaNotFoundError
+        from services.manga.manga_service import MangaNotFoundError
 
         service = _FakeService(raise_on_search=MangaNotFoundError("not found"))
         warnings = []
@@ -202,7 +202,7 @@ class TestStartMangaSearch:
 
     def test_manga_dex_error_shows_user_message(self, monkeypatch):
         from services.manga.read_orchestrator import start_manga_search
-        from services.manga_service import MangaDexError
+        from services.manga.manga_service import MangaDexError
 
         err = MangaDexError("internal", user_message="serviço indisponível")
         service = _FakeService(raise_on_search=err)
@@ -376,7 +376,7 @@ class TestPrepareChapterPdf:
 
     def test_get_chapter_pages_mangadex_error_returns_none(self, tmp_path):
         from services.manga.read_orchestrator import _prepare_chapter_pdf
-        from services.manga_service import MangaDexError
+        from services.manga.manga_service import MangaDexError
 
         manga = _manga()
         chapter = _chapter("2")
@@ -505,7 +505,7 @@ class TestLoadChaptersWithFallback:
 
     def test_mangadex_error_with_no_fallback(self, monkeypatch):
         from services.manga.read_orchestrator import _load_chapters_with_fallback
-        from services.manga_service import MangaDexError
+        from services.manga.manga_service import MangaDexError
 
         err = MangaDexError("err", user_message="falhou")
         service = _FakeService(raise_on_chapters=err, sources=["mangadex"])
@@ -542,7 +542,7 @@ class TestLoadChaptersWithFallback:
     def test_fallback_source_used_on_mangadex_error(self, monkeypatch):
         """When primary fails with MangaDexError and fallback succeeds, returns fallback chapters."""
         from services.manga.read_orchestrator import _load_chapters_with_fallback
-        from services.manga_service import MangaDexError
+        from services.manga.manga_service import MangaDexError
 
         fallback_chapters = [_chapter("1")]
         call_count = [0]

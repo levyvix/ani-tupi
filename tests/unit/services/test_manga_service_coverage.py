@@ -42,18 +42,18 @@ def _chapter_result(id_="c1", number="1", url="http://x/ch/1"):
 class TestMangaHistory:
     @pytest.fixture(autouse=True)
     def _redirect_history_file(self, tmp_path, monkeypatch):
-        from services.manga_service import MangaHistory
+        from services.manga.manga_service import MangaHistory
 
         monkeypatch.setattr(MangaHistory, "_history_file", tmp_path / "manga_history.json")
 
     def test_load_returns_empty_when_file_missing(self):
-        from services.manga_service import MangaHistory
+        from services.manga.manga_service import MangaHistory
 
         result = MangaHistory.load()
         assert result == {}
 
     def test_save_and_load_roundtrip(self):
-        from services.manga_service import MangaHistory
+        from services.manga.manga_service import MangaHistory
         from models.models import MangaHistoryEntry
 
         entry = MangaHistoryEntry(last_chapter="5")
@@ -63,7 +63,7 @@ class TestMangaHistory:
         assert loaded["One Piece"].last_chapter == "5"
 
     def test_load_returns_empty_on_corrupt_json(self, tmp_path, monkeypatch):
-        from services.manga_service import MangaHistory
+        from services.manga.manga_service import MangaHistory
 
         f = tmp_path / "manga_history.json"
         f.write_text("not valid json")
@@ -71,19 +71,19 @@ class TestMangaHistory:
         assert MangaHistory.load() == {}
 
     def test_get_last_chapter_returns_none_when_missing(self):
-        from services.manga_service import MangaHistory
+        from services.manga.manga_service import MangaHistory
 
         assert MangaHistory.get_last_chapter("Naruto") is None
 
     def test_get_last_chapter_returns_chapter(self):
-        from services.manga_service import MangaHistory
+        from services.manga.manga_service import MangaHistory
         from models.models import MangaHistoryEntry
 
         MangaHistory.save({"Naruto": MangaHistoryEntry(last_chapter="42")})
         assert MangaHistory.get_last_chapter("Naruto") == "42"
 
     def test_update_creates_new_entry(self):
-        from services.manga_service import MangaHistory
+        from services.manga.manga_service import MangaHistory
 
         MangaHistory.update("Bleach", "100", chapter_id="cid", manga_id="mid", anilist_id=99)
         history = MangaHistory.load()
@@ -91,7 +91,7 @@ class TestMangaHistory:
         assert history["Bleach"].anilist_id == 99
 
     def test_update_preserves_anilist_id(self):
-        from services.manga_service import MangaHistory
+        from services.manga.manga_service import MangaHistory
 
         MangaHistory.update("Bleach", "1", anilist_id=55)
         MangaHistory.update("Bleach", "2")  # no anilist_id — should preserve
@@ -100,7 +100,7 @@ class TestMangaHistory:
         assert history["Bleach"].last_chapter == "2"
 
     def test_update_is_thread_safe(self):
-        from services.manga_service import MangaHistory
+        from services.manga.manga_service import MangaHistory
 
         errors = []
 
@@ -129,30 +129,30 @@ class TestMangaHistory:
 class TestDownloadedChaptersTracker:
     @pytest.fixture(autouse=True)
     def _redirect_downloads_file(self, tmp_path, monkeypatch):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         monkeypatch.setattr(
             DownloadedChaptersTracker, "_downloads_file", tmp_path / "manga_downloads.json"
         )
 
     def test_is_downloaded_returns_false_initially(self):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         assert DownloadedChaptersTracker.is_downloaded("m1", "1") is False
 
     def test_mark_downloaded_persists(self):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         DownloadedChaptersTracker.mark_downloaded("m1", "Manga", "5", "/path/5.pdf", 1.2)
         assert DownloadedChaptersTracker.is_downloaded("m1", "5") is True
 
     def test_get_downloaded_chapters_empty(self):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         assert DownloadedChaptersTracker.get_downloaded_chapters("m1") == {}
 
     def test_get_downloaded_chapters_after_mark(self):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         DownloadedChaptersTracker.mark_downloaded("m1", "Manga", "3", "/x.pdf", 0.5)
         chapters = DownloadedChaptersTracker.get_downloaded_chapters("m1")
@@ -160,31 +160,31 @@ class TestDownloadedChaptersTracker:
         assert chapters["3"]["file_path"] == "/x.pdf"
 
     def test_get_download_path_returns_none_when_missing(self):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         assert DownloadedChaptersTracker.get_download_path("m1", "99") is None
 
     def test_get_download_path_returns_path_after_mark(self):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         DownloadedChaptersTracker.mark_downloaded("m1", "Manga", "7", "/ch7.pdf", 1.0)
         assert DownloadedChaptersTracker.get_download_path("m1", "7") == "/ch7.pdf"
 
     def test_cleanup_download_removes_entry(self):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         DownloadedChaptersTracker.mark_downloaded("m1", "Manga", "2", "/x.pdf", 0.3)
         DownloadedChaptersTracker.cleanup_download("m1", "2")
         assert DownloadedChaptersTracker.is_downloaded("m1", "2") is False
 
     def test_cleanup_download_noop_when_missing(self):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         # Should not raise
         DownloadedChaptersTracker.cleanup_download("m1", "999")
 
     def test_load_raw_returns_empty_on_corrupt(self, tmp_path, monkeypatch):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         f = tmp_path / "bad.json"
         f.write_text("{invalid}")
@@ -192,7 +192,7 @@ class TestDownloadedChaptersTracker:
         assert DownloadedChaptersTracker._load_raw() == {}
 
     def test_mark_downloaded_with_custom_source(self):
-        from services.manga_service import DownloadedChaptersTracker
+        from services.manga.manga_service import DownloadedChaptersTracker
 
         DownloadedChaptersTracker.mark_downloaded(
             "m1", "Manga", "1", "/f.pdf", 0.1, source="mugiwaras"
@@ -236,12 +236,12 @@ def plugin_b():
 
 @pytest.fixture
 def service_ab(manga_config, plugin_a, plugin_b, tmp_path, monkeypatch):
-    monkeypatch.setattr("services.manga_service.get_data_path", lambda: tmp_path / "state")
+    monkeypatch.setattr("services.manga.manga_service.get_data_path", lambda: tmp_path / "state")
     with patch(
-        "services.manga_service.load_manga_plugins",
+        "services.manga.manga_service.load_manga_plugins",
         return_value={"src_a": plugin_a, "src_b": plugin_b},
     ):
-        from services.manga_service import UnifiedMangaService
+        from services.manga.manga_service import UnifiedMangaService
 
         svc = UnifiedMangaService(manga_config)
     return svc
@@ -249,18 +249,18 @@ def service_ab(manga_config, plugin_a, plugin_b, tmp_path, monkeypatch):
 
 class TestUnifiedMangaServiceInit:
     def test_raises_when_no_plugins(self, manga_config):
-        with patch("services.manga_service.load_manga_plugins", return_value={}):
-            from services.manga_service import UnifiedMangaService
+        with patch("services.manga.manga_service.load_manga_plugins", return_value={}):
+            from services.manga.manga_service import UnifiedMangaService
 
             with pytest.raises(RuntimeError, match="Nenhum plugin"):
                 UnifiedMangaService(manga_config)
 
     def test_default_source_uses_preferred_order(self, manga_config, plugin_a, plugin_b, tmp_path):
         with patch(
-            "services.manga_service.load_manga_plugins",
+            "services.manga.manga_service.load_manga_plugins",
             return_value={"src_a": plugin_a, "src_b": plugin_b},
         ):
-            from services.manga_service import UnifiedMangaService
+            from services.manga.manga_service import UnifiedMangaService
 
             svc = UnifiedMangaService(manga_config)
         assert svc.current_source == "src_a"
@@ -270,8 +270,10 @@ class TestUnifiedMangaServiceInit:
 
         config = MangaSettings(preferred_sources=["nonexistent"], output_directory=tmp_path)
         plugin = _make_plugin("other")
-        with patch("services.manga_service.load_manga_plugins", return_value={"other": plugin}):
-            from services.manga_service import UnifiedMangaService
+        with patch(
+            "services.manga.manga_service.load_manga_plugins", return_value={"other": plugin}
+        ):
+            from services.manga.manga_service import UnifiedMangaService
 
             svc = UnifiedMangaService(config)
         assert svc.current_source == "other"
@@ -297,9 +299,10 @@ class TestUnifiedMangaServiceSearch:
         p1 = _make_plugin("src_a", search_results=[_manga_search_result("m1", "Naruto")])
         p2 = _make_plugin("src_b", search_results=[_manga_search_result("m2", "Bleach")])
         with patch(
-            "services.manga_service.load_manga_plugins", return_value={"src_a": p1, "src_b": p2}
+            "services.manga.manga_service.load_manga_plugins",
+            return_value={"src_a": p1, "src_b": p2},
         ):
-            from services.manga_service import UnifiedMangaService
+            from services.manga.manga_service import UnifiedMangaService
 
             svc = UnifiedMangaService(manga_config)
         results = svc.search_manga("manga")
@@ -308,8 +311,8 @@ class TestUnifiedMangaServiceSearch:
     def test_search_source_failure_raises_for_specific_source(self, manga_config, tmp_path):
         p = _make_plugin("src_a")
         p.search_manga.side_effect = RuntimeError("network error")
-        with patch("services.manga_service.load_manga_plugins", return_value={"src_a": p}):
-            from services.manga_service import UnifiedMangaService
+        with patch("services.manga.manga_service.load_manga_plugins", return_value={"src_a": p}):
+            from services.manga.manga_service import UnifiedMangaService
 
             svc = UnifiedMangaService(manga_config)
         with pytest.raises(ValueError, match="Falha ao buscar"):
@@ -320,9 +323,10 @@ class TestUnifiedMangaServiceSearch:
         p1.search_manga.side_effect = RuntimeError("boom")
         p2 = _make_plugin("src_b", search_results=[_manga_search_result("m2", "Bleach")])
         with patch(
-            "services.manga_service.load_manga_plugins", return_value={"src_a": p1, "src_b": p2}
+            "services.manga.manga_service.load_manga_plugins",
+            return_value={"src_a": p1, "src_b": p2},
         ):
-            from services.manga_service import UnifiedMangaService
+            from services.manga.manga_service import UnifiedMangaService
 
             svc = UnifiedMangaService(manga_config)
         results = svc.search_manga("Bleach")
@@ -330,8 +334,8 @@ class TestUnifiedMangaServiceSearch:
 
     def test_search_returns_empty_for_specific_source_no_results(self, manga_config, tmp_path):
         p = _make_plugin("src_a", search_results=[])
-        with patch("services.manga_service.load_manga_plugins", return_value={"src_a": p}):
-            from services.manga_service import UnifiedMangaService
+        with patch("services.manga.manga_service.load_manga_plugins", return_value={"src_a": p}):
+            from services.manga.manga_service import UnifiedMangaService
 
             svc = UnifiedMangaService(manga_config)
         assert svc.search_manga("x", source="src_a") == []
@@ -387,9 +391,10 @@ class TestUnifiedMangaServiceChapters:
         p1.get_chapters.side_effect = RuntimeError("timeout")
         p2 = _make_plugin("src_b", chapter_results=[_chapter_result("c1", "5")])
         with patch(
-            "services.manga_service.load_manga_plugins", return_value={"src_a": p1, "src_b": p2}
+            "services.manga.manga_service.load_manga_plugins",
+            return_value={"src_a": p1, "src_b": p2},
         ):
-            from services.manga_service import UnifiedMangaService
+            from services.manga.manga_service import UnifiedMangaService
 
             svc = UnifiedMangaService(manga_config)
         with patch("services.manga.reading_flow.build_manga_url", return_value="http://x/"):
@@ -406,8 +411,8 @@ class TestUnifiedMangaServiceChapters:
 
     def test_get_chapter_pages_constructs_mangadex_url(self, manga_config, tmp_path):
         p = _make_plugin("mangadex", page_results=["http://img.png"])
-        with patch("services.manga_service.load_manga_plugins", return_value={"mangadex": p}):
-            from services.manga_service import UnifiedMangaService
+        with patch("services.manga.manga_service.load_manga_plugins", return_value={"mangadex": p}):
+            from services.manga.manga_service import UnifiedMangaService
 
             svc = UnifiedMangaService(manga_config)
         pages = svc.get_chapter_pages("chapter-uuid", chapter_url=None, source="mangadex")
@@ -429,33 +434,22 @@ class TestLRUMetadata:
 
     def test_metadata_persisted_and_loaded(self, manga_config, tmp_path, monkeypatch):
         state = tmp_path / "state"
-        monkeypatch.setattr("services.manga_service.get_data_path", lambda: state)
+        monkeypatch.setattr("services.manga.manga_service.get_data_path", lambda: state)
         with patch(
-            "services.manga_service.load_manga_plugins",
+            "services.manga.manga_service.load_manga_plugins",
             return_value={"src_a": _make_plugin("src_a")},
         ):
-            from services.manga_service import UnifiedMangaService
+            from services.manga.manga_service import UnifiedMangaService
 
             svc = UnifiedMangaService(manga_config)
         svc._record_manga_in_plugin("m99", "src_a")
 
         # Re-create service to load from file
         with patch(
-            "services.manga_service.load_manga_plugins",
+            "services.manga.manga_service.load_manga_plugins",
             return_value={"src_a": _make_plugin("src_a")},
         ):
-            from services.manga_service import UnifiedMangaService
+            from services.manga.manga_service import UnifiedMangaService
 
             svc2 = UnifiedMangaService(manga_config)
         assert svc2._get_known_plugin_for_manga("m99") == "src_a"
-
-
-class TestMangaDexClientAlias:
-    def test_mangadex_client_sets_mangadex_source(self, manga_config, tmp_path, monkeypatch):
-        monkeypatch.setattr("services.manga_service.get_data_path", lambda: tmp_path / "s")
-        p = _make_plugin("mangadex")
-        with patch("services.manga_service.load_manga_plugins", return_value={"mangadex": p}):
-            from services.manga_service import MangaDexClient
-
-            client = MangaDexClient(manga_config)
-        assert client.current_source == "mangadex"

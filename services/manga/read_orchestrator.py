@@ -13,9 +13,9 @@ together and interleaves the menus.
 """
 
 from models.models import Status
-from services import ui_bridge
+from services.core import ui_bridge
 from services.anilist import anilist_client
-from services.manga_service import (
+from services.manga.manga_service import (
     DownloadedChaptersTracker,
     MangaDexError,
     MangaHistory,

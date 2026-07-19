@@ -6,7 +6,7 @@ Handles loading episodes from cache or by scraping via the repository.
 import json
 
 from models.config import get_data_path
-from services import ui_bridge
+from services.core import ui_bridge
 from services.repository import rep
 from services.anilist.scraper_cache import get_scraper_cache, set_scraper_cache
 from services.anime.mappings import load_anilist_urls

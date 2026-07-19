@@ -14,8 +14,10 @@ def test_update_command_reports_current_version_without_running_update(monkeypat
         "echo upgrade",
     )
 
-    with patch("services.update_check_service.importlib.metadata.version", return_value="0.8.0"):
-        with patch("services.update_check_service.http_get_with_retry") as mock_get:
+    with patch(
+        "services.core.update_check_service.importlib.metadata.version", return_value="0.8.0"
+    ):
+        with patch("services.core.update_check_service.http_get_with_retry") as mock_get:
             mock_get.return_value = Mock(json=lambda: {"info": {"version": "0.8.0"}})
 
             with patch("commands.update.subprocess.run") as mock_run:
@@ -33,8 +35,10 @@ def test_update_command_runs_configured_update_when_new_version_exists(monkeypat
         "echo upgrade",
     )
 
-    with patch("services.update_check_service.importlib.metadata.version", return_value="0.8.0"):
-        with patch("services.update_check_service.http_get_with_retry") as mock_get:
+    with patch(
+        "services.core.update_check_service.importlib.metadata.version", return_value="0.8.0"
+    ):
+        with patch("services.core.update_check_service.http_get_with_retry") as mock_get:
             mock_get.return_value = Mock(json=lambda: {"info": {"version": "0.9.0"}})
 
             with patch("commands.update.subprocess.run") as mock_run:
@@ -53,8 +57,10 @@ def test_update_command_handles_release_lookup_failure(monkeypatch):
         "echo upgrade",
     )
 
-    with patch("services.update_check_service.importlib.metadata.version", return_value="0.8.0"):
-        with patch("services.update_check_service.http_get_with_retry") as mock_get:
+    with patch(
+        "services.core.update_check_service.importlib.metadata.version", return_value="0.8.0"
+    ):
+        with patch("services.core.update_check_service.http_get_with_retry") as mock_get:
             mock_get.side_effect = ValueError("fetch failed")
 
             with patch("commands.update.subprocess.run") as mock_run:

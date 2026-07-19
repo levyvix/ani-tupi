@@ -4,7 +4,6 @@ Provides:
 - UnifiedMangaService: Multi-source manga service with plugin support
 - MangaHistory: Reading progress persistence
 - DownloadedChaptersTracker: Download tracking and metadata
-- MangaDexClient: Backward compatibility alias
 - Custom exceptions: MangaError, MangaNotFoundError, etc.
 
 This module consolidates both the legacy MangaDex-specific service
@@ -571,17 +570,3 @@ class UnifiedMangaService:
             if self.check_manga_available(manga_title, source):
                 available.append(source)
         return available
-
-
-class MangaDexClient(UnifiedMangaService):
-    """Legacy MangaDex client for backward compatibility.
-
-    Use UnifiedMangaService instead for new code.
-    """
-
-    def __init__(self, config: MangaSettings):
-        """Initialize with MangaDex as default source."""
-        super().__init__(config)
-        # Force MangaDex as default for backward compatibility
-        if "mangadex" in self.plugins:
-            self.current_source = "mangadex"

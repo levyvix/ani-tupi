@@ -12,7 +12,7 @@ the same dependency-injection pattern used in ``services/history_service.py``.
 They never build menus; the command layer owns prompts.
 """
 
-from services import ui_bridge
+from services.core import ui_bridge
 from services.manga.reading_flow import (
     build_manga_url,
     find_chapter_by_number,

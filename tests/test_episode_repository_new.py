@@ -1,6 +1,6 @@
 """Tests for updated EpisodeRepository with priority sorting."""
 
-from services.episode_repository import EpisodeRepository
+from services.repository.episode_repository import EpisodeRepository
 
 
 class TestEpisodeRepository:

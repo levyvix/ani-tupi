@@ -53,7 +53,7 @@ class TestLoadHistoryInjectedUI:
     def test_saved_urls_path_returns_contract_tuple(self, temp_dir, repository, monkeypatch):
         """load_history resolves via injected callables and honours the
         (anime, episode_idx, anilist_id, anilist_title) contract."""
-        from services import history_service
+        from services.core import history_service
 
         store = JSONStore(temp_dir / "history.json")
         monkeypatch.setattr(history_service, "_history_store", store)
@@ -83,7 +83,7 @@ class TestLoadHistoryInjectedUI:
         assert len(menu.calls) == 2
 
     def test_cancel_history_menu_returns_none(self, temp_dir, repository, monkeypatch):
-        from services import history_service
+        from services.core import history_service
 
         store = JSONStore(temp_dir / "history.json")
         monkeypatch.setattr(history_service, "_history_store", store)
@@ -100,7 +100,7 @@ class TestLoadHistoryInjectedUI:
 
 class TestPickEpisodeInjectedUI:
     def test_next_episode_choice(self):
-        from services.history_service import _pick_episode
+        from services.core.history_service import _pick_episode
 
         menu = ScriptedMenu(["⏭️  Episódio 3 (próximo)"])
         idx = _pick_episode(
@@ -115,7 +115,7 @@ class TestPickEpisodeInjectedUI:
         assert idx == 2
 
     def test_choose_other_episode_delegates_to_menu_episodes(self):
-        from services.history_service import _pick_episode
+        from services.core.history_service import _pick_episode
 
         menu = ScriptedMenu(["📋 Escolher outro episódio"])
         idx = _pick_episode(
@@ -130,7 +130,7 @@ class TestPickEpisodeInjectedUI:
         assert idx == 2
 
     def test_unavailable_episode_prompts_and_returns_none(self):
-        from services.history_service import _pick_episode
+        from services.core.history_service import _pick_episode
 
         prompts: list[str] = []
         menu = ScriptedMenu(["⏭️  Episódio 4 (aguardando)"])
