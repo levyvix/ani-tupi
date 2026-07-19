@@ -165,7 +165,7 @@ class TestDiscoverAnilistInfo:
         # Scenario 1: API discovery fails - return no match
         mock_anilist.is_authenticated.return_value = True
         mock_normalize.return_value = "dandadan"
-        mock_auto_discover.side_effect = Exception("Network error")
+        mock_auto_discover.side_effect = TypeError("Network error")
         result = discover_anilist_info("Dandadan")
         assert result.authenticated is True
         assert result.found is False
@@ -176,7 +176,7 @@ class TestDiscoverAnilistInfo:
         mock_auto_discover.return_value = [
             AniListSearchResult(anilist_id=12345, score=95, title="Dandadan")
         ]
-        mock_get_metadata.side_effect = Exception("Metadata fetch failed")
+        mock_get_metadata.side_effect = TypeError("Metadata fetch failed")
         result = discover_anilist_info("Dandadan")
         assert result.authenticated is True
         assert result.found is True

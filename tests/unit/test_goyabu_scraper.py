@@ -52,7 +52,7 @@ class TestGoyabuScraper:
     def setup_method(self):
         self.scraper = Goyabu()
 
-    @patch("scrapers.plugins.goyabu.httpx.get")
+    @patch("scrapers.plugins.goyabu.http_get_with_retry")
     def test_search_anime_returns_results(self, mock_get):
         mock_get.return_value = _html_response(SEARCH_HTML)
 
@@ -62,7 +62,7 @@ class TestGoyabuScraper:
         assert results[0].title == "Mao"
         assert results[0].url == "https://goyabu.io/anime/mao/"
 
-    @patch("scrapers.plugins.goyabu.httpx.get")
+    @patch("scrapers.plugins.goyabu.http_get_with_retry")
     def test_search_anime_empty_returns_empty_list(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")
 
@@ -70,7 +70,7 @@ class TestGoyabuScraper:
 
         assert results == []
 
-    @patch("scrapers.plugins.goyabu.httpx.get")
+    @patch("scrapers.plugins.goyabu.http_get_with_retry")
     def test_search_episodes_returns_episode_list(self, mock_get):
         mock_get.return_value = _html_response(EPISODES_JS)
 
@@ -80,7 +80,7 @@ class TestGoyabuScraper:
         assert result[0].source == "goyabu"
         assert len(result[0].urls) == 2
 
-    @patch("scrapers.plugins.goyabu.httpx.get")
+    @patch("scrapers.plugins.goyabu.http_get_with_retry")
     def test_search_episodes_no_episodes_returns_empty(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")
 
@@ -89,7 +89,7 @@ class TestGoyabuScraper:
         assert result == []
 
     @patch("scrapers.plugins.goyabu.resolve_blogger_token")
-    @patch("scrapers.plugins.goyabu.httpx.get")
+    @patch("scrapers.plugins.goyabu.http_get_with_retry")
     def test_search_player_src_extracts_video_url(self, mock_get, mock_resolve):
         mock_get.return_value = _html_response(PLAYER_HTML)
         mock_resolve.return_value = "https://video.example.com/mao.mp4"
@@ -101,7 +101,7 @@ class TestGoyabuScraper:
         assert container == ["https://video.example.com/mao.mp4"]
         mock_resolve.assert_called_once_with("XYZ789")
 
-    @patch("scrapers.plugins.goyabu.httpx.get")
+    @patch("scrapers.plugins.goyabu.http_get_with_retry")
     def test_search_player_src_no_source_raises(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")
         container = []

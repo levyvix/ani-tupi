@@ -3,8 +3,6 @@
 from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
-import httpx
-
 from models.config import UpdateCheckSettings
 from services.update_check_service import UpdateCheckService
 
@@ -30,12 +28,8 @@ def test_update_available_builds_notice(temp_dir):
 
     payload = {"info": {"version": "0.9.0"}}
 
-    with patch.object(httpx.Client, "get") as mock_get:
-        mock_get.return_value = Mock(
-            status_code=200,
-            json=lambda: payload,
-            raise_for_status=lambda: None,
-        )
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
+        mock_get.return_value = Mock(json=lambda: payload)
 
         result = service.check_for_updates()
 
@@ -54,12 +48,8 @@ def test_current_version_returns_no_notice(temp_dir):
 
     payload = {"info": {"version": "0.8.0"}}
 
-    with patch.object(httpx.Client, "get") as mock_get:
-        mock_get.return_value = Mock(
-            status_code=200,
-            json=lambda: payload,
-            raise_for_status=lambda: None,
-        )
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
+        mock_get.return_value = Mock(json=lambda: payload)
 
         result = service.check_for_updates()
 
@@ -75,12 +65,8 @@ def test_invalid_payload_returns_fail_safe_result(temp_dir):
 
     payload = {"unexpected": "shape"}
 
-    with patch.object(httpx.Client, "get") as mock_get:
-        mock_get.return_value = Mock(
-            status_code=200,
-            json=lambda: payload,
-            raise_for_status=lambda: None,
-        )
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
+        mock_get.return_value = Mock(json=lambda: payload)
 
         result = service.check_for_updates()
 
@@ -90,20 +76,22 @@ def test_invalid_payload_returns_fail_safe_result(temp_dir):
 
 
 def test_timeout_and_network_failures_are_silent(temp_dir):
-    """Timeout/network errors return no-notice result."""
+    """Fetch errors (e.g. bad JSON from a network failure) return no-notice result."""
     settings = UpdateCheckSettings(enabled=True, interval_hours=24)
     service = _service(settings, temp_dir / "update_check_state.json")
 
-    with patch.object(httpx.Client, "get") as mock_get:
-        mock_get.side_effect = httpx.TimeoutException("timeout")
+    # _fetch_latest_version catches (ValueError, TypeError); simulate a fetch
+    # that produces unparseable content (as happens after a timeout/retry cycle).
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
+        mock_get.side_effect = ValueError("network failure")
         timeout_result = service.check_for_updates()
 
     assert timeout_result.update_available is False
     assert timeout_result.latest_version is None
     assert timeout_result.message is None
 
-    with patch.object(httpx.Client, "get") as mock_get:
-        mock_get.side_effect = httpx.ConnectError("network down")
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
+        mock_get.side_effect = TypeError("bad response type")
         network_result = service.check_for_updates()
 
     assert network_result.update_available is False
@@ -117,23 +105,15 @@ def test_uses_cached_result_before_interval_elapses(temp_dir):
     state_path = temp_dir / "update_check_state.json"
     service = _service(settings, state_path, local_version="0.8.0")
 
-    with patch.object(httpx.Client, "get") as mock_get:
-        mock_get.return_value = Mock(
-            status_code=200,
-            json=lambda: {"info": {"version": "1.0.0"}},
-            raise_for_status=lambda: None,
-        )
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
+        mock_get.return_value = Mock(json=lambda: {"info": {"version": "1.0.0"}})
 
         first = service.check_for_updates()
 
     assert first.update_available is True
 
-    with patch.object(httpx.Client, "get") as mock_get:
-        mock_get.return_value = Mock(
-            status_code=200,
-            json=lambda: {"info": {"version": "9.9.9"}},
-            raise_for_status=lambda: None,
-        )
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
+        mock_get.return_value = Mock(json=lambda: {"info": {"version": "9.9.9"}})
 
         second = service.check_for_updates()
 
@@ -160,12 +140,8 @@ def test_cache_expires_after_interval(temp_dir):
 
     service = _service(settings, state_path, local_version="0.8.0")
 
-    with patch.object(httpx.Client, "get") as mock_get:
-        mock_get.return_value = Mock(
-            status_code=200,
-            json=lambda: {"info": {"version": "0.9.0"}},
-            raise_for_status=lambda: None,
-        )
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
+        mock_get.return_value = Mock(json=lambda: {"info": {"version": "0.9.0"}})
 
         result = service.check_for_updates()
 
@@ -179,7 +155,7 @@ def test_disabled_update_check_skips_network(temp_dir):
     settings = UpdateCheckSettings(enabled=False)
     service = _service(settings, temp_dir / "update_check_state.json")
 
-    with patch.object(httpx.Client, "get") as mock_get:
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
         result = service.check_for_updates()
 
     assert mock_get.call_count == 0
@@ -193,12 +169,8 @@ def test_state_saved_with_successful_check(temp_dir):
     state_path = temp_dir / "update_check_state.json"
     service = _service(settings, state_path, local_version="0.8.0")
 
-    with patch.object(httpx.Client, "get") as mock_get:
-        mock_get.return_value = Mock(
-            status_code=200,
-            json=lambda: {"info": {"version": "0.9.0"}},
-            raise_for_status=lambda: None,
-        )
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
+        mock_get.return_value = Mock(json=lambda: {"info": {"version": "0.9.0"}})
         service.check_for_updates()
 
     raw_state = state_path.read_text()
@@ -222,7 +194,7 @@ def test_cached_state_with_naive_timestamp_is_supported(temp_dir):
         )
     )
 
-    with patch.object(httpx.Client, "get") as mock_get:
+    with patch("services.update_check_service.http_get_with_retry") as mock_get:
         result = service.check_for_updates()
 
     assert mock_get.call_count == 0

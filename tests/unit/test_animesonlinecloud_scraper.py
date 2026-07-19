@@ -36,7 +36,7 @@ class TestAnimesOnlineCloudScraper:
     def teardown_method(self) -> None:
         SearchRepository.reset_singleton()
 
-    @patch("scrapers.plugins.animesonlinecloud.httpx.get")
+    @patch("scrapers.plugins.animesonlinecloud.http_get_with_retry")
     def test_search_removes_all_episodes_suffix_to_enable_source_merge(self, mock_get) -> None:
         mock_get.return_value = _html_response(SEARCH_HTML)
 

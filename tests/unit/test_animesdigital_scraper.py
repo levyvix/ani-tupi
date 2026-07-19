@@ -62,9 +62,9 @@ class TestAnimesDigitalFallbackLogging:
     def setup_method(self):
         self.scraper = AnimesDigital()
 
-    @patch("scrapers.plugins.animesdigital.httpx.get")
+    @patch("scrapers.plugins.animesdigital.http_get_with_retry")
     def test_homepage_http_error_returns_empty_without_warning(self, mock_get, caplog):
-        mock_get.return_value = _http_error_response()
+        mock_get.side_effect = httpx.TimeoutException("timed out")
 
         with caplog.at_level(logging.WARNING):
             result = self.scraper.search_homepage_incremental("Liar Game")
@@ -89,7 +89,7 @@ class TestAnimesDigitalFallbackLogging:
         mock_scrape_series_page.assert_called_once()
         mock_homepage_search.assert_called_once_with("Liar Game", audio_type="legendado")
 
-    @patch("scrapers.plugins.animesdigital.httpx.get")
+    @patch("scrapers.plugins.animesdigital.http_get_with_retry")
     def test_scrape_series_page_uses_static_html_and_appends_odr(self, mock_get):
         mock_get.return_value = _html_response(SERIES_PAGE_HTML)
 
@@ -112,7 +112,7 @@ class TestAnimesDigitalFallbackLogging:
             "https://animesdigital.org/video/a/135726/",
         ]
 
-    @patch("scrapers.plugins.animesdigital.httpx.get")
+    @patch("scrapers.plugins.animesdigital.http_get_with_retry")
     def test_scrape_series_page_preserves_existing_query_string(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")
 
@@ -140,7 +140,7 @@ class TestAnimesDigitalPlayerSrc:
     def setup_method(self):
         self.scraper = AnimesDigital()
 
-    @patch("scrapers.plugins.animesdigital.httpx.get")
+    @patch("scrapers.plugins.animesdigital.http_get_with_retry")
     def test_search_player_src_extracts_iframe_url(self, mock_get):
         mock_get.return_value = _html_response(IFRAME_PLAYER_HTML)
         container = []

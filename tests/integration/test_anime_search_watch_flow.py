@@ -158,11 +158,13 @@ class TestCompleteSearchToWatchIntegration:
         """User adds new anime to list (with CURRENT status) then starts watching."""
         from ui.anilist_menus import _search_and_add_anime
 
-        # User adds anime that's not on their list
+        # User adds anime that's not on their list.
+        # choose_status() is imported from ui.anilist.filters and calls its own
+        # menu_navigate; patch it directly so we don't need to thread a side-effect
+        # through the ui.anilist_menus.menu_navigate mock.
         mock_menu_navigate.side_effect = [
             "Dandadan (2024, 12 eps) ⭐87%",  # Select result
             "➕ Adicionar à lista",  # Add to list
-            "📺 Watching (Assistindo)",  # Choose CURRENT status
             "▶️  Assistir agora",  # Watch now after adding
         ]
         mock_anilist_client.search_anime.return_value = sample_search_results
@@ -170,7 +172,10 @@ class TestCompleteSearchToWatchIntegration:
         mock_anilist_client.get_media_list_entry.return_value = None
         mock_anilist_main_menu.return_value = None
 
-        with patch("builtins.input", return_value="Dandadan"):
+        with (
+            patch("ui.anilist_menus.choose_status", return_value="CURRENT"),
+            patch("builtins.input", return_value="Dandadan"),
+        ):
             _search_and_add_anime(is_logged_in=True)
 
         # Verify: anime was added BEFORE playback

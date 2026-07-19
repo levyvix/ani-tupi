@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+import ui.anilist.airing_menu as airing_menu
 import ui.anilist_menus as menus
 from models.models import AiringAnimeEntry, AniListAnime, AniListTitle
 
@@ -18,12 +19,17 @@ from models.models import AiringAnimeEntry, AniListAnime, AniListTitle
 @pytest.fixture
 def restore_menus_state():
     """Snapshot and restore module-level DI holders around each test."""
-    saved = (
+    saved_menus = (
         menus.anilist_client,
         menus.anilist_anime_flow,
         menus.run_anime_actions,
         menus.airing_service_factory,
         menus.handle_local_library_playback,
+    )
+    saved_airing = (
+        airing_menu.anilist_client,
+        airing_menu.airing_service_factory,
+        airing_menu.run_anime_actions,
     )
     yield
     (
@@ -32,7 +38,12 @@ def restore_menus_state():
         menus.run_anime_actions,
         menus.airing_service_factory,
         menus.handle_local_library_playback,
-    ) = saved
+    ) = saved_menus
+    (
+        airing_menu.anilist_client,
+        airing_menu.airing_service_factory,
+        airing_menu.run_anime_actions,
+    ) = saved_airing
 
 
 class TestConfigure:
@@ -130,17 +141,18 @@ class TestAiringEpisodesInvokesFactoryAndCallback:
         client.format_title.return_value = "Airing Anime"
 
         actions = Mock()
-        menus.anilist_client = client
-        menus.airing_service_factory = factory
-        menus.run_anime_actions = actions
+        # show_airing_episodes lives in ui.anilist.airing_menu; set DI there
+        airing_menu.anilist_client = client
+        airing_menu.airing_service_factory = factory
+        airing_menu.run_anime_actions = actions
 
         # display string built for a finished-anime entry (airing_at is None)
         display = "(1 atrasado) Airing Anime - Anime finalizado, você viu 3/5 ⭐80%"
         with (
-            patch.object(menus, "menu_navigate", side_effect=[display, None]),
-            patch.object(menus, "loading"),
+            patch.object(airing_menu, "menu_navigate", side_effect=[display, None]),
+            patch.object(airing_menu, "loading"),
         ):
-            menus._show_airing_episodes()
+            menus.show_airing_episodes()
 
         factory.assert_called()
         actions.assert_called_once()

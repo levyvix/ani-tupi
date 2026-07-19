@@ -110,7 +110,7 @@ class TestSushiAnimesScraper:
     def setup_method(self):
         self.scraper = SushiAnimes()
 
-    @patch("scrapers.plugins.sushianimes.httpx.get")
+    @patch("scrapers.plugins.sushianimes.http_get_with_retry")
     def test_search_anime_creates_season_results(self, mock_get):
         mock_get.side_effect = [_response(SEARCH_HTML), _response(ANIME_PAGE_HTML)]
 
@@ -123,7 +123,7 @@ class TestSushiAnimesScraper:
         assert results[1].title == "Dorohedoro 2 - Dublado"
         assert results[1].params == {"season": 2}
 
-    @patch("scrapers.plugins.sushianimes.httpx.get")
+    @patch("scrapers.plugins.sushianimes.http_get_with_retry")
     def test_search_episodes_uses_requested_season(self, mock_get):
         mock_get.return_value = _response(ANIME_PAGE_HTML)
 
@@ -143,11 +143,9 @@ class TestSushiAnimesScraper:
         assert result[0].urls[0].startswith("https://sushianimes.com.br/")
         assert mock_get.call_args.kwargs["headers"] == HEADERS
 
-    @patch("scrapers.plugins.sushianimes.httpx.get")
+    @patch("scrapers.plugins.sushianimes.http_get_with_retry")
     def test_search_episodes_swallows_http_errors(self, mock_get):
-        response = MagicMock()
-        response.raise_for_status.side_effect = httpx.HTTPError("403 Client Error")
-        mock_get.return_value = response
+        mock_get.side_effect = httpx.HTTPError("403 Client Error")
 
         result = self.scraper.search_episodes(
             "Dorohedoro 2 - Dublado",
@@ -157,8 +155,8 @@ class TestSushiAnimesScraper:
 
         assert result == []
 
-    @patch("scrapers.plugins.sushianimes.httpx.post")
-    @patch("scrapers.plugins.sushianimes.httpx.get")
+    @patch("scrapers.plugins.sushianimes.http_request_with_retry")
+    @patch("scrapers.plugins.sushianimes.http_get_with_retry")
     def test_search_player_src_extracts_player_url(self, mock_get, mock_post):
         mock_get.return_value = _response(EPISODE_PAGE_HTML)
         mock_post.return_value = _response(EMBED_RESPONSE)
@@ -179,8 +177,8 @@ class TestSushiAnimesScraper:
         assert post_headers["X-Requested-With"] == "XMLHttpRequest"
         assert post_headers["Referer"].endswith("-1-season-1-episode")
 
-    @patch("scrapers.plugins.sushianimes.httpx.post")
-    @patch("scrapers.plugins.sushianimes.httpx.get")
+    @patch("scrapers.plugins.sushianimes.http_request_with_retry")
+    @patch("scrapers.plugins.sushianimes.http_get_with_retry")
     def test_search_player_src_fallbacks_to_data_id(self, mock_get, mock_post):
         mock_get.return_value = _response(EPISODE_PAGE_HTML_DATA_ID)
         mock_post.return_value = _response(EMBED_RESPONSE)

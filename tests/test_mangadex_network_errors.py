@@ -2,7 +2,7 @@
 
 A network/HTTP failure must be logged at WARNING level (so it is visible in
 logs) while still returning ``[]`` to preserve the existing return contract.
-Only the external HTTP client (``httpx``) is mocked.
+Only the external HTTP client helper is mocked.
 
 The project uses loguru (not stdlib logging), so a temporary loguru sink is
 installed to capture emitted records instead of pytest's ``caplog``.
@@ -36,7 +36,7 @@ def test_search_manga_logs_warning_on_timeout(scraper, monkeypatch, warnings):
     def _raise(*args, **kwargs):
         raise httpx.TimeoutException("timed out")
 
-    monkeypatch.setattr(httpx, "get", _raise)
+    monkeypatch.setattr("manga_scrapers.plugins.mangadex.http_request_with_retry", _raise)
 
     result = scraper.search_manga("naruto")
 
@@ -48,7 +48,7 @@ def test_search_manga_logs_warning_on_connect_error(scraper, monkeypatch, warnin
     def _raise(*args, **kwargs):
         raise httpx.ConnectError("connection refused")
 
-    monkeypatch.setattr(httpx, "get", _raise)
+    monkeypatch.setattr("manga_scrapers.plugins.mangadex.http_request_with_retry", _raise)
 
     result = scraper.search_manga("bleach")
 
@@ -60,7 +60,7 @@ def test_get_chapters_logs_warning_on_timeout(scraper, monkeypatch, warnings):
     def _raise(*args, **kwargs):
         raise httpx.TimeoutException("timed out")
 
-    monkeypatch.setattr(httpx, "get", _raise)
+    monkeypatch.setattr("manga_scrapers.plugins.mangadex.http_request_with_retry", _raise)
 
     result = scraper.get_chapters("manga-id", "https://mangadex.org/title/manga-id")
 
@@ -72,7 +72,7 @@ def test_get_chapter_pages_logs_warning_on_timeout(scraper, monkeypatch, warning
     def _raise(*args, **kwargs):
         raise httpx.TimeoutException("timed out")
 
-    monkeypatch.setattr(httpx, "get", _raise)
+    monkeypatch.setattr("manga_scrapers.plugins.mangadex.http_request_with_retry", _raise)
 
     result = scraper.get_chapter_pages("chapter-id", "https://mangadex.org/chapter/chapter-id")
 

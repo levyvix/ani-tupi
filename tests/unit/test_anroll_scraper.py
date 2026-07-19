@@ -34,7 +34,7 @@ class TestAnRollEpisodes:
     def setup_method(self):
         self.scraper = AnRoll()
 
-    @patch("scrapers.plugins.anroll.httpx.get")
+    @patch("scrapers.plugins.anroll.http_get_with_retry")
     def test_search_episodes_uses_sidebar_not_id_range(self, mock_get):
         mock_get.side_effect = [
             _html_response(ANIME_PAGE_HTML),
@@ -54,7 +54,7 @@ class TestAnRollEpisodes:
         assert result[0].urls[0] == "https://anroll.io/53289/"
         assert result[0].urls[-1] == "https://anroll.io/60098/"
 
-    @patch("scrapers.plugins.anroll.httpx.get")
+    @patch("scrapers.plugins.anroll.http_get_with_retry")
     def test_episodes_from_sidebar_parses_ep_list_box(self, mock_get):
         mock_get.return_value = _html_response(SIDEBAR_HTML)
 
@@ -64,7 +64,7 @@ class TestAnRollEpisodes:
         assert titles[0] == "Ep.001"
         assert urls[1] == "https://anroll.io/53633/"
 
-    @patch("scrapers.plugins.anroll.httpx.get")
+    @patch("scrapers.plugins.anroll.http_get_with_retry")
     def test_episodes_from_sidebar_returns_empty_without_box(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")
 
@@ -89,7 +89,7 @@ class TestAnRollSearchAnimeAndPlayer:
     def setup_method(self):
         self.scraper = AnRoll()
 
-    @patch("scrapers.plugins.anroll.httpx.get")
+    @patch("scrapers.plugins.anroll.http_get_with_retry")
     def test_search_anime_returns_results(self, mock_get):
         mock_get.return_value = _html_response(SEARCH_ANIME_HTML)
 

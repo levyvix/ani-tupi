@@ -95,7 +95,7 @@ class TestDattebayoSearch:
     def setup_method(self):
         self.scraper = Dattebayo()
 
-    @patch("scrapers.plugins.dattebayo.httpx.get")
+    @patch("scrapers.plugins.dattebayo.http_get_with_retry")
     def test_search_returns_results(self, mock_get):
         mock_get.return_value = _html_response(SEARCH_HTML)
 
@@ -106,7 +106,7 @@ class TestDattebayoSearch:
         assert "Naruto" in titles
         assert "Bleach" in titles
 
-    @patch("scrapers.plugins.dattebayo.httpx.get")
+    @patch("scrapers.plugins.dattebayo.http_get_with_retry")
     def test_search_resolves_relative_urls(self, mock_get):
         mock_get.return_value = _html_response(SEARCH_HTML)
 
@@ -114,7 +114,7 @@ class TestDattebayoSearch:
 
         assert all(item.url.startswith("https://") for item in results)
 
-    @patch("scrapers.plugins.dattebayo.httpx.get")
+    @patch("scrapers.plugins.dattebayo.http_get_with_retry")
     def test_list_animes_returns_catalog(self, mock_get):
         mock_get.return_value = _html_response(SEARCH_HTML)
 
@@ -129,7 +129,7 @@ class TestDattebayoEpisodes:
     def setup_method(self):
         self.scraper = Dattebayo()
 
-    @patch("scrapers.plugins.dattebayo.httpx.get")
+    @patch("scrapers.plugins.dattebayo.http_get_with_retry")
     def test_episodes_paginate_until_empty_page(self, mock_get):
         mock_get.side_effect = [
             _html_response(EPISODES_HTML),
@@ -167,11 +167,10 @@ class TestDattebayoSigning:
             "https://1db850bdcbe958d7be70519d81551be4.r2.cloudflarestorage.com/fful/560174.mp4"
         )
 
-    @patch("scrapers.plugins.dattebayo.httpx.Client")
-    def test_sign_video_url(self, mock_client_cls):
+    @patch("scrapers.plugins.dattebayo.http_request_with_retry")
+    def test_sign_video_url(self, mock_request):
         client = MagicMock()
-        mock_client_cls.return_value.__enter__.return_value = client
-        client.get.return_value = _json_response([{"ads": "OK", "publicidade": "?sig=abc"}])
+        mock_request.return_value = _json_response([{"ads": "OK", "publicidade": "?sig=abc"}])
 
         signed = sign_video_url(
             client,
@@ -187,7 +186,7 @@ class TestDattebayoSigning:
 
         client = MagicMock()
 
-        def get_side_effect(url, **kwargs):
+        def request_side_effect(method, url, **kwargs):
             if url == episode_url:
                 return _html_response(PLAYER_HTML)
             if "ads.animeyabu.net" in url:
@@ -196,13 +195,13 @@ class TestDattebayoSigning:
             response.status_code = 206 if url.startswith(dynamic_fullhd) else 404
             return response
 
-        client.get.side_effect = get_side_effect
+        client.request.side_effect = request_side_effect
 
         resolved = resolve_signed_video_url(client, episode_url)
 
         assert resolved.startswith(dynamic_fullhd)
         assert "sig=dynamic" in resolved
-        page_call, sign_call, playable_call = client.get.call_args_list
+        page_call, sign_call, playable_call = client.request.call_args_list
         assert page_call.kwargs["follow_redirects"] is False
         assert sign_call.kwargs["follow_redirects"] is False
         assert playable_call.kwargs["follow_redirects"] is False
@@ -215,7 +214,7 @@ class TestDattebayoSigning:
 
         client = MagicMock()
 
-        def get_side_effect(url, **kwargs):
+        def request_side_effect(method, url, **kwargs):
             if url == episode_url:
                 return _html_response(page_html)
             if "ads.animeyabu.net" in url:
@@ -224,7 +223,7 @@ class TestDattebayoSigning:
             response.status_code = 206 if url.startswith(fallback_hd) else 404
             return response
 
-        client.get.side_effect = get_side_effect
+        client.request.side_effect = request_side_effect
 
         resolved = resolve_signed_video_url(client, episode_url)
 
@@ -235,7 +234,7 @@ class TestDattebayoSigning:
         fullhd = unsigned_video_url("560174", quality="fullhd")
         client = MagicMock()
 
-        def get_side_effect(url, **kwargs):
+        def request_side_effect(method, url, **kwargs):
             if url == episode_url:
                 raise httpx.ConnectError("offline")
             if "ads.animeyabu.net" in url:
@@ -244,7 +243,7 @@ class TestDattebayoSigning:
             response.status_code = 206 if url.startswith(fullhd) else 404
             return response
 
-        client.get.side_effect = get_side_effect
+        client.request.side_effect = request_side_effect
 
         resolved = resolve_signed_video_url(client, episode_url)
 
@@ -257,7 +256,7 @@ class TestDattebayoSigning:
 
         client = MagicMock()
 
-        def get_side_effect(url, **kwargs):
+        def request_side_effect(method, url, **kwargs):
             if url == episode_url:
                 return _html_response("<html></html>")
             if "ads.animeyabu.net" in url and "fful" in url:
@@ -273,7 +272,7 @@ class TestDattebayoSigning:
                 response.status_code = 404
             return response
 
-        client.get.side_effect = get_side_effect
+        client.request.side_effect = request_side_effect
 
         resolved = resolve_signed_video_url(client, episode_url)
 

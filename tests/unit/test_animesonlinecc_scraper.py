@@ -56,7 +56,7 @@ class TestAnimesOnlineCCScraper:
     def setup_method(self):
         self.scraper = AnimesOnlineCC()
 
-    @patch("scrapers.plugins.animesonlinecc.httpx.get")
+    @patch("scrapers.plugins.animesonlinecc.http_get_with_retry")
     def test_search_anime_returns_results(self, mock_get):
         mock_get.return_value = _html_response(SEARCH_HTML)
 
@@ -66,7 +66,7 @@ class TestAnimesOnlineCCScraper:
         assert results[0].title == "Mao"
         assert "animesonlinecc.to/anime/mao" in results[0].url
 
-    @patch("scrapers.plugins.animesonlinecc.httpx.get")
+    @patch("scrapers.plugins.animesonlinecc.http_get_with_retry")
     def test_search_anime_empty_returns_empty_list(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")
 
@@ -74,7 +74,7 @@ class TestAnimesOnlineCCScraper:
 
         assert results == []
 
-    @patch("scrapers.plugins.animesonlinecc.httpx.get")
+    @patch("scrapers.plugins.animesonlinecc.http_get_with_retry")
     def test_search_episodes_returns_episode_list(self, mock_get):
         mock_get.return_value = _html_response(EPISODES_HTML)
 
@@ -84,7 +84,7 @@ class TestAnimesOnlineCCScraper:
         assert result[0].source == "animesonlinecc"
         assert len(result[0].urls) == 2
 
-    @patch("scrapers.plugins.animesonlinecc.httpx.get")
+    @patch("scrapers.plugins.animesonlinecc.http_get_with_retry")
     def test_search_episodes_returns_only_season_one_by_default(self, mock_get):
         mock_get.return_value = _html_response(MULTI_SEASON_HTML)
 
@@ -98,7 +98,7 @@ class TestAnimesOnlineCCScraper:
             "https://animesonlinecc.to/episodio/mao-episodio-2/",
         ]
 
-    @patch("scrapers.plugins.animesonlinecc.httpx.get")
+    @patch("scrapers.plugins.animesonlinecc.http_get_with_retry")
     def test_search_episodes_returns_requested_season(self, mock_get):
         mock_get.return_value = _html_response(MULTI_SEASON_HTML)
 
@@ -115,7 +115,7 @@ class TestAnimesOnlineCCScraper:
             "https://animesonlinecc.to/episodio/mao-2-episodio-3/",
         ]
 
-    @patch("scrapers.plugins.animesonlinecc.httpx.get")
+    @patch("scrapers.plugins.animesonlinecc.http_get_with_retry")
     def test_search_episodes_no_episodes_returns_empty(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")
 
@@ -124,7 +124,7 @@ class TestAnimesOnlineCCScraper:
         assert result == []
 
     @patch("scrapers.plugins.animesonlinecc.resolve_blogger_token")
-    @patch("scrapers.plugins.animesonlinecc.httpx.get")
+    @patch("scrapers.plugins.animesonlinecc.http_get_with_retry")
     def test_search_player_src_extracts_video_url(self, mock_get, mock_resolve):
         mock_get.return_value = _html_response(PLAYER_HTML)
         mock_resolve.return_value = "https://video.example.com/mao.mp4"
@@ -138,7 +138,7 @@ class TestAnimesOnlineCCScraper:
         assert container == ["https://video.example.com/mao.mp4"]
         mock_resolve.assert_called_once_with("ABC123")
 
-    @patch("scrapers.plugins.animesonlinecc.httpx.get")
+    @patch("scrapers.plugins.animesonlinecc.http_get_with_retry")
     def test_search_player_src_no_source_raises(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")
         container = []
