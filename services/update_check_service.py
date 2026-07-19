@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import httpx
+from scrapers.plugins.utils import http_get_with_retry
 
 from models.config import UpdateCheckSettings, get_data_path, settings
 from models.models import UpdateCheckResult, UpdateCheckState
@@ -146,11 +146,12 @@ class UpdateCheckService:
 
     def _fetch_latest_version(self) -> str | None:
         try:
-            with httpx.Client(timeout=self.settings.request_timeout_seconds) as client:
-                response = client.get(self.settings.release_source_url)
-                response.raise_for_status()
-                payload = response.json()
-        except (httpx.HTTPError, ValueError, TypeError) as exc:
+            response = http_get_with_retry(
+                self.settings.release_source_url,
+                timeout=self.settings.request_timeout_seconds,
+            )
+            payload = response.json()
+        except (ValueError, TypeError) as exc:
             logger.debug(f"Update-check request failed: {exc}")
             return None
 
