@@ -74,13 +74,20 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y mpv
 
     - name: Run tests
-      run: uv run pytest -v --cov=. --cov-report=xml --cov-report=term-missing
+      # Repo-wide coverage for the codecov report; the service-layer gate is
+      # enforced by the dedicated step below, so disable fail-under here.
+      run: uv run pytest -v --cov=. --cov-report=xml --cov-report=term-missing --cov-fail-under=0
 
     - name: Upload coverage
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
         fail_ci_if_error: false
+
+    - name: Service-layer coverage gate
+      # Enforces `fail_under` from [tool.coverage.report] (pyproject.toml),
+      # scoped to the services/ business-logic layer.
+      run: uv run pytest --cov=services --cov-report=term-missing
 
   quick-imports:
     name: Test Imports (${{ matrix.os }})

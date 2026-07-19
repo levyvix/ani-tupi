@@ -130,6 +130,15 @@ markers = [
     "requires_http: Tests requiring HTTP/network access",
 ]
 
+[tool.coverage.report]
+show_missing = true
+# Service-layer coverage gate. Only enforced when coverage is collected, e.g.
+# `uv run pytest --cov=services`; a plain `uv run pytest` (no --cov) is unaffected,
+# so running a single test file never trips the gate. CI enforces it via a
+# dedicated services-only step; the repo-wide codecov run overrides with
+# `--cov-fail-under=0`. See .github/workflows/ci.yml and CLAUDE.md.
+fail_under = 80
+
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 branch = "master"
