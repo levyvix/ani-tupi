@@ -6,7 +6,13 @@ import urllib.parse
 import httpx
 from bs4 import BeautifulSoup
 
-from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
+from scrapers.plugins.utils import (
+    DEFAULT_HEADERS,
+    http_get_with_retry,
+    http_request_with_retry,
+    load_plugin,
+    store_player_source,
+)
 from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
@@ -122,13 +128,15 @@ class SushiAnimes:
 
     def _search_page(self, query: str) -> BeautifulSoup:
         url = f"{BASE_URL}/search/{urllib.parse.quote(query)}"
-        response = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-        response.raise_for_status()
+        response = http_get_with_retry(
+            url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+        )
         return BeautifulSoup(response.text, "html.parser")
 
     def _fetch_anime_page(self, url: str) -> BeautifulSoup:
-        response = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-        response.raise_for_status()
+        response = http_get_with_retry(
+            url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+        )
         return BeautifulSoup(response.text, "html.parser")
 
     def search_anime(self, query: str) -> list[AnimeMetadata]:
@@ -179,10 +187,9 @@ class SushiAnimes:
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         try:
-            response = httpx.get(
+            response = http_get_with_retry(
                 url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
             )
-            response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
 
             season = None
@@ -221,10 +228,9 @@ class SushiAnimes:
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            response = httpx.get(
+            response = http_get_with_retry(
                 url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
             )
-            response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
 
             embed_ids = _extract_embed_ids(soup)
@@ -240,14 +246,14 @@ class SushiAnimes:
 
             for embed_id in embed_ids:
                 try:
-                    embed_response = httpx.post(
+                    embed_response = http_request_with_retry(
+                        "POST",
                         f"{BASE_URL}/ajax/embed",
                         data={"id": embed_id},
                         headers=ajax_headers,
                         timeout=REQUEST_TIMEOUT,
                         follow_redirects=True,
                     )
-                    embed_response.raise_for_status()
                     player_url = _extract_player_url(embed_response.text)
                     if player_url:
                         store_player_source(container, event, player_url)
