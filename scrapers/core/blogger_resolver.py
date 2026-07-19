@@ -7,8 +7,6 @@ is fetched through the BloggerVideoPlayerUi batchexecute API.
 import json
 import re
 
-from scrapers.plugins.utils import http_get_with_retry, http_request_with_retry
-
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
     "Accept-Language": "pt-BR,pt;q=0.9",
@@ -65,6 +63,8 @@ def _parse_batchexecute_streams(inner: object) -> list[str]:
 
 
 def _fetch_batchexecute_inner(token: str) -> object:
+    from scrapers.plugins.utils import http_get_with_retry, http_request_with_retry
+
     r = http_get_with_retry(
         f"https://www.blogger.com/video.g?token={token}",
         headers=_HEADERS,
