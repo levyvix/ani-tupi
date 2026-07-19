@@ -246,7 +246,7 @@ class TestAutoCreatePdfIfNeeded:
         svc = LocalMangaService(tmp_path)
 
         with patch(
-            "services.local_manga_service.create_pdf_from_images", side_effect=Exception("fail")
+            "services.local_manga_service.create_pdf_from_images", side_effect=OSError("fail")
         ):
             result = svc.auto_create_pdf_if_needed("Manga", "01")
 
@@ -367,7 +367,7 @@ class TestSyncToAnilistIfAhead:
     def test_returns_false_on_anilist_network_error(self, tmp_path):
         svc = LocalMangaService(tmp_path)
         anilist = MagicMock()
-        anilist.get_manga_list_entry.side_effect = Exception("network error")
+        anilist.get_manga_list_entry.side_effect = ValueError("network error")
 
         with patch("services.manga_service.MangaHistory") as mock_history:
             mock_history.load.return_value = {"Manga": MagicMock(anilist_id=123, last_chapter="5")}

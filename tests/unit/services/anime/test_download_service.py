@@ -260,7 +260,7 @@ class TestDownloadSingleEpisodeWithUrl:
         anime_dir = tmp_path / "anime"
         anime_dir.mkdir()
 
-        with patch.object(svc, "_download_file", side_effect=RuntimeError("boom")):
+        with patch.object(svc, "_download_file", side_effect=OSError("boom")):
             success, valid = svc._download_single_episode_with_url(
                 "MyAnime", anime_dir, 1, ("http://example.com/1.mkv", "test")
             )
@@ -324,9 +324,7 @@ class TestDownloadFile:
         output_path = tmp_path / "1.mkv"
 
         with patch("yt_dlp.YoutubeDL") as mock_ydl_class:
-            mock_ydl_class.return_value.__enter__ = MagicMock(
-                side_effect=RuntimeError("yt-dlp failed")
-            )
+            mock_ydl_class.return_value.__enter__ = MagicMock(side_effect=OSError("yt-dlp failed"))
             mock_ydl_class.return_value.__exit__ = MagicMock(return_value=False)
 
             result = svc._download_file("http://example.com/ep1.mkv", output_path)
@@ -391,7 +389,7 @@ class TestPrefetchEpisodeUrls:
         svc = _make_service(tmp_path, monkeypatch)
 
         def bad_getter(ep: int):
-            raise RuntimeError("scraper exploded")
+            raise ValueError("scraper exploded")
 
         result = svc._prefetch_episode_urls("Anime", [1], bad_getter)
         assert result[1] is None

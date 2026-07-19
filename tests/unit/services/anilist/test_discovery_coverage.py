@@ -227,12 +227,12 @@ class TestGetAniListMetadata:
         assert result is None
 
     def test_returns_none_on_exception(self, temp_dir, monkeypatch):
-        """Returns None when API raises."""
+        """Returns None when API raises a caught exception type."""
         disk_cache = DiskCache(cache_dir=temp_dir / "cache")
         monkeypatch.setattr(cache_module, "_global_cache", disk_cache)
 
         with patch.object(
-            discovery.anilist_client, "get_anime_by_id", side_effect=RuntimeError("boom")
+            discovery.anilist_client, "get_anime_by_id", side_effect=TypeError("boom")
         ):
             result = discovery.get_anilist_metadata(1)
 
@@ -295,7 +295,7 @@ class TestDiscoverAnilistInfo:
         assert result.anilist_id is None
 
     def test_returns_partial_result_when_metadata_exception(self, temp_dir, monkeypatch):
-        """Metadata fetch raises directly → found=True but anilist_title=None."""
+        """Metadata fetch raises a caught exception → found=True but anilist_title=None."""
         disk_cache = DiskCache(cache_dir=temp_dir / "cache")
         monkeypatch.setattr(cache_module, "_global_cache", disk_cache)
 
@@ -306,7 +306,7 @@ class TestDiscoverAnilistInfo:
                 # to discover_anilist_info's except block (lines 345-354)
                 with patch(
                     "services.anilist.discovery.get_anilist_metadata",
-                    side_effect=RuntimeError("err"),
+                    side_effect=TypeError("err"),
                 ):
                     result = discovery.discover_anilist_info("Naruto Shippuden")
 
@@ -363,7 +363,7 @@ class TestDiscoverAnilistInfo:
         with patch.object(discovery.anilist_client, "is_authenticated", return_value=True):
             with patch(
                 "services.anilist.discovery.auto_discover_anilist_id",
-                side_effect=RuntimeError("network error"),
+                side_effect=TypeError("network error"),
             ):
                 result = discovery.discover_anilist_info("Naruto")
 

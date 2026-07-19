@@ -1,7 +1,7 @@
 """Tests for AniListClient._query, _validate_token, authenticate, get_viewer_info.
 
 Covers the uncovered branches in services/anilist/client.py:
-- _query: 429 retry/backoff, non-200 with errors, non-200 without errors, GraphQL errors
+- _query: GraphQL errors, header passing, exception propagation
 - _validate_token: ConnectError, TimeoutException, server errors (5xx), valid
 - authenticate: ConnectError/Timeout propagation, generic Exception path
 - get_viewer_info: success and exception path
@@ -18,91 +18,29 @@ from tests.fixtures.anilist import (
 
 
 # ---------------------------------------------------------------------------
-# _query – status code and retry branches
+# _query – thin wrapper: GraphQL errors, headers, exception propagation
 # ---------------------------------------------------------------------------
 
 
-class TestQueryRetry:
-    """Rate-limit (429) retry logic in _query."""
+class TestQuery:
+    """_query delegates HTTP to http_request_with_retry; tests cover its own logic."""
 
-    def test_query_retries_on_429_then_succeeds(self, anilist_client, anilist_http, monkeypatch):
-        """One 429 followed by a good 200 response succeeds after one retry."""
-        monkeypatch.setattr("services.anilist.client.time.sleep", lambda *_: None)
-
-        anilist_http.enqueue(
-            graphql_response(status_code=429),
-            graphql_response({"Viewer": viewer()}),
-        )
-
-        result = anilist_client._query("query { Viewer { id } }")
-        assert result == {"Viewer": viewer()}
-        assert anilist_http.call_count == 2
-
-    def test_query_raises_after_all_429_retries(self, anilist_client, anilist_http, monkeypatch):
-        """Three consecutive 429 responses raises Exception."""
-        monkeypatch.setattr("services.anilist.client.time.sleep", lambda *_: None)
-
-        anilist_http.enqueue(
-            graphql_response(status_code=429),
-            graphql_response(status_code=429),
-            graphql_response(status_code=429),
-        )
-
-        with pytest.raises(Exception, match="rate limited"):
-            anilist_client._query("query { Viewer { id } }")
-
-        assert anilist_http.call_count == 3
-
-    def test_query_sleep_called_with_exponential_backoff(
-        self, anilist_client, anilist_http, monkeypatch
-    ):
-        """sleep is called with 1s then 2s before retries."""
-        sleep_calls = []
-        monkeypatch.setattr("services.anilist.client.time.sleep", lambda n: sleep_calls.append(n))
-
-        anilist_http.enqueue(
-            graphql_response(status_code=429),
-            graphql_response(status_code=429),
-            graphql_response({"Viewer": viewer()}),
-        )
-
-        anilist_client._query("query { Viewer { id } }")
-
-        assert sleep_calls == [1, 2]
-
-
-class TestQueryNon200:
-    """Non-200 (not 429) status code handling."""
-
-    def test_query_raises_on_non_200_with_graphql_errors(
-        self, anilist_client, anilist_http, monkeypatch
-    ):
-        """500 with errors array includes the error message in the exception."""
-        monkeypatch.setattr("services.anilist.client.time.sleep", lambda *_: None)
-        anilist_http.enqueue(anilist_errors("Not found", status_code=404))
-
-        with pytest.raises(Exception, match="status 404"):
-            anilist_client._query("query { Viewer { id } }")
-
-    def test_query_raises_on_non_200_no_errors(self, anilist_client, anilist_http, monkeypatch):
-        """500 with no errors array raises generic status message."""
-        monkeypatch.setattr("services.anilist.client.time.sleep", lambda *_: None)
-        anilist_http.enqueue(graphql_response(status_code=500))
-
-        with pytest.raises(Exception, match="status 500"):
-            anilist_client._query("query { Viewer { id } }")
-
-    def test_query_raises_on_graphql_errors_in_200(self, anilist_client, anilist_http, monkeypatch):
+    def test_query_raises_on_graphql_errors_in_200(self, anilist_client, anilist_http):
         """200 response with GraphQL-level errors field raises Exception."""
-        monkeypatch.setattr("services.anilist.client.time.sleep", lambda *_: None)
         anilist_http.enqueue(anilist_errors("Unauthorized"))
 
         with pytest.raises(Exception, match="GraphQL error"):
             anilist_client._query("query { Viewer { id } }")
 
-    def test_query_sends_authorization_header(self, anilist_client, anilist_http, monkeypatch):
+    def test_query_returns_data_on_success(self, anilist_client, anilist_http):
+        """Valid response returns the data dict."""
+        anilist_http.enqueue(graphql_response({"Viewer": viewer()}))
+
+        result = anilist_client._query("query { Viewer { id } }")
+        assert result == {"Viewer": viewer()}
+
+    def test_query_sends_authorization_header(self, anilist_client, anilist_http):
         """When client has a token, Authorization header is attached."""
-        monkeypatch.setattr("services.anilist.client.time.sleep", lambda *_: None)
         anilist_http.enqueue(graphql_response({"Viewer": viewer()}))
 
         anilist_client._query("query { Viewer { id } }")
@@ -110,9 +48,8 @@ class TestQueryNon200:
         call = anilist_http.calls[0]
         assert call["headers"]["Authorization"] == "Bearer test-token"
 
-    def test_query_uses_token_override(self, anilist_client, anilist_http, monkeypatch):
+    def test_query_uses_token_override(self, anilist_client, anilist_http):
         """Passing token= overrides the client token in the request."""
-        monkeypatch.setattr("services.anilist.client.time.sleep", lambda *_: None)
         anilist_http.enqueue(graphql_response({"Viewer": viewer()}))
 
         anilist_client._query("query { Viewer { id } }", token="override-token")
@@ -120,9 +57,8 @@ class TestQueryNon200:
         call = anilist_http.calls[0]
         assert call["headers"]["Authorization"] == "Bearer override-token"
 
-    def test_query_no_auth_header_when_no_token(self, anilist_client, anilist_http, monkeypatch):
+    def test_query_no_auth_header_when_no_token(self, anilist_client, anilist_http):
         """When client has no token and no override, no Authorization header is sent."""
-        monkeypatch.setattr("services.anilist.client.time.sleep", lambda *_: None)
         anilist_client.token = None
         anilist_http.enqueue(graphql_response({"Viewer": viewer()}))
 
@@ -130,6 +66,13 @@ class TestQueryNon200:
 
         call = anilist_http.calls[0]
         assert "Authorization" not in call.get("headers", {})
+
+    def test_query_propagates_exception_from_transport(self, anilist_client, anilist_http):
+        """Exceptions raised by http_request_with_retry bubble up from _query."""
+        anilist_http.enqueue(httpx.ConnectError("refused"))
+
+        with pytest.raises(httpx.ConnectError):
+            anilist_client._query("query { Viewer { id } }")
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +97,7 @@ class TestValidateToken:
 
     def test_validate_raises_server_error(self, anilist_client, anilist_http):
         """A 503 wrapped in an Exception message is re-raised."""
-        anilist_http.enqueue(graphql_response(status_code=503))
+        anilist_http.enqueue(Exception("status 503"))
 
         with pytest.raises(Exception, match="status 503"):
             anilist_client._validate_token("my-token")
@@ -227,7 +170,7 @@ class TestAuthenticateExceptions:
             "services.anilist.client.AniListClient._parse_token",
             lambda self, t: t,
         )
-        anilist_http.enqueue(graphql_response(status_code=503))
+        anilist_http.enqueue(Exception("status 503"))
 
         result = anilist_client.authenticate()
         assert result is False

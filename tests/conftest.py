@@ -67,9 +67,11 @@ def reset_repository():
 
 @pytest.fixture
 def anilist_http(monkeypatch):
-    """Patch the AniList ``httpx.post`` boundary with a fake transport.
+    """Patch the AniList HTTP boundary with a fake transport.
 
-    Mocks only the external GraphQL call; the real ``AniListClient`` and its
+    The client executes GraphQL via
+    ``scrapers.plugins.utils.http_request_with_retry("POST", url, json=..., ...)``,
+    so we patch that single external boundary; the real ``AniListClient`` and its
     operation mixins run against the enqueued responses. Enqueue payloads with
     the builders in ``tests.fixtures.anilist``::
 
@@ -78,7 +80,7 @@ def anilist_http(monkeypatch):
     from tests.fixtures.anilist import FakeAniListTransport
 
     transport = FakeAniListTransport()
-    monkeypatch.setattr("services.anilist.client.httpx.post", transport)
+    monkeypatch.setattr("scrapers.plugins.utils.http_request_with_retry", transport)
     return transport
 
 

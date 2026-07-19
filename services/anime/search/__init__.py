@@ -13,6 +13,7 @@ from services.anime.search.core import (
     ManualSearchSelection,
     ContextualSearchResults,
     DualSearchResults,
+    _ensure_anime_sources_in_repo,
 )
 from services.anime.search.incremental_search_state import IncrementalSearchState
 from services.anime.search.result_set import SearchResultSet
@@ -37,6 +38,7 @@ __all__ = [
     "DualSearchResults",
     "IncrementalSearchState",
     "SearchResultSet",
+    "_ensure_anime_sources_in_repo",
     "_filter_anime_results",
     "_rank_anime_results_by_reference",
     "_best_similarity_score_for_reference",

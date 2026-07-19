@@ -1,5 +1,7 @@
 """Tests for MangaOperationsMixin in services/anilist/manga_operations.py."""
 
+import pytest
+
 from tests.fixtures.anilist import (
     anilist_data,
     graphql_response,
@@ -98,12 +100,11 @@ class TestGetTrendingManga:
 
         assert result == []
 
-    def test_exception_returns_empty_list(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("network error"))
 
-        result = anilist_client.get_trending_manga()
-
-        assert result == []
+        with pytest.raises(Exception):
+            anilist_client.get_trending_manga()
 
     def test_passes_page_and_per_page(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_data({"Page": {"media": [_manga_item()]}}))
@@ -196,12 +197,11 @@ class TestGetUserMangaList:
 
         assert result == []
 
-    def test_exception_returns_empty(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("timeout"))
 
-        result = anilist_client.get_user_manga_list("CURRENT")
-
-        assert result == []
+        with pytest.raises(Exception):
+            anilist_client.get_user_manga_list("CURRENT")
 
     def test_none_result_returns_empty(self, anilist_client, anilist_http):
         anilist_http.enqueue(graphql_response(None))
@@ -239,12 +239,11 @@ class TestGetMangaById:
 
         assert result is None
 
-    def test_exception_returns_none(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("error"))
 
-        result = anilist_client.get_manga_by_id(1)
-
-        assert result is None
+        with pytest.raises(Exception):
+            anilist_client.get_manga_by_id(1)
 
     def test_passes_manga_id(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_data({"Media": _manga_item(42)}))
@@ -310,12 +309,11 @@ class TestGetMangaListEntry:
 
         assert result is None
 
-    def test_exception_returns_none(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("boom"))
 
-        result = anilist_client.get_manga_list_entry(10)
-
-        assert result is None
+        with pytest.raises(Exception):
+            anilist_client.get_manga_list_entry(10)
 
 
 # ---------------------------------------------------------------------------
@@ -414,12 +412,11 @@ class TestAddMangaToList:
 
         assert result is False
 
-    def test_exception_returns_false(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("error"))
 
-        result = anilist_client.add_manga_to_list(10)
-
-        assert result is False
+        with pytest.raises(Exception):
+            anilist_client.add_manga_to_list(10)
 
 
 # ---------------------------------------------------------------------------
@@ -456,14 +453,13 @@ class TestChangeMangaStatus:
 
         assert result is False
 
-    def test_exception_returns_false(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         from models.anime import Status
 
         anilist_http.enqueue(Exception("network"))
 
-        result = anilist_client.change_manga_status(10, Status.DROPPED)
-
-        assert result is False
+        with pytest.raises(Exception):
+            anilist_client.change_manga_status(10, Status.DROPPED)
 
     def test_passes_status_value(self, anilist_client, anilist_http):
         from models.anime import Status
@@ -504,12 +500,11 @@ class TestSearchManga:
 
         assert result == []
 
-    def test_exception_returns_empty(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("timeout"))
 
-        result = anilist_client.search_manga("query")
-
-        assert result == []
+        with pytest.raises(Exception):
+            anilist_client.search_manga("query")
 
     def test_passes_search_variable(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_data({"Page": {"media": [_manga_item()]}}))

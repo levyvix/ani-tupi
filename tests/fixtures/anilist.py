@@ -97,11 +97,17 @@ def save_media_list_entry(entry_id: int = 99, **fields: Any) -> dict[str, Any]:
 
 
 class FakeAniListTransport:
-    """Callable stand-in for ``httpx.post`` used by the AniList client.
+    """Callable stand-in for the AniList HTTP boundary.
+
+    The client funnels every GraphQL call through
+    ``scrapers.plugins.utils.http_request_with_retry("POST", url, json=..., ...)``
+    (retry/status handling lives in that helper). This transport replaces it and
+    also tolerates the legacy ``httpx.post(url, ...)`` calling convention.
 
     Enqueue responses (or exceptions) in the order they will be consumed. Each
     call pops the next queued item; if the queue is empty the ``default``
-    response is returned. Every call is recorded in ``self.calls``.
+    response is returned. Every call is recorded in ``self.calls`` with the
+    ``method`` and ``url`` plus keyword args (``json``/``headers``/...).
     """
 
     def __init__(self, default: Mock | None = None) -> None:
@@ -114,8 +120,16 @@ class FakeAniListTransport:
         self._queue.extend(responses)
         return self
 
-    def __call__(self, url: str, **kwargs: Any) -> Mock:
-        self.calls.append({"url": url, **kwargs})
+    def __call__(self, *args: Any, **kwargs: Any) -> Mock:
+        # http_request_with_retry(method, url, ...) -> two positionals;
+        # legacy httpx.post(url, ...) -> one positional.
+        if len(args) >= 2:
+            method, url = args[0], args[1]
+        elif len(args) == 1:
+            method, url = None, args[0]
+        else:
+            method, url = None, None
+        self.calls.append({"method": method, "url": url, **kwargs})
         item = self._queue.pop(0) if self._queue else self.default
         if isinstance(item, BaseException) or (
             isinstance(item, type) and issubclass(item, BaseException)

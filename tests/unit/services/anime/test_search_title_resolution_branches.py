@@ -154,25 +154,25 @@ class TestIncrementalSearchStateNavigation:
 
 class TestCountSources:
     def test_single_source(self):
-        from services.anime.search import _count_sources
+        from services.anime.search.core import _count_sources
 
         result = _count_sources(["Naruto [animesdigital]"])
         assert result == {"animesdigital": 1}
 
     def test_multiple_sources_same_name(self):
-        from services.anime.search import _count_sources
+        from services.anime.search.core import _count_sources
 
         result = _count_sources(["Naruto [animesdigital]", "Bleach [animesdigital]"])
         assert result == {"animesdigital": 2}
 
     def test_no_source_bracket(self):
-        from services.anime.search import _count_sources
+        from services.anime.search.core import _count_sources
 
         result = _count_sources(["Naruto"])
         assert result == {}
 
     def test_mixed(self):
-        from services.anime.search import _count_sources
+        from services.anime.search.core import _count_sources
 
         result = _count_sources(["A [src1]", "B [src2]", "C"])
         assert result["src1"] == 1
@@ -248,13 +248,13 @@ class TestFilterAnimeResults:
 
 class TestBuildSearchQueryCandidates:
     def test_no_resolution_returns_only_original(self):
-        from services.anime.search import _build_search_query_candidates
+        from services.anime.search.core import _build_search_query_candidates
 
         result = _build_search_query_candidates("one piece", None)
         assert result == ["one piece"]
 
     def test_resolution_prepends_resolved_title(self):
-        from services.anime.search import _build_search_query_candidates
+        from services.anime.search.core import _build_search_query_candidates
 
         resolution = AnimeTitleResolution(
             original_query="op",
@@ -268,7 +268,7 @@ class TestBuildSearchQueryCandidates:
         assert "op" in result
 
     def test_duplicates_are_deduplicated(self):
-        from services.anime.search import _build_search_query_candidates
+        from services.anime.search.core import _build_search_query_candidates
 
         resolution = AnimeTitleResolution(
             original_query="one piece",
@@ -282,7 +282,7 @@ class TestBuildSearchQueryCandidates:
         assert result.count("One Piece") + result.count("one piece") == 1
 
     def test_aliases_included(self):
-        from services.anime.search import _build_search_query_candidates
+        from services.anime.search.core import _build_search_query_candidates
 
         resolution = AnimeTitleResolution(
             original_query="naruto",
@@ -302,14 +302,14 @@ class TestBuildSearchQueryCandidates:
 
 class TestSearchResultsFromSerialized:
     def test_empty_payload(self):
-        from services.anime.search import _search_results_from_serialized
+        from services.anime.search.core import _search_results_from_serialized
 
         result = _search_results_from_serialized("query", {})
         assert result.titles_with_sources == []
         assert result.used_query == "query"
 
     def test_payload_with_titles(self):
-        from services.anime.search import _search_results_from_serialized
+        from services.anime.search.core import _search_results_from_serialized
 
         payload = {
             "used_query": "naruto shippuden",
@@ -321,7 +321,7 @@ class TestSearchResultsFromSerialized:
         assert result.state.get_current() is not None
 
     def test_uses_query_when_used_query_missing(self):
-        from services.anime.search import _search_results_from_serialized
+        from services.anime.search.core import _search_results_from_serialized
 
         payload = {"titles_with_sources": ["Anime A [src]"]}
         result = _search_results_from_serialized("my query", payload)
@@ -335,15 +335,17 @@ class TestSearchResultsFromSerialized:
 
 class TestResolveSearchQuery:
     def test_returns_none_when_disabled(self, monkeypatch):
-        monkeypatch.setattr("services.anime.search.settings.search.enable_title_resolution", False)
-        import services.anime.search as mod
+        monkeypatch.setattr(
+            "services.anime.search.core.settings.search.enable_title_resolution", False
+        )
+        from services.anime.search.core import _resolve_search_query
 
-        # Reload to pick up monkeypatched setting for the function
-        result = mod._resolve_search_query("naruto")
+        result = _resolve_search_query("naruto")
         assert result is None
 
     def test_returns_none_when_resolved_same_as_query(self):
-        from services.anime.search import _resolve_search_query, AnimeTitleResolver
+        from services.anime.search.core import _resolve_search_query
+        from services.anime.title_resolution import AnimeTitleResolver
 
         static_result = AnimeTitleResolution(
             original_query="naruto",
@@ -357,7 +359,8 @@ class TestResolveSearchQuery:
         assert result is None
 
     def test_returns_resolution_when_different_from_query(self):
-        from services.anime.search import _resolve_search_query, AnimeTitleResolver
+        from services.anime.search.core import _resolve_search_query
+        from services.anime.title_resolution import AnimeTitleResolver
 
         static_result = AnimeTitleResolution(
             original_query="re zero",
@@ -677,7 +680,8 @@ class TestHelpers:
         assert score > 80
 
     def test_init_language_tracking_sets_english_when_query_matches(self):
-        from services.anime.search import _init_language_tracking, IncrementalSearchState
+        from services.anime.search.core import _init_language_tracking
+        from services.anime.search import IncrementalSearchState
 
         state = IncrementalSearchState()
         _init_language_tracking(
@@ -687,7 +691,8 @@ class TestHelpers:
         assert state.alternative_language == "romaji"
 
     def test_init_language_tracking_sets_romaji_when_query_not_english(self):
-        from services.anime.search import _init_language_tracking, IncrementalSearchState
+        from services.anime.search.core import _init_language_tracking
+        from services.anime.search import IncrementalSearchState
 
         state = IncrementalSearchState()
         _init_language_tracking(
@@ -697,7 +702,8 @@ class TestHelpers:
         assert state.alternative_language == "english"
 
     def test_init_language_tracking_noop_when_titles_same(self):
-        from services.anime.search import _init_language_tracking, IncrementalSearchState
+        from services.anime.search.core import _init_language_tracking
+        from services.anime.search import IncrementalSearchState
 
         state = IncrementalSearchState()
         _init_language_tracking(state, "Naruto", "Naruto", "Naruto")
@@ -705,7 +711,8 @@ class TestHelpers:
         assert state.alternative_title is None
 
     def test_init_language_tracking_noop_when_none(self):
-        from services.anime.search import _init_language_tracking, IncrementalSearchState
+        from services.anime.search.core import _init_language_tracking
+        from services.anime.search import IncrementalSearchState
 
         state = IncrementalSearchState()
         _init_language_tracking(state, "Naruto", None, None)

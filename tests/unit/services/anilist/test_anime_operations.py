@@ -3,6 +3,8 @@
 Uses real AniListClient + mixin; only the external httpx.post boundary is mocked.
 """
 
+import pytest
+
 from tests.fixtures.anilist import (
     anilist_errors,
     graphql_response,
@@ -89,10 +91,10 @@ class TestGetTrending:
         results = anilist_client.get_trending()
         assert results == []
 
-    def test_error_returns_empty(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("Server error"))
-        results = anilist_client.get_trending()
-        assert results == []
+        with pytest.raises(Exception):
+            anilist_client.get_trending()
 
     def test_passes_year_and_season(self, anilist_client, anilist_http):
         anilist_http.enqueue(graphql_response({"Page": {"media": []}}))
@@ -109,10 +111,10 @@ class TestGetTrending:
         assert variables["page"] == 2
         assert variables["perPage"] == 5
 
-    def test_network_exception_returns_empty(self, anilist_client, anilist_http):
+    def test_network_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("network down"))
-        results = anilist_client.get_trending()
-        assert results == []
+        with pytest.raises(Exception):
+            anilist_client.get_trending()
 
 
 # ===========================================================================
@@ -152,10 +154,10 @@ class TestGetUserList:
         results = anilist_client.get_user_list("CURRENT")
         assert results == []
 
-    def test_error_returns_empty(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("Forbidden"))
-        results = anilist_client.get_user_list("CURRENT")
-        assert results == []
+        with pytest.raises(Exception):
+            anilist_client.get_user_list("CURRENT")
 
     def test_fetches_viewer_when_user_id_is_none(self, anilist_client, anilist_http):
         anilist_client.user_id = None
@@ -197,15 +199,15 @@ class TestChangeStatus:
         result = anilist_client.change_status(1, "CURRENT")
         assert result is False
 
-    def test_error_returns_false(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("not found"))
-        result = anilist_client.change_status(1, "CURRENT")
-        assert result is False
+        with pytest.raises(Exception):
+            anilist_client.change_status(1, "CURRENT")
 
-    def test_exception_returns_false(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("timeout"))
-        result = anilist_client.change_status(1, "CURRENT")
-        assert result is False
+        with pytest.raises(Exception):
+            anilist_client.change_status(1, "CURRENT")
 
 
 # ===========================================================================
@@ -282,10 +284,10 @@ class TestSearchAnime:
         results = anilist_client.search_anime("test")
         assert results == []
 
-    def test_error_returns_empty(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("rate limited"))
-        results = anilist_client.search_anime("test")
-        assert results == []
+        with pytest.raises(Exception):
+            anilist_client.search_anime("test")
 
     def test_passes_search_variable(self, anilist_client, anilist_http):
         anilist_http.enqueue(graphql_response({"Page": {"media": []}}))
@@ -316,15 +318,15 @@ class TestGetAnimeById:
         result = anilist_client.get_anime_by_id(99)
         assert result is None
 
-    def test_error_returns_none(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("not found"))
-        result = anilist_client.get_anime_by_id(99)
-        assert result is None
+        with pytest.raises(Exception):
+            anilist_client.get_anime_by_id(99)
 
-    def test_exception_returns_none(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("network"))
-        result = anilist_client.get_anime_by_id(1)
-        assert result is None
+        with pytest.raises(Exception):
+            anilist_client.get_anime_by_id(1)
 
 
 # ===========================================================================
@@ -352,10 +354,10 @@ class TestGetRecentActivities:
         results = anilist_client.get_recent_activities()
         assert results == []
 
-    def test_error_returns_empty(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("error"))
-        results = anilist_client.get_recent_activities()
-        assert results == []
+        with pytest.raises(Exception):
+            anilist_client.get_recent_activities()
 
     def test_fetches_viewer_when_user_id_is_none(self, anilist_client, anilist_http):
         anilist_client.user_id = None
@@ -405,10 +407,10 @@ class TestIsInAnyList:
         result = anilist_client.is_in_any_list(10)
         assert result is False
 
-    def test_error_returns_false(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("not in list"))
-        result = anilist_client.is_in_any_list(10)
-        assert result is False
+        with pytest.raises(Exception):
+            anilist_client.is_in_any_list(10)
 
     def test_fetches_viewer_when_user_id_is_none(self, anilist_client, anilist_http):
         anilist_client.user_id = None
@@ -450,15 +452,15 @@ class TestAddToList:
         result = anilist_client.add_to_list(10)
         assert result is False
 
-    def test_error_returns_false(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("mutation failed"))
-        result = anilist_client.add_to_list(10)
-        assert result is False
+        with pytest.raises(Exception):
+            anilist_client.add_to_list(10)
 
-    def test_exception_returns_false(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("crash"))
-        result = anilist_client.add_to_list(10)
-        assert result is False
+        with pytest.raises(Exception):
+            anilist_client.add_to_list(10)
 
     def test_default_status_is_current(self, anilist_client, anilist_http):
         anilist_http.enqueue(graphql_response(save_media_list_entry(1, status="CURRENT")))
@@ -507,10 +509,10 @@ class TestGetAnimeRelations:
         results = anilist_client.get_anime_relations(1)
         assert results == []
 
-    def test_error_returns_empty(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("error"))
-        results = anilist_client.get_anime_relations(1)
-        assert results == []
+        with pytest.raises(Exception):
+            anilist_client.get_anime_relations(1)
 
 
 # ===========================================================================
@@ -586,15 +588,15 @@ class TestGetMediaListEntry:
         result = anilist_client.get_media_list_entry(10)
         assert result is None
 
-    def test_error_returns_none(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("not found"))
-        result = anilist_client.get_media_list_entry(10)
-        assert result is None
+        with pytest.raises(Exception):
+            anilist_client.get_media_list_entry(10)
 
-    def test_exception_returns_none(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("crash"))
-        result = anilist_client.get_media_list_entry(10)
-        assert result is None
+        with pytest.raises(Exception):
+            anilist_client.get_media_list_entry(10)
 
     def test_fetches_viewer_when_user_id_is_none(self, anilist_client, anilist_http):
         anilist_client.user_id = None
@@ -662,15 +664,15 @@ class TestGetAiringEpisodesForWatching:
         results = anilist_client.get_airing_episodes_for_watching()
         assert results == []
 
-    def test_error_returns_empty(self, anilist_client, anilist_http):
+    def test_error_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(anilist_errors("forbidden"))
-        results = anilist_client.get_airing_episodes_for_watching()
-        assert results == []
+        with pytest.raises(Exception):
+            anilist_client.get_airing_episodes_for_watching()
 
-    def test_exception_returns_empty(self, anilist_client, anilist_http):
+    def test_exception_propagates(self, anilist_client, anilist_http):
         anilist_http.enqueue(Exception("crash"))
-        results = anilist_client.get_airing_episodes_for_watching()
-        assert results == []
+        with pytest.raises(Exception):
+            anilist_client.get_airing_episodes_for_watching()
 
     def test_fetches_viewer_when_user_id_is_none(self, anilist_client, anilist_http):
         anilist_client.user_id = None

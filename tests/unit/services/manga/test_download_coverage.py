@@ -143,7 +143,7 @@ class TestDownloadImages:
         mock_response.headers = {"content-type": "image/png"}
         mock_response.raise_for_status.return_value = None
 
-        with patch("httpx.get", return_value=mock_response):
+        with patch("services.manga.download.http_get_with_retry", return_value=mock_response):
             count = _download_images(["http://example.com/img.png"], tmp_path, self._cfg())
 
         assert count == 1
@@ -156,7 +156,7 @@ class TestDownloadImages:
         mock_response.headers = {"content-type": "image/png"}
         mock_response.raise_for_status.return_value = None
 
-        with patch("httpx.get", return_value=mock_response):
+        with patch("services.manga.download.http_get_with_retry", return_value=mock_response):
             count = _download_images(["http://example.com/img.png"], tmp_path, self._cfg())
 
         assert count == 0
@@ -164,7 +164,10 @@ class TestDownloadImages:
     def test_handles_timeout(self, tmp_path):
         import httpx
 
-        with patch("httpx.get", side_effect=httpx.TimeoutException("timeout")):
+        with patch(
+            "services.manga.download.http_get_with_retry",
+            side_effect=httpx.TimeoutException("timeout"),
+        ):
             count = _download_images(["http://example.com/img.png"], tmp_path, self._cfg())
 
         assert count == 0
@@ -172,7 +175,10 @@ class TestDownloadImages:
     def test_handles_connect_error(self, tmp_path):
         import httpx
 
-        with patch("httpx.get", side_effect=httpx.ConnectError("no connection")):
+        with patch(
+            "services.manga.download.http_get_with_retry",
+            side_effect=httpx.ConnectError("no connection"),
+        ):
             count = _download_images(["http://example.com/img.png"], tmp_path, self._cfg())
 
         assert count == 0
@@ -186,7 +192,10 @@ class TestDownloadImages:
             "404", request=MagicMock(), response=mock_response
         )
 
-        with patch("httpx.get", return_value=mock_response):
+        with patch(
+            "services.manga.download.http_get_with_retry",
+            side_effect=mock_response.raise_for_status.side_effect,
+        ):
             count = _download_images(["http://example.com/img.png"], tmp_path, self._cfg())
 
         assert count == 0
@@ -197,7 +206,7 @@ class TestDownloadImages:
         mock_response.headers = {"content-type": "text/html"}
         mock_response.raise_for_status.return_value = None
 
-        with patch("httpx.get", return_value=mock_response):
+        with patch("services.manga.download.http_get_with_retry", return_value=mock_response):
             count = _download_images(["http://example.com/img.png"], tmp_path, self._cfg())
 
         assert count == 0
@@ -208,7 +217,7 @@ class TestDownloadImages:
         mock_response.headers = {"content-type": "application/octet-stream"}
         mock_response.raise_for_status.return_value = None
 
-        with patch("httpx.get", return_value=mock_response):
+        with patch("services.manga.download.http_get_with_retry", return_value=mock_response):
             count = _download_images(["http://example.com/img.png"], tmp_path, self._cfg())
 
         assert count == 1
@@ -217,10 +226,10 @@ class TestDownloadImages:
         existing = tmp_path / "000.png"
         existing.write_bytes(b"x" * 5000)
 
-        with patch("httpx.get") as mock_get:
+        with patch("services.manga.download.http_get_with_retry") as mock_get:
             count = _download_images(["http://example.com/img.png"], tmp_path, self._cfg())
 
-        # httpx.get should NOT be called since file exists
+        # http_get_with_retry should NOT be called since file exists
         mock_get.assert_not_called()
         assert count == 1
 
@@ -238,7 +247,7 @@ class TestDownloadImages:
             raise httpx.TimeoutException("timeout")
 
         urls = ["http://good1.png", "http://bad1.png", "http://good2.png"]
-        with patch("httpx.get", side_effect=side_effect):
+        with patch("services.manga.download.http_get_with_retry", side_effect=side_effect):
             count = _download_images(urls, tmp_path, self._cfg())
 
         assert count == 2
@@ -246,7 +255,10 @@ class TestDownloadImages:
     def test_debug_mode_logs_urls(self, tmp_path):
         import httpx
 
-        with patch("httpx.get", side_effect=httpx.ConnectError("no")):
+        with patch(
+            "services.manga.download.http_get_with_retry",
+            side_effect=httpx.ConnectError("no"),
+        ):
             # Just verify it doesn't crash in debug mode
             count = _download_images(
                 ["http://x.png"], tmp_path, SimpleNamespace(debug_download_failures=True)
@@ -280,7 +292,7 @@ class TestDownloadChapter:
         mock_response.headers = {"content-type": "image/png"}
         mock_response.raise_for_status.return_value = None
 
-        with patch("httpx.get", return_value=mock_response):
+        with patch("services.manga.download.http_get_with_retry", return_value=mock_response):
             with patch("services.manga.download.create_pdf_from_images") as mock_pdf:
 
                 def fake_pdf(src, dest, quality=85):
@@ -329,7 +341,10 @@ class TestDownloadChapter:
         # All downloads fail
         import httpx
 
-        with patch("httpx.get", side_effect=httpx.ConnectError("x")):
+        with patch(
+            "services.manga.download.http_get_with_retry",
+            side_effect=httpx.ConnectError("x"),
+        ):
             success, err = download_chapter(
                 chapter, svc, _manga(), None, "src_a", config, _FakeTracker(), 1, 1
             )
@@ -357,7 +372,7 @@ class TestDownloadChapter:
                 return m
             raise httpx.ConnectError("x")
 
-        with patch("httpx.get", side_effect=side_effect):
+        with patch("services.manga.download.http_get_with_retry", side_effect=side_effect):
             success, err = download_chapter(
                 chapter, svc, _manga(), None, "src_a", config, _FakeTracker(), 1, 1
             )
@@ -388,7 +403,7 @@ class TestDownloadChapter:
         mock_response.headers = {"content-type": "image/png"}
         mock_response.raise_for_status.return_value = None
 
-        with patch("httpx.get", return_value=mock_response):
+        with patch("services.manga.download.http_get_with_retry", return_value=mock_response):
             with patch("services.manga.download.create_pdf_from_images") as mock_pdf:
 
                 def fake_pdf(src, dest, quality=85):
