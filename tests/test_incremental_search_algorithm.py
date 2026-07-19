@@ -36,13 +36,15 @@ class InMemorySearchPlugin:
 @pytest.fixture
 def incremental_search_env(repository, monkeypatch):
     """Connect an isolated real repository to the search module."""
-    import services.anime.search as search_module
+    import services.anime.search.core as search_core_module
+    import services.anime.search.scraper_search as scraper_search_module
     from utils import cache as cache_module
     from utils.cache import MemoryCache
 
     plugin = InMemorySearchPlugin()
     repository.register(plugin)
-    monkeypatch.setattr(search_module, "rep", repository)
+    monkeypatch.setattr(search_core_module, "rep", repository)
+    monkeypatch.setattr(scraper_search_module, "rep", repository)
     monkeypatch.setattr(cache_module, "_global_cache", MemoryCache())
     monkeypatch.setattr(
         "services.anilist.discovery.auto_discover_anilist_id",

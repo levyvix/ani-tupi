@@ -380,7 +380,7 @@ class TestGetEpisodeUrlAndSource:
         assert result.error_message is not None
 
         # Scenario 2: API error during lookup
-        mock_rep.search_player.side_effect = Exception("Network error")
+        mock_rep.search_player.side_effect = ValueError("Network error")
         result = get_episode_url_and_source("Dandadan", 5)
         assert result.success is False
         assert result.player_url is None
@@ -531,7 +531,8 @@ class TestSyncProgressToAnilist:
         mock_anilist.is_authenticated.return_value = True
         mock_anilist.is_in_any_list.return_value = True
         mock_anilist.get_media_list_entry.return_value = MagicMock(status="CURRENT")
-        mock_anilist.update_progress.side_effect = Exception("API error")
+        mock_anilist.get_anime_by_id.return_value = MagicMock(episodes=24)
+        mock_anilist.update_progress.side_effect = ValueError("API error")
 
         # Execute - should NOT raise exception
         result = sync_progress_to_anilist(
@@ -779,7 +780,7 @@ class TestEdgeCases:
         from services.anime.playback_service import prepare_playback_from_search
 
         # Setup: Exception in discovery
-        mock_discover.side_effect = Exception("AniList API down")
+        mock_discover.side_effect = ValueError("AniList API down")
         mock_rep.get_episode_list.return_value = ["Ep 1", "Ep 2"]
 
         # Execute - should NOT raise

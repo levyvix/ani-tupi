@@ -79,7 +79,7 @@ class TestAnimeFireScraper:
     def setup_method(self):
         self.scraper = AnimeFire()
 
-    @patch("scrapers.plugins.animefire.httpx.get")
+    @patch("scrapers.plugins.animefire.http_get_with_retry")
     def test_search_player_src_uses_json_endpoint(self, mock_get):
         # First call: episode page HTML; second call: video JSON API
         mock_get.side_effect = [
@@ -102,7 +102,7 @@ class TestAnimeFireScraper:
             ),
         ]
 
-    @patch("scrapers.plugins.animefire.httpx.get")
+    @patch("scrapers.plugins.animefire.http_get_with_retry")
     def test_search_anime_returns_results(self, mock_get):
         mock_get.return_value = _Response(SEARCH_HTML)
 
@@ -113,7 +113,7 @@ class TestAnimeFireScraper:
         assert results[0].url == "https://animefire.plus/animes/mao"
         mock_get.assert_called_once()
 
-    @patch("scrapers.plugins.animefire.httpx.get")
+    @patch("scrapers.plugins.animefire.http_get_with_retry")
     def test_search_anime_returns_empty_without_cards(self, mock_get):
         mock_get.return_value = _Response("<html></html>")
 
@@ -121,7 +121,7 @@ class TestAnimeFireScraper:
 
         assert results == []
 
-    @patch("scrapers.plugins.animefire.httpx.get")
+    @patch("scrapers.plugins.animefire.http_get_with_retry")
     def test_search_episodes_returns_episode_list(self, mock_get):
         mock_get.return_value = _Response(EPISODES_HTML)
 
@@ -134,7 +134,7 @@ class TestAnimeFireScraper:
             "https://animefire.plus/animes/mao/2",
         ]
 
-    @patch("scrapers.plugins.animefire.httpx.get")
+    @patch("scrapers.plugins.animefire.http_get_with_retry")
     def test_search_episodes_empty_page_returns_empty(self, mock_get):
         mock_get.return_value = _Response("<html></html>")
 
@@ -142,7 +142,7 @@ class TestAnimeFireScraper:
 
         assert result == []
 
-    @patch("scrapers.plugins.animefire.httpx.get")
+    @patch("scrapers.plugins.animefire.http_get_with_retry")
     def test_search_player_src_fallbacks_to_video_src(self, mock_get):
         mock_get.return_value = _Response(VIDEO_SRC_HTML)
         container = []
@@ -152,7 +152,7 @@ class TestAnimeFireScraper:
 
         assert container == ["https://cdn.example.com/mao/9.mp4"]
 
-    @patch("scrapers.plugins.animefire.httpx.get")
+    @patch("scrapers.plugins.animefire.http_get_with_retry")
     def test_search_player_src_fallbacks_to_iframe(self, mock_get):
         mock_get.return_value = _Response(IFRAME_HTML)
         container = []

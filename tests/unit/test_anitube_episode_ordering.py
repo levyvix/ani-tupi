@@ -38,7 +38,7 @@ class TestAnitubeEpisodeOrdering:
         """Verify that ?ord=1 is appended to URLs without existing query parameters."""
         scraper = AniTube()
 
-        with patch("scrapers.plugins.anitube.httpx.get") as mock_get:
+        with patch("scrapers.plugins.anitube.http_get_with_retry") as mock_get:
             mock_get.return_value = _response("<html></html>")
 
             # Call search_episodes with a clean URL
@@ -54,7 +54,7 @@ class TestAnitubeEpisodeOrdering:
         """Verify that ?ord=1 is appended with & when URL has existing query params."""
         scraper = AniTube()
 
-        with patch("scrapers.plugins.anitube.httpx.get") as mock_get:
+        with patch("scrapers.plugins.anitube.http_get_with_retry") as mock_get:
             mock_get.return_value = _response("<html></html>")
 
             # Call search_episodes with a URL that already has query params
@@ -70,7 +70,7 @@ class TestAnitubeEpisodeOrdering:
         """Verify that episode extraction still works correctly with ?ord=1."""
         scraper = AniTube()
 
-        with patch("scrapers.plugins.anitube.httpx.get") as mock_get:
+        with patch("scrapers.plugins.anitube.http_get_with_retry") as mock_get:
             mock_get.return_value = _response(
                 """
                 <html><body>
@@ -95,7 +95,7 @@ class TestAnitubeEpisodeOrdering:
         """Verify that valid episode links are kept even when title formatting differs."""
         scraper = AniTube()
 
-        with patch("scrapers.plugins.anitube.httpx.get") as mock_get:
+        with patch("scrapers.plugins.anitube.http_get_with_retry") as mock_get:
             mock_get.return_value = _response(
                 """
                 <html><body>
@@ -118,7 +118,7 @@ class TestAnitubeSearchAnimeAndPlayer:
     def setup_method(self):
         self.scraper = AniTube()
 
-    @patch("scrapers.plugins.anitube.httpx.get")
+    @patch("scrapers.plugins.anitube.http_get_with_retry")
     def test_search_anime_returns_results(self, mock_get):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -132,7 +132,7 @@ class TestAnitubeSearchAnimeAndPlayer:
         assert any(r.title == "Mao" for r in results)
         assert all(r.source == "anitube" for r in results)
 
-    @patch("scrapers.plugins.anitube.httpx.get")
+    @patch("scrapers.plugins.anitube.http_get_with_retry")
     def test_search_player_src_extracts_hls_url(self, mock_get):
         hls_html = (
             "<html><body><script>"
@@ -149,7 +149,7 @@ class TestAnitubeSearchAnimeAndPlayer:
         assert len(container) == 1
         assert container[0].endswith(".m3u8") or "cdn.example.com" in container[0]
 
-    @patch("scrapers.plugins.anitube.httpx.get")
+    @patch("scrapers.plugins.anitube.http_get_with_retry")
     def test_search_player_src_collects_hls_candidate(self, mock_get):
         episode_html = """
         <html><body>

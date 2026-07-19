@@ -296,8 +296,21 @@ uv run pytest tests/test_anilist_authentication.py -v
 uv run ruff check .                      # Lint
 uv run ruff format .                     # Format
 uv run pytest                            # Test
-uv run pytest -v --cov=. --cov-report=html  # Coverage
+uv run pytest -v --cov=. --cov-report=html  # Coverage (whole repo)
 ```
+
+**Service-layer coverage gate**:
+The business-logic layer (`services/`) must stay at or above **80%** statement
+coverage. This is enforced in CI and can be checked locally with:
+```bash
+uv run pytest --cov=services --cov-report=term-missing   # per-module report + gate
+```
+The `fail_under = 80` threshold lives in `[tool.coverage.report]` (`pyproject.toml`)
+and only triggers when coverage is collected (i.e. when `--cov` is passed). A plain
+`uv run pytest` or a single-file run never trips the gate. New service tests must
+mock **only** external boundaries (AniList GraphQL, HTTP, external tools) and use
+`tmp_path` for persistence — see the shared fixtures in `tests/conftest.py` and
+`tests/fixtures/anilist.py`.
 
 **Manage**:
 ```bash

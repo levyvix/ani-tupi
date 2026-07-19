@@ -63,3 +63,55 @@ def reset_repository():
     Repository.reset_singleton()
     yield
     Repository.reset_singleton()
+
+
+@pytest.fixture
+def anilist_http(monkeypatch):
+    """Patch the AniList HTTP boundary with a fake transport.
+
+    The client executes GraphQL via
+    ``scrapers.plugins.utils.http_request_with_retry("POST", url, json=..., ...)``,
+    so we patch that single external boundary; the real ``AniListClient`` and its
+    operation mixins run against the enqueued responses. Enqueue payloads with
+    the builders in ``tests.fixtures.anilist``::
+
+        anilist_http.enqueue(graphql_response({"Viewer": viewer()}))
+    """
+    from tests.fixtures.anilist import FakeAniListTransport
+
+    transport = FakeAniListTransport()
+    monkeypatch.setattr("scrapers.plugins.utils.http_request_with_retry", transport)
+    return transport
+
+
+@pytest.fixture
+def anilist_client(temp_dir, monkeypatch):
+    """Provide an authenticated ``AniListClient`` backed by a temp token file.
+
+    The token file lives under ``temp_dir`` so persistence uses ``tmp_path``
+    semantics. Combine with ``anilist_http`` to drive GraphQL responses.
+    """
+    from services.anilist.client import AniListClient
+
+    token_file = temp_dir / "anilist_token.json"
+    monkeypatch.setattr("services.anilist.client.settings.anilist.token_file", token_file)
+    monkeypatch.setattr(
+        "services.anilist.client.settings.anilist.api_url",
+        "https://graphql.anilist.co",
+    )
+    client = AniListClient()
+    client.token = "test-token"
+    client.user_id = 42
+    return client
+
+
+@pytest.fixture
+def state_dir(temp_dir):
+    """Provide a temp directory standing in for the app state dir.
+
+    Services persist JSON under a module-global :class:`JSONStore`; tests can
+    repoint those stores at this directory to exercise real persistence without
+    touching the user's real state. Returns the path (auto-cleaned)."""
+    state = temp_dir / "state"
+    state.mkdir(parents=True, exist_ok=True)
+    return state
