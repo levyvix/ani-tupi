@@ -4,6 +4,7 @@ Mixin class providing manga trending, lists, search, and sync.
 """
 
 from typing import Protocol
+from pydantic import ValidationError
 
 from models.models import (
     AniListManga,
@@ -81,7 +82,7 @@ class MangaOperationsMixin(_MangaOperationsRequired):  # type: ignore[misc]
             result = self._query(query, variables)
             media_list = result["Page"]["media"] if result else []
             return [AniListManga.model_validate(item) for item in media_list]
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return []
 
     def get_user_manga_list(
@@ -153,7 +154,7 @@ class MangaOperationsMixin(_MangaOperationsRequired):  # type: ignore[misc]
 
                 return [AniListMediaListEntry.model_validate(entry) for entry in entries]
             return []
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return []
 
     def get_manga_by_id(self, manga_id: int) -> AniListManga | None:
@@ -202,7 +203,7 @@ class MangaOperationsMixin(_MangaOperationsRequired):  # type: ignore[misc]
             if media_data:
                 return AniListManga.model_validate(media_data)
             return None
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return None
 
     def get_manga_list_entry(self, manga_id: int) -> AniListMediaListEntry | None:
@@ -253,7 +254,7 @@ class MangaOperationsMixin(_MangaOperationsRequired):  # type: ignore[misc]
             if result and "MediaList" in result and result["MediaList"]:
                 return AniListMediaListEntry.model_validate(result["MediaList"])
             return None
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return None
 
     def update_manga_progress(self, manga_id: int, chapter: int) -> bool:
@@ -287,7 +288,8 @@ class MangaOperationsMixin(_MangaOperationsRequired):  # type: ignore[misc]
                 return True
             return False
         except Exception as e:
-            # Log error for debugging (might be COMPLETED status issue)
+            # KEPT GENERIC: Exception message content determines error handling strategy
+            # "completed"/"finished" → silent recovery; others → log and return False
             error_msg = str(e).lower()
             if "completed" in error_msg or "finished" in error_msg:
                 # Silently handle COMPLETED status - user needs to change status manually
@@ -325,7 +327,7 @@ class MangaOperationsMixin(_MangaOperationsRequired):  # type: ignore[misc]
             if result and "SaveMediaListEntry" in result:
                 return True
             return False
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return False
 
     def change_manga_status(self, manga_id: int, status: Status) -> bool:
@@ -357,7 +359,7 @@ class MangaOperationsMixin(_MangaOperationsRequired):  # type: ignore[misc]
             if result and "SaveMediaListEntry" in result:
                 return True
             return False
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return False
 
     def search_manga(self, query_text: str) -> list[AniListManga]:
@@ -394,5 +396,5 @@ class MangaOperationsMixin(_MangaOperationsRequired):  # type: ignore[misc]
             result = self._query(query, variables)
             media_list = result["Page"]["media"] if result else []
             return [AniListManga.model_validate(item) for item in media_list]
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return []
