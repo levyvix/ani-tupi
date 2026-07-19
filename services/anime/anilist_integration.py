@@ -4,25 +4,20 @@ Handles AniList-specific anime flows including search, selection, progress track
 sequel detection, and synchronization with AniList API.
 """
 
-import json
 from collections.abc import Callable
 from typing import Any
 
-from models.config import get_data_path
 from services.anilist import anilist_client
 from services.repository import rep
 from services import ui_bridge
-from services.anilist.scraper_cache import get_scraper_cache, set_scraper_cache
+from services.anilist.scraper_cache import get_scraper_cache
 from scrapers import loader
-from models.models import Status
-from services.history_service import save_history, reset_history
+from services.history_service import save_history
 from utils.video_player import VideoPlayer
 from services.anime.source_management import switch_anime_source
 from utils.logging import get_logger
 from services.anime.mappings import (
     load_anilist_mapping,
-    load_anilist_urls,
-    save_anilist_mapping,
     load_language_preference,
     save_language_preference,
 )
@@ -33,8 +28,12 @@ from services.anime.playback_fallback import play_episode_with_fallback
 from services.anime.awaiting_episodes import registry as awaiting_registry
 from utils.video_player import _format_episode_progress
 
-# Use centralized path function from config
-HISTORY_PATH = get_data_path()
+# Import extracted functions
+from services.anime.episode_selection import _resolve_start_episode_idx
+from services.anime.episode_loader import _load_episode_list, _read_local_progress
+from services.anime.anime_choice_persistence import _persist_anime_choice
+from services.anilist.progress_sync import _sync_anilist_progress
+from services.anilist.sequel_service import offer_sequel_and_continue
 
 logger = get_logger(__name__)
 
@@ -56,29 +55,6 @@ def build_anilist_post_playback_options(current_episode_idx: int, num_episodes: 
     opts.append("📋 Escolher outro episódio")
     opts.append("🔄 Trocar fonte")
     return opts
-
-
-def _is_anime_released(anime_node) -> bool:
-    """Check if an anime has started airing or is finished.
-
-    Args:
-        anime_node: AniListRelationNode with status and startDate
-
-    Returns:
-        True if anime has started airing (RELEASING or FINISHED), False if not yet released
-    """
-    if not anime_node:
-        return True  # Assume released if no data
-
-    # Check status field
-    if hasattr(anime_node, "status"):
-        status = anime_node.status
-        if status == "NOT_YET_RELEASED":
-            return False
-        if status in ("RELEASING", "FINISHED"):
-            return True
-
-    return True  # Default to released if status is unknown
 
 
 def resolve_preferred_title(
@@ -221,7 +197,10 @@ def select_anime_from_results(
             if current_result_set:
                 display_query = current_result_set.used_query or current_result_set.query
                 menu_title += f"🔍 Busca usada: '{display_query}'\n"
-                menu_title += f"   ({current_result_set.word_count} palavras: {len(current_result_set.results)} resultados)\n"
+                menu_title += (
+                    f"   ({current_result_set.word_count} palavras: "
+                    f"{len(current_result_set.results)} resultados)\n"
+                )
         else:
             display_query = used_query or query
             menu_title += f"🔍 Busca usada: '{display_query}'\n"
@@ -322,197 +301,6 @@ def select_anime_from_results(
     return selected_anime, source, used_query
 
 
-def _sync_anilist_progress(
-    anilist_id: int,
-    episode: int,
-    num_episodes: int,
-) -> None:
-    """Sync watched episode progress to AniList and update status if needed.
-
-    Handles PLANNING → CURRENT promotion, CURRENT → COMPLETED on last episode.
-    Logs warnings on failure without raising.
-
-    Args:
-        anilist_id: AniList media ID
-        episode: Episode number just watched (1-indexed)
-        num_episodes: Total episodes available (from scrapers)
-    """
-    if not anilist_client.is_authenticated() or not anilist_id:
-        return
-
-    if not anilist_client.is_in_any_list(anilist_id):
-        logger.info("📝 Adicionando à sua lista do AniList...")
-        anilist_client.add_to_list(anilist_id, Status.CURRENT)
-    else:
-        entry = anilist_client.get_media_list_entry(anilist_id)
-        if entry:
-            if entry.status == "PLANNING":
-                logger.info("📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
-                anilist_client.add_to_list(anilist_id, Status.CURRENT)
-            elif entry.status == "CURRENT" and episode == num_episodes:
-                logger.info("✅ Marcando como 'Completo'...")
-                anilist_client.change_status(anilist_id, Status.COMPLETED)
-
-    logger.info(f"🔄 Sincronizando progresso com AniList (Ep {episode})...")
-    success = anilist_client.update_progress(anilist_id, episode)
-    if success:
-        logger.info("✅ Progresso salvo no AniList!")
-    else:
-        viewer = anilist_client.get_viewer_info()
-        if not viewer:
-            logger.info("⚠️  Token do AniList expirou")
-            logger.info("   Execute: ani-tupi anilist auth")
-        else:
-            logger.info("⚠️  Não foi possível salvar no AniList (continuando...)")
-
-
-def offer_sequel_and_continue(
-    anilist_id: int,
-    args,
-    current_episode: int | None = None,
-    anilist_episodes: int | None = None,
-) -> bool:
-    """Check for sequels when last episode is watched and offer to continue.
-
-    Args:
-        anilist_id: AniList ID of the anime just watched
-        args: Command line arguments
-        current_episode: Current episode number (for checking if series is truly complete)
-        anilist_episodes: Total episodes on AniList (if known)
-
-    Returns:
-        True if user accepted sequel and it started playback, False otherwise
-    """
-    # Only offer sequels if authenticated
-    if not anilist_client.is_authenticated():
-        return False
-
-    # If we know the AniList episode count, check if series is actually complete
-    # This prevents offering sequels when the current source has fewer episodes
-    if anilist_episodes and current_episode:
-        if current_episode < anilist_episodes:
-            # User has more episodes to watch - don't offer sequel
-            logger.info(
-                f"\n💡 Existem mais {anilist_episodes - current_episode} episódio(s) disponível(is) em outras fontes."
-            )
-            return False
-
-    # Get sequels from AniList
-    sequels = anilist_client.get_sequels(anilist_id)
-
-    if not sequels:
-        return False  # No sequels found
-
-    # Format sequel options
-    if len(sequels) == 1:
-        sequel = sequels[0]
-        sequel_title = anilist_client.format_title(sequel.title)
-        is_released = _is_anime_released(sequel)
-
-        # Single sequel: offer multiple options (but suggest Planning if not yet released)
-        if is_released:
-            menu_options = [
-                "▶️ Procurar episódios",
-                "📋 Adicionar à 'Planejo Assistir'",
-                "❌ Não, parar aqui",
-            ]
-        else:
-            menu_options = ["📋 Adicionar à 'Planejo Assistir'", "❌ Não, parar aqui"]
-            sequel_title += " ⏳ (ainda não lançado)"
-
-        choice = ui_bridge.menu_navigate(
-            menu_options,
-            msg=f"Deseja continuar com a sequência?\n\n→ {sequel_title}",
-        )
-
-        if choice == "▶️ Procurar episódios":
-            # Get sequel info and start playback
-            anilist_anime_flow(
-                sequel_title,
-                sequel.id,
-                args,
-                anilist_progress=0,
-                display_title=sequel_title,
-                total_episodes=sequel.episodes,
-            )
-            return True
-        elif choice == "📋 Adicionar à 'Planejo Assistir'":
-            # Add to Planning list without searching for episodes
-            success = anilist_client.add_to_list(sequel.id, Status.PLANNING)
-            if success:
-                logger.info(f"✅ {sequel_title} adicionado à sua lista de 'Planejo Assistir'!")
-            else:
-                logger.info(f"❌ Erro ao adicionar {sequel_title} à sua lista.")
-            return False
-    else:
-        # Multiple sequels: let user choose and then ask what to do
-        sequel_options = []
-        for s in sequels:
-            title = anilist_client.format_title(s.title)
-            is_released = _is_anime_released(s)
-            if not is_released:
-                title += " ⏳"
-            sequel_options.append(title)
-
-        choice = ui_bridge.menu_navigate(
-            sequel_options + ["❌ Não, parar aqui"],
-            msg="Qual sequência deseja assistir?",
-        )
-
-        if choice and choice != "❌ Não, parar aqui":
-            # Find selected sequel (removing the ⏳ indicator if present)
-            choice_clean = choice.replace(" ⏳", "")
-            selected_sequel = next(
-                (s for s in sequels if anilist_client.format_title(s.title) == choice_clean),
-                None,
-            )
-            if selected_sequel:
-                sequel_title = anilist_client.format_title(selected_sequel.title)
-                is_released = _is_anime_released(selected_sequel)
-
-                # Ask what user wants to do (but suggest Planning if not yet released)
-                if is_released:
-                    action_options = [
-                        "▶️ Procurar episódios",
-                        "📋 Adicionar à 'Planejo Assistir'",
-                        "❌ Cancelar",
-                    ]
-                else:
-                    action_options = [
-                        "📋 Adicionar à 'Planejo Assistir'",
-                        "❌ Cancelar",
-                    ]
-                    sequel_title += " ⏳ (ainda não lançado)"
-
-                action_choice = ui_bridge.menu_navigate(
-                    action_options,
-                    msg=f"O que deseja fazer com {sequel_title}?",
-                )
-
-                if action_choice == "▶️ Procurar episódios":
-                    anilist_anime_flow(
-                        sequel_title,
-                        selected_sequel.id,
-                        args,
-                        anilist_progress=0,
-                        display_title=sequel_title,
-                        total_episodes=selected_sequel.episodes,
-                    )
-                    return True
-                elif action_choice == "📋 Adicionar à 'Planejo Assistir'":
-                    # Add to Planning list without searching for episodes
-                    success = anilist_client.add_to_list(selected_sequel.id, Status.PLANNING)
-                    if success:
-                        logger.info(
-                            f"\n✅ {sequel_title} adicionado à sua lista de 'Planejo Assistir'!"
-                        )
-                    else:
-                        logger.info(f"❌ Erro ao adicionar {sequel_title} à sua lista.")
-                    return False
-
-    return False
-
-
 def _get_anilist_titles(anilist_id: int) -> tuple[str | None, str | None]:
     """Fetch English and Romaji titles for an AniList ID.
 
@@ -608,259 +396,6 @@ def _current_used_query(search_state: Any, fallback: str) -> str:
         if current_result_set:
             return current_result_set.query
     return fallback
-
-
-def _persist_anime_choice(
-    anilist_id: int,
-    selected_anime: str,
-    search_title: str,
-    source: str | None,
-) -> None:
-    """Save the resolved anime choice (title, source, URLs) for next time."""
-    anime_url = None
-    anime_urls: dict[str, str] = {}
-
-    repo_title = selected_anime
-    if selected_anime not in rep.anime_to_urls:
-        from thefuzz import fuzz
-
-        repo_titles = list(rep.anime_to_urls.keys())
-        if repo_titles:
-            best_match = max(
-                repo_titles,
-                key=lambda t: fuzz.token_sort_ratio(selected_anime.lower(), t.lower()),
-            )
-            if fuzz.token_sort_ratio(selected_anime.lower(), best_match.lower()) >= 50:
-                repo_title = best_match
-
-    if repo_title in rep.anime_to_urls:
-        for url, src, _params in rep.anime_to_urls[repo_title]:
-            anime_urls[src] = url
-            if anime_url is None and (source is None or src in source.split(",")):
-                anime_url = url
-
-    save_anilist_mapping(
-        anilist_id,
-        selected_anime,
-        search_title=search_title,
-        source=source,
-        anime_url=anime_url,
-        anime_urls=anime_urls,
-    )
-
-
-def _load_episode_list(
-    selected_anime: str,
-    saved_title: str | None,
-    saved_source: str | None,
-    saved_url: str | None,
-    anilist_id: int,
-) -> tuple[list | None, int]:
-    """Load the episode list from cache or by scraping.
-
-    Returns ``(episode_list, scraper_episode_count)``. ``episode_list`` is
-    ``None`` when loading failed (no episodes could be scraped).
-    """
-    cache_data = get_scraper_cache(selected_anime)
-
-    if cache_data:
-        logger.info(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
-        rep.search_episodes(selected_anime)
-        return cache_data.episode_urls, cache_data.episode_count
-
-    if selected_anime == saved_title:
-        saved_urls = load_anilist_urls(anilist_id) if anilist_id else {}
-        if saved_urls:
-            sources_list = ", ".join(sorted(saved_urls.keys()))
-            logger.info(f"📺 Carregando '{selected_anime}' da fonte {sources_list}...")
-            for src, url in saved_urls.items():
-                rep.add_anime(selected_anime, url, src)
-        elif saved_url and saved_source:
-            logger.info(f"📺 Carregando '{selected_anime}' da fonte {saved_source}...")
-            rep.add_anime(selected_anime, saved_url, saved_source)
-
-    with ui_bridge.loading("Carregando episódios..."):
-        rep.search_episodes(selected_anime)
-    episode_list = rep.get_episode_list(selected_anime)
-    scraper_episode_count = len(episode_list)
-
-    if not episode_list:
-        logger.info(
-            "\n❌ Nenhum episódio carregado — todos os scrapers falharam (timeout ou erro de rede)."
-        )
-        logger.info("   Tente novamente em alguns instantes.")
-        ui_bridge.prompt("\nPressione Enter para voltar...")
-        return None, 0
-
-    set_scraper_cache(selected_anime, scraper_episode_count, episode_list)
-    return episode_list, scraper_episode_count
-
-
-def _read_local_progress(selected_anime: str) -> int:
-    """Return the next episode to watch based on local history (0 if none)."""
-    try:
-        history_file = HISTORY_PATH / "history.json"
-        with history_file.open() as f:
-            history_data = json.load(f)
-            if selected_anime in history_data:
-                return history_data[selected_anime][1] + 1
-    except (OSError, KeyError, IndexError):
-        pass  # No local history
-    return 0
-
-
-def _find_awaiting_episode_idx(
-    selected_anime: str,
-    target_ep_num: int,
-) -> int | None:
-    """Search AnimesDigital's homepage for a freshly-released episode.
-
-    Records the direct episode URL in the awaiting-episode registry so the
-    playback layer can extract it. Returns the 0-indexed episode index, or
-    ``None`` when the episode could not be found.
-    """
-    logger.info(f"🔍 Buscando episódio {target_ep_num} no AnimesDigital...")
-
-    try:
-        with ui_bridge.loading("Procurando novo episódio..."):
-            results = rep.search_homepage_incremental("animesdigital", selected_anime)
-
-        if not results:
-            logger.info(
-                f"\n❌ Episódio {target_ep_num} ainda não disponível nos scrapers ou no AnimesDigital."
-            )
-            ui_bridge.prompt("\nPressione Enter para voltar...")
-            return None
-
-        matching_episodes = [ep for ep in results if ep["episode_number"] == target_ep_num]
-        if not matching_episodes:
-            logger.info(f"\n❌ Episódio {target_ep_num} não encontrado no AnimesDigital.")
-            ui_bridge.prompt("\nPressione Enter para voltar...")
-            return None
-
-        episode = matching_episodes[0]
-        logger.info(f"✅ Episódio {target_ep_num} encontrado no AnimesDigital!")
-        logger.info(f"   URL: {episode['episode_url'][:80]}...")
-
-        awaiting_registry.set(selected_anime, target_ep_num, episode["episode_url"])
-        return target_ep_num - 1
-
-    except (OSError, ConnectionError, TimeoutError) as e:
-        logger.warning(f"⚠️  Erro de rede ao buscar no AnimesDigital: {e!r}")
-        logger.info(f"Episódio {target_ep_num} ainda não disponível nos scrapers.")
-        ui_bridge.prompt("\nPressione Enter para voltar...")
-        return None
-    except Exception as e:
-        logger.warning(
-            f"⚠️  Erro inesperado ao buscar no AnimesDigital: {e!r}",
-            exc_info=True,
-        )
-        logger.info(f"Episódio {target_ep_num} ainda não disponível nos scrapers.")
-        ui_bridge.prompt("\nPressione Enter para voltar...")
-        return None
-
-
-def _build_continue_menu(
-    selected_anime: str,
-    max_progress: int,
-    anilist_progress: int,
-    local_progress: int,
-    episode_list: list,
-    total_episodes: int | None,
-    scraper_episode_count: int | None,
-) -> tuple[list[str], dict[str, int | None], str]:
-    """Build the "de onde continuar" menu options and message."""
-    options: list[str] = []
-    option_to_idx: dict[str, int | None] = {}
-
-    progress_source = ""
-    if max_progress == anilist_progress and max_progress == local_progress:
-        progress_source = "AniList + Local"
-    elif max_progress == anilist_progress:
-        progress_source = "AniList"
-    elif max_progress == local_progress:
-        progress_source = "Local"
-
-    if max_progress < len(episode_list):
-        next_ep = f"⏭️  Episódio {max_progress + 1} (próximo)"
-        options.append(next_ep)
-        option_to_idx[next_ep] = max_progress
-    elif total_episodes and max_progress < total_episodes:
-        next_ep = f"⏭️  Episódio {max_progress + 1} (aguardando)"
-        options.append(next_ep)
-        option_to_idx[next_ep] = None
-
-    current_ep = f"▶️  Episódio {max_progress} ({progress_source})"
-    options.append(current_ep)
-    option_to_idx[current_ep] = max_progress - 1
-
-    if max_progress > 1:
-        prev_ep = f"◀️  Episódio {max_progress - 1} (anterior)"
-        options.append(prev_ep)
-        option_to_idx[prev_ep] = max_progress - 2
-
-    options.append("📋 Escolher outro episódio")
-    options.append("🔄 Começar do zero")
-
-    menu_msg = f"{selected_anime} - De onde quer continuar?"
-    if total_episodes and scraper_episode_count:
-        menu_msg += f"\n📊 {scraper_episode_count} eps disponíveis / {total_episodes} total"
-    elif scraper_episode_count:
-        menu_msg += f"\n📊 {scraper_episode_count} eps disponíveis"
-
-    return options, option_to_idx, menu_msg
-
-
-def _resolve_start_episode_idx(
-    selected_anime: str,
-    episode_list: list,
-    anilist_progress: int,
-    local_progress: int,
-    total_episodes: int | None,
-    scraper_episode_count: int | None,
-) -> int | None:
-    """Ask the user where to start and return the 0-indexed episode.
-
-    Returns ``None`` when the user cancels or the episode is unavailable.
-    """
-    max_progress = max(anilist_progress, local_progress)
-
-    if not (0 < max_progress <= len(episode_list)):
-        return ui_bridge.menu_navigate_episodes(episode_list)
-
-    options, option_to_idx, menu_msg = _build_continue_menu(
-        selected_anime,
-        max_progress,
-        anilist_progress,
-        local_progress,
-        episode_list,
-        total_episodes,
-        scraper_episode_count,
-    )
-
-    choice = ui_bridge.menu_navigate(options, msg=menu_msg)
-
-    if not choice:
-        return None
-
-    if choice == "📋 Escolher outro episódio":
-        return ui_bridge.menu_navigate_episodes(episode_list)
-
-    if choice == "🔄 Começar do zero":
-        confirm_reset = ui_bridge.menu_navigate(
-            ["✅ Sim, resetar", "❌ Cancelar"],
-            msg="Tem certeza que quer começar do zero? Seu progresso será perdido.",
-        )
-        if confirm_reset == "✅ Sim, resetar":
-            reset_history(selected_anime)
-            logger.info("✅ Histórico resetado! Começando do episódio 1...")
-            return 0
-        return None
-
-    episode_idx = option_to_idx[choice]
-    if episode_idx is None:
-        return _find_awaiting_episode_idx(selected_anime, max_progress + 1)
-    return episode_idx
 
 
 def _confirm_watch_or_download(
