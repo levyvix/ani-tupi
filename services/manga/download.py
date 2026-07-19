@@ -9,13 +9,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from os import cpu_count
 from pathlib import Path
-import httpx
 from InquirerPy import inquirer
 
 from services.manga_service import DownloadedChaptersTracker
 from utils.pdf_converter import create_pdf_from_images
 from utils.logging import get_logger
 from utils.range_parser import parse_range_input
+from scrapers.plugins.utils import http_get_with_retry
 
 logger = get_logger(__name__)
 
@@ -412,8 +412,7 @@ def _download_images(pages: list, output_path: Path, config) -> int:
         if not img_path.exists():
             response = None
             try:
-                response = httpx.get(url, timeout=15, follow_redirects=True)
-                response.raise_for_status()
+                response = http_get_with_retry(url, timeout=15, follow_redirects=True)
 
                 # Validate content is actually an image. Some CDNs (e.g.
                 # mugiwaras) serve images as application/octet-stream, so also
@@ -434,18 +433,8 @@ def _download_images(pages: list, output_path: Path, config) -> int:
 
                 img_path.write_bytes(img_data)
                 valid_downloads += 1
-            except httpx.TimeoutException:
-                failed_pages.append(f"Page {i}: Timeout")
-                continue
-            except httpx.ConnectError:
-                failed_pages.append(f"Page {i}: Connection error")
-                continue
-            except httpx.HTTPStatusError:
-                status_code = getattr(response, "status_code", "unknown") if response else "unknown"
-                failed_pages.append(f"Page {i}: HTTP {status_code}")
-                continue
             except Exception as e:
-                failed_pages.append(f"Page {i}: {str(e)}")
+                failed_pages.append(f"Page {i}: {type(e).__name__} - {str(e)}")
                 continue
         else:
             valid_downloads += 1
