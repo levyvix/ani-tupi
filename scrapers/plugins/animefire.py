@@ -1,14 +1,13 @@
 import json
 import re
-from utils.logging import get_logger
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-import httpx
 from bs4 import BeautifulSoup
 
+from models.models import AnimeMetadata, ScrapedEpisodes
 from scrapers.core.blogger_resolver import resolve_blogger_token
 from scrapers.plugins.utils import http_get_with_retry, load_plugin, store_player_source
-from models.models import AnimeMetadata, ScrapedEpisodes
+from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -110,8 +109,7 @@ class AnimeFire:
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
             # data-video-src is in static HTML — no Selenium needed
-            response = httpx.get(url, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-            response.raise_for_status()
+            response = http_get_with_retry(url, timeout=REQUEST_TIMEOUT, follow_redirects=True)
             page = BeautifulSoup(response.text, "html.parser")
 
             # AnimeFire uses Video.js player with data-video-src attribute
@@ -121,10 +119,9 @@ class AnimeFire:
                 api_url = video.get("data-video-src")
                 if api_url:
                     try:
-                        response = httpx.get(
+                        response = http_get_with_retry(
                             api_url, timeout=REQUEST_TIMEOUT, follow_redirects=True
                         )
-                        response.raise_for_status()
                         video_data = json.loads(response.text)
 
                         if isinstance(video_data, dict) and "data" in video_data:

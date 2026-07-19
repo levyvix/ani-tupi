@@ -1,11 +1,13 @@
 """Shared Jikan/MAL client for anime title lookups."""
 
-from utils.logging import get_logger
+from urllib.parse import urlencode
 
 import httpx
 
+from scrapers.plugins.utils import http_get_with_retry
 from models.config import settings
 from models.models import JikanAnimeEntry
+from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -25,12 +27,11 @@ class JikanClient:
         """Search anime titles on Jikan and return parsed entries."""
         url = f"{self.base_url}/anime"
         params = {"q": query, "limit": limit}
+        full_url = f"{url}?{urlencode(params)}"
 
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.get(url, params=params)
-                response.raise_for_status()
-                data = response.json()
+            response = http_get_with_retry(full_url, timeout=self.timeout)
+            data = response.json()
         except httpx.HTTPStatusError as e:
             logger.warning(f"Jikan API error: {e.response.status_code} for '{query}'")
             return []

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Callable
 
+import httpx
 from tqdm import tqdm
 
 from models.config import get_data_path, settings
@@ -220,7 +221,7 @@ class AnimeDownloadService:
                         logger.debug(
                             f"URL pattern miss for {anime_title} ep {ep_num}, falling back to scraping"
                         )
-                except Exception as e:
+                except (ValueError, AttributeError, TypeError) as e:
                     logger.debug(f"URL pattern error for {anime_title} ep {ep_num}: {e}")
 
             # Fallback: full scraping
@@ -233,7 +234,13 @@ class AnimeDownloadService:
                 else:
                     last_known_url = None
                     logger.warning(f"No URL found for {anime_title} episode {ep_num}")
-            except Exception as e:
+            except (
+                httpx.TimeoutException,
+                httpx.ConnectError,
+                ValueError,
+                AttributeError,
+                TypeError,
+            ) as e:
                 logger.warning(f"Error fetching URL for episode {ep_num}: {e}")
                 episode_urls[ep_num] = None
                 last_known_url = None
@@ -388,7 +395,7 @@ class AnimeDownloadService:
                 return False, False
 
             return False, False
-        except Exception as e:
+        except (IOError, OSError, FileNotFoundError, PermissionError) as e:
             logger.debug(f"Episode {episode_num} download error: {e}")
             return False, False
 
@@ -438,7 +445,7 @@ class AnimeDownloadService:
                 shutil.move(str(downloaded_file), str(file_path))
 
             return True
-        except Exception as e:
+        except (IOError, OSError, FileNotFoundError, PermissionError, ValueError) as e:
             logger.error(f"Failed to download {url}: {e}")
             return False
 
@@ -474,7 +481,7 @@ class AnimeDownloadService:
             with open(self.db_path) as f:
                 data = json.load(f)
                 return AnimeDownloadDatabase.model_validate(data)
-        except Exception as e:
+        except (json.JSONDecodeError, FileNotFoundError, IOError, OSError, ValueError) as e:
             logger.error(f"Failed to load download database: {e}")
             return AnimeDownloadDatabase()
 
@@ -489,7 +496,7 @@ class AnimeDownloadService:
             with open(self.db_path, "w") as f:
                 json.dump(db.model_dump(mode="json"), f, indent=2, default=str)
             logger.debug(f"Saved download database: {self.db_path}")
-        except Exception as e:
+        except (IOError, OSError, FileNotFoundError, PermissionError, ValueError) as e:
             logger.error(f"Failed to save download database: {e}")
 
     def _build_summary(

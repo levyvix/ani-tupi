@@ -11,6 +11,7 @@ level discovery flow into a single service-layer module.
 
 from dataclasses import dataclass
 
+from pydantic import ValidationError
 from thefuzz import fuzz
 
 from models.models import AniListAnime, AniListSearchResult
@@ -49,7 +50,7 @@ def auto_discover_anilist_id(scraper_title: str) -> list[AniListSearchResult]:
             if isinstance(cached, list):
                 try:
                     return [AniListSearchResult(**item) for item in cached]
-                except TypeError:
+                except (ValidationError, TypeError):
                     # In case of malformed list, treat as a cache miss
                     pass
             # Old format or malformed, fall through to re-fetch
@@ -180,7 +181,7 @@ def get_anilist_id_with_interactive_fallback(
         cache.set(cache_key, [chosen.model_dump()], ttl=2592000)  # 30 days
         logger.info("   ✅ Cache salvo por 30 dias")
 
-    except Exception as e:
+    except (ValidationError, TypeError, KeyError) as e:
         logger.info(f"⚠️  Não foi possível validar anime ID: {e}")
         # Still cache it anyway, but user is warned
 
@@ -247,7 +248,7 @@ def get_anilist_metadata(anilist_id: int) -> AniListAnime | None:
 
         return None
 
-    except Exception as e:
+    except (ValidationError, TypeError, KeyError) as e:
         logger.info(f"⚠️  Erro ao buscar metadata do AniList ID {anilist_id}: {e}")
         return None
 
@@ -315,7 +316,7 @@ def discover_anilist_info(anime_title: str) -> AniListDiscoveryResult:
     # Search AniList
     try:
         anilist_results = auto_discover_anilist_id(normalized_title)
-    except Exception as e:
+    except (ValidationError, TypeError, KeyError) as e:
         logger.warning("AniList search failed for '%s': %s", anime_title, e)
         return AniListDiscoveryResult(
             anilist_id=None,
@@ -342,7 +343,7 @@ def discover_anilist_info(anime_title: str) -> AniListDiscoveryResult:
     # Fetch metadata
     try:
         metadata = get_anilist_metadata(anilist_id)
-    except Exception as e:
+    except (ValidationError, TypeError, KeyError) as e:
         logger.warning("AniList metadata fetch failed for ID %d: %s", anilist_id, e)
         # Return partial result with ID but no title/episodes
         return AniListDiscoveryResult(

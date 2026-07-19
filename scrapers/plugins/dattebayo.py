@@ -10,7 +10,13 @@ import httpx
 from bs4 import BeautifulSoup
 
 from models.models import AnimeMetadata, ScrapedEpisodes
-from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
+from scrapers.plugins.utils import (
+    DEFAULT_HEADERS,
+    http_get_with_retry,
+    http_request_with_retry,
+    load_plugin,
+    store_player_source,
+)
 
 logger = get_logger(__name__)
 
@@ -133,12 +139,13 @@ def sign_video_url(
     referer: str,
 ) -> str:
     sign_url = f"{SIGN_API}?url={urllib.parse.quote(unsigned_url, safe='')}"
-    response = client.get(
+    response = http_request_with_retry(
+        "GET",
         sign_url,
         headers=_request_headers(referer),
         follow_redirects=False,
+        client=client,
     )
-    response.raise_for_status()
 
     payload = response.json()
     if not payload or not isinstance(payload, list):
@@ -153,11 +160,13 @@ def sign_video_url(
 
 def _is_playable(client: httpx.Client, video_url: str, *, referer: str) -> bool:
     try:
-        response = client.get(
+        response = http_request_with_retry(
+            "GET",
             video_url,
             headers={**_request_headers(referer), "Range": "bytes=0-0"},
             timeout=10,
             follow_redirects=False,
+            client=client,
         )
         return response.status_code in (200, 206)
     except httpx.HTTPError:
@@ -173,12 +182,13 @@ def resolve_signed_video_url(
     video_id = extract_video_id(episode_url)
 
     try:
-        response = client.get(
+        response = http_request_with_retry(
+            "GET",
             episode_url,
             headers=_request_headers(episode_url),
             follow_redirects=False,
+            client=client,
         )
-        response.raise_for_status()
         unsigned_urls = extract_unsigned_video_urls(
             response.text,
             episode_url,
@@ -245,13 +255,12 @@ class Dattebayo:
     def search_anime(self, query: str) -> list[AnimeMetadata]:
         try:
             url = f"{BASE_URL}/busca?busca={urllib.parse.quote(query)}"
-            response = httpx.get(
+            response = http_get_with_retry(
                 url,
                 headers=HEADERS,
                 timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
-            response.raise_for_status()
             return _parse_anime_items(BeautifulSoup(response.text, "html.parser"))
         except httpx.HTTPError as exc:
             logger.debug("Dattebayo search_anime failed for %r: %s", query, exc)
@@ -264,26 +273,24 @@ class Dattebayo:
                 url = f"{BASE_URL}/animes"
             else:
                 url = f"{BASE_URL}/animes/page/{page}"
-            response = httpx.get(
+            response = http_get_with_retry(
                 url,
                 headers=HEADERS,
                 timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
-            response.raise_for_status()
             return _parse_anime_items(BeautifulSoup(response.text, "html.parser"))
         except httpx.HTTPError as exc:
             logger.debug("Dattebayo list_animes failed for page %s: %s", page, exc)
             return []
 
     def _fetch_episode_page(self, url: str) -> list[tuple[str, str]]:
-        response = httpx.get(
+        response = http_get_with_retry(
             url,
             headers=HEADERS,
             timeout=REQUEST_TIMEOUT,
             follow_redirects=True,
         )
-        response.raise_for_status()
         return _parse_episode_items(BeautifulSoup(response.text, "html.parser"))
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:

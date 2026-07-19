@@ -7,7 +7,12 @@ import httpx
 from bs4 import BeautifulSoup
 
 from models.models import AnimeMetadata, ScrapedEpisodes
-from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
+from scrapers.plugins.utils import (
+    DEFAULT_HEADERS,
+    http_get_with_retry,
+    load_plugin,
+    store_player_source,
+)
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -31,8 +36,9 @@ class AnimesOnlineIO:
         results = []
         try:
             url = f"{BASE_URL}/search/{urllib.parse.quote(query)}"
-            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-            r.raise_for_status()
+            r = http_get_with_retry(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             soup = BeautifulSoup(r.text, "html.parser")
             for article in soup.select("article.bs"):
                 a = article.select_one("a[href*='/anime/']")
@@ -49,8 +55,9 @@ class AnimesOnlineIO:
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
-            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-            r.raise_for_status()
+            r = http_get_with_retry(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             soup = BeautifulSoup(r.text, "html.parser")
 
             episodes = []
@@ -88,8 +95,9 @@ class AnimesOnlineIO:
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-            r.raise_for_status()
+            r = http_get_with_retry(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             soup = BeautifulSoup(r.text, "html.parser")
 
             found = False
@@ -145,13 +153,12 @@ class AnimesOnlineIO:
     def _resolve_embed_streams(self, embed_url: str) -> list[str]:
         """Resolve an anidrive-style embed to direct googlevideo MP4 URLs (720p first)."""
         try:
-            r = httpx.get(
+            r = http_get_with_retry(
                 embed_url,
                 headers={**HEADERS, "Referer": f"{BASE_URL}/"},
                 timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
-            r.raise_for_status()
             payload = self._decode_juicy_payload(r.text)
             sources_m = _JW_SOURCES_RE.search(payload)
             if not sources_m:
@@ -185,10 +192,12 @@ class AnimesOnlineIO:
         if "redirector.googlevideo.com" not in url:
             return url
         try:
-            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=False)
+            r = http_get_with_retry(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=False
+            )
             location = r.headers.get("location", "")
             return location if location.startswith("http") else url
-        except httpx.HTTPError:
+        except (httpx.HTTPError, Exception):
             return url
 
     @staticmethod

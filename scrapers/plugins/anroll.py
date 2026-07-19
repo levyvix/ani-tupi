@@ -7,7 +7,12 @@ import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.core.selenium_driver import SeleniumWebDriver
-from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
+from scrapers.plugins.utils import (
+    DEFAULT_HEADERS,
+    http_get_with_retry,
+    load_plugin,
+    store_player_source,
+)
 from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
@@ -29,10 +34,9 @@ class AnRoll:
         results = []
         try:
             url = f"{BASE_URL}/?s={urllib.parse.quote(query)}"
-            response = httpx.get(
+            response = http_get_with_retry(
                 url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
             )
-            response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
             for article in soup.select("article.anime-card"):
                 a = article.find("a", href=True)
@@ -55,10 +59,9 @@ class AnRoll:
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
-            response = httpx.get(
+            response = http_get_with_retry(
                 url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
             )
-            response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
             titles = []
             urls = []
@@ -100,13 +103,12 @@ class AnRoll:
         fallback treated last_id - first_id as episode count, inflating lists to
         thousands. The sidebar on any episode page lists all episodes in order.
         """
-        response = httpx.get(
+        response = http_get_with_retry(
             first_ep_url,
             headers=HEADERS,
             timeout=REQUEST_TIMEOUT,
             follow_redirects=True,
         )
-        response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
 
         sidebar = soup.select_one(".ep-list-box")

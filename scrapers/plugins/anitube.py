@@ -1,9 +1,9 @@
-from utils.logging import get_logger
 import urllib.parse
 
 import httpx
 from bs4 import BeautifulSoup
 
+from models.models import AnimeMetadata, ScrapedEpisodes
 from scrapers.plugins.utils import (
     DEFAULT_HEADERS,
     extract_anivideo_hls,
@@ -11,7 +11,7 @@ from scrapers.plugins.utils import (
     load_plugin,
     store_player_source,
 )
-from models.models import AnimeMetadata, ScrapedEpisodes
+from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -82,10 +82,9 @@ class AniTube:
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            response = httpx.get(
+            response = http_get_with_retry(
                 url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
             )
-            response.raise_for_status()
             html = response.text
 
             if hls_url := extract_anivideo_hls(html):

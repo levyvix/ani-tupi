@@ -10,9 +10,7 @@ Example: https://cdn-s01.example.net/stream/y/<slug>/11.mp4/index.m3u8
 from utils.logging import get_logger
 import re
 
-import httpx
-
-logger = get_logger(__name__)
+from scrapers.plugins.utils import http_head_with_fallback
 
 logger = get_logger(__name__)
 
@@ -80,28 +78,16 @@ def validate_episode_url(url: str, timeout: float = 5.0) -> bool:
     """
     logger.info(f"[URL-PATTERN] HEAD {url[:80]}{'...' if len(url) > 80 else ''}")
     try:
-        with httpx.Client(follow_redirects=True, timeout=timeout) as client:
-            response = client.head(url)
-
-            # Some CDNs reject HEAD for media URLs; fallback to tiny ranged GET probe.
-            if response.status_code in (403, 405):
-                logger.info(f"[URL-PATTERN] HEAD {response.status_code}; trying GET range probe")
-                response = client.get(url, headers={"Range": "bytes=0-1"})
-
+        response = http_head_with_fallback(
+            url,
+            timeout=timeout,
+            follow_redirects=True,
+        )
         logger.info(
             f"[URL-PATTERN] → {response.status_code} {'✅ HIT' if response.is_success else '❌ MISS'}"
         )
         return response.is_success
     except Exception as exc:
-        logger.info(f"[URL-PATTERN] HEAD error: {exc}; trying GET range probe")
-        try:
-            with httpx.Client(follow_redirects=True, timeout=timeout) as client:
-                response = client.get(url, headers={"Range": "bytes=0-1"})
-            logger.info(
-                f"[URL-PATTERN] → {response.status_code} {'✅ HIT' if response.is_success else '❌ MISS'}"
-            )
-            return response.is_success
-        except Exception as get_exc:
-            logger.info(f"[URL-PATTERN] → ERROR: {get_exc}")
-            logger.debug("validate_episode_url failed for %s: %s", url, get_exc)
-            return False
+        logger.info(f"[URL-PATTERN] → ERROR: {exc}")
+        logger.debug("validate_episode_url failed for %s: %s", url, exc)
+        return False

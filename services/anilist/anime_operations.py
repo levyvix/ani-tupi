@@ -5,6 +5,7 @@ Mixin class providing anime trending, lists, search, sync, and relations.
 
 from utils.logging import get_logger
 from typing import Protocol
+from pydantic import ValidationError
 
 from models.models import (
     AniListAnime,
@@ -91,7 +92,7 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
             result = self._query(query, variables)
             media_list = result["Page"]["media"] if result else []
             return [AniListAnime.model_validate(item) for item in media_list]
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return []
 
     def get_user_list(
@@ -162,7 +163,7 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
 
                 return [AniListMediaListEntry.model_validate(entry) for entry in entries]
             return []
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return []
 
     def change_status(self, anime_id: int, status: Status) -> bool:
@@ -194,7 +195,7 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
             if result and "SaveMediaListEntry" in result:
                 return True
             return False
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return False
 
     def update_progress(self, anime_id: int, episode: int) -> bool:
@@ -235,7 +236,8 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
             )
             return False
         except Exception as e:
-            # Log error for debugging
+            # KEPT GENERIC: Exception message content is critical to determine retry/ignore behavior
+            # "completed"/"finished" → silent recovery; "progress"/"exceed" → warn; others → error
             error_msg = str(e)
             error_lower = error_msg.lower()
 
@@ -294,7 +296,7 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
             result = self._query(query, variables)
             media_list = result["Page"]["media"] if result else []
             return [AniListAnime.model_validate(item) for item in media_list]
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return []
 
     def get_anime_by_id(self, anime_id: int) -> AniListAnime | None:
@@ -341,7 +343,7 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
             if media_data:
                 return AniListAnime.model_validate(media_data)
             return None
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return None
 
     def get_recent_activities(self, limit: int = 5) -> list[AniListActivity]:
@@ -395,7 +397,7 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
             result = self._query(query, variables)
             activities = result["Page"]["activities"] if result else []
             return [AniListActivity.model_validate(activity) for activity in activities]
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return []
 
     def is_in_any_list(self, anime_id: int) -> bool:
@@ -433,7 +435,7 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
         try:
             result = self._query(query, variables)
             return result is not None and "MediaList" in result and result["MediaList"] is not None
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return False
 
     def add_to_list(self, anime_id: int, status: str = "CURRENT") -> bool:
@@ -470,7 +472,7 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
             if result and "SaveMediaListEntry" in result:
                 return True
             return False
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return False
 
     def get_anime_relations(self, anime_id: int) -> list[AniListRelationEdge]:
@@ -519,7 +521,7 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
                 edges = result["Media"]["relations"]["edges"]
                 return [AniListRelationEdge.model_validate(edge) for edge in edges]
             return []
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return []
 
     def get_sequels(self, anime_id: int) -> list[AniListRelationNode]:
@@ -590,7 +592,7 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
             if result and "MediaList" in result and result["MediaList"]:
                 return AniListMediaListEntry.model_validate(result["MediaList"])
             return None
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return None
 
     def get_airing_episodes_for_watching(self) -> list[dict]:
@@ -658,5 +660,5 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
                     entries.extend(list_group["entries"])
                 return entries
             return []
-        except Exception:
+        except (KeyError, TypeError, ValidationError):
             return []

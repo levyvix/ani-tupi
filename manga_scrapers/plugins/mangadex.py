@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 
+from scrapers.plugins.utils import http_request_with_retry
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -37,13 +38,13 @@ class MangaDex:
             List of manga results
         """
         try:
-            resp = httpx.get(
+            resp = http_request_with_retry(
+                "GET",
                 f"{self.base_url}/manga",
                 params={"title": query, "limit": 100},
                 timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
-            resp.raise_for_status()
             data = resp.json()
         except _NETWORK_ERRORS as exc:
             logger.warning(f"MangaDex search_manga network error for '{query}': {exc}")
@@ -111,12 +112,12 @@ class MangaDex:
                     "translatedLanguage[]": ["pt-br"],
                 }
 
-                resp = httpx.get(
+                resp = http_request_with_retry(
+                    "GET",
                     f"{self.base_url}/manga/{manga_id}/feed",
                     params=params,
                     timeout=REQUEST_TIMEOUT,
                 )
-                resp.raise_for_status()
                 data = resp.json()
 
                 if not data.get("data"):
@@ -174,12 +175,12 @@ class MangaDex:
             List of image URLs
         """
         try:
-            resp = httpx.get(
+            resp = http_request_with_retry(
+                "GET",
                 f"{self.base_url}/at-home/server/{chapter_id}",
                 timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
-            resp.raise_for_status()
             data = resp.json()
 
             base_url = data["baseUrl"]

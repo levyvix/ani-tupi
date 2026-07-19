@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 
 from scrapers.core.selenium_driver import SeleniumWebDriver
+from scrapers.plugins.utils import http_request_with_retry
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -319,18 +320,21 @@ class MugiwarasOficial:
             ),
             "Referer": f"{self.base_url}/",
         }
-        with httpx.Client(
-            headers=headers, timeout=REQUEST_TIMEOUT, follow_redirects=True
-        ) as client:
-            for n in range(start, start + self._MAX_PAGES):
-                url = f"{prefix}{n:0{width}d}.{ext}"
-                try:
-                    resp = client.head(url)
-                except httpx.HTTPError:
-                    break
-                if resp.status_code != 200:
-                    break
-                pages.append(url)
+        for n in range(start, start + self._MAX_PAGES):
+            url = f"{prefix}{n:0{width}d}.{ext}"
+            try:
+                resp = http_request_with_retry(
+                    "HEAD",
+                    url,
+                    headers=headers,
+                    timeout=REQUEST_TIMEOUT,
+                    follow_redirects=True,
+                )
+            except httpx.HTTPError:
+                break
+            if resp.status_code != 200:
+                break
+            pages.append(url)
         return pages
 
 

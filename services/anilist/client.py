@@ -5,7 +5,6 @@ and all anime/manga operations via mixins.
 """
 
 import json
-import time
 
 import httpx
 
@@ -189,56 +188,30 @@ class AniListClient(AnimeOperationsMixin, MangaOperationsMixin):
             Query result data
 
         """
+        from scrapers.plugins.utils import http_request_with_retry
+
         headers = {}
         use_token = token if token else self.token
 
         if use_token:
             headers["Authorization"] = f"Bearer {use_token}"
 
-        max_retries = 3
-        base_wait = 1
+        response = http_request_with_retry(
+            "POST",
+            settings.anilist.api_url,
+            json={"query": query, "variables": variables or {}},
+            headers=headers,
+            timeout=settings.anilist.request_timeout_seconds,
+            follow_redirects=True,
+        )
 
-        for attempt in range(max_retries):
-            response = httpx.post(
-                settings.anilist.api_url,
-                json={"query": query, "variables": variables or {}},
-                headers=headers,
-                timeout=settings.anilist.request_timeout_seconds,
-                follow_redirects=True,
-            )
+        result = response.json()
 
-            # Handle rate limiting with exponential backoff
-            if response.status_code == 429:
-                if attempt < max_retries - 1:
-                    wait_time = base_wait * (2**attempt)
-                    time.sleep(wait_time)
-                    continue
-                msg = f"Query failed with status {response.status_code} (rate limited)"
-                raise Exception(msg)
+        if "errors" in result:
+            msg = f"GraphQL error: {result['errors']}"
+            raise Exception(msg)
 
-            if response.status_code != 200:
-                try:
-                    error_data = response.json()
-                    errors = error_data.get("errors", [])
-                    if errors:
-                        error_msg = errors[0].get("message", "Unknown error")
-                        msg = f"Query failed with status {response.status_code}: {error_msg}"
-                    else:
-                        msg = f"Query failed with status {response.status_code}"
-                except Exception:
-                    msg = f"Query failed with status {response.status_code}"
-                raise Exception(msg)
-
-            result = response.json()
-
-            if "errors" in result:
-                msg = f"GraphQL error: {result['errors']}"
-                raise Exception(msg)
-
-            return result.get("data")
-
-        # Should not reach here, but included for safety
-        raise Exception("Query failed after all retries")
+        return result.get("data")
 
     def get_viewer_info(self) -> AniListViewerInfo | None:
         """Get authenticated user info with statistics."""
