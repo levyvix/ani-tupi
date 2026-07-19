@@ -6,7 +6,12 @@ import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.core.blogger_resolver import resolve_blogger_token
-from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
+from scrapers.plugins.utils import (
+    DEFAULT_HEADERS,
+    http_get_with_retry,
+    load_plugin,
+    store_player_source,
+)
 from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
@@ -46,8 +51,9 @@ class AnimesOnlineCC:
         results = []
         try:
             url = f"{BASE_URL}/search/{urllib.parse.quote(query)}"
-            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-            r.raise_for_status()
+            r = http_get_with_retry(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             soup = BeautifulSoup(r.text, "html.parser")
             for article in soup.select("article"):
                 a = article.find("a", href=re.compile(r"/anime/"))
@@ -71,8 +77,9 @@ class AnimesOnlineCC:
         anime_slug = anime_slug_match.group(1) if anime_slug_match else ""
 
         try:
-            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-            r.raise_for_status()
+            r = http_get_with_retry(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             soup = BeautifulSoup(r.text, "html.parser")
 
             # The anime page mixes every season together; group by season so a
@@ -109,8 +116,9 @@ class AnimesOnlineCC:
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-            r.raise_for_status()
+            r = http_get_with_retry(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             soup = BeautifulSoup(r.text, "html.parser")
 
             iframes = soup.find_all("iframe", src=re.compile(r"blogger\.com/video\.g"))

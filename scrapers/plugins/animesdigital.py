@@ -22,6 +22,8 @@ from thefuzz import fuzz
 from scrapers.core.selenium_driver import SeleniumWebDriver
 from scrapers.plugins.utils import (
     extract_anivideo_hls,
+    http_get_with_retry,
+    http_request_with_retry,
     load_plugin,
     store_player_source,
 )
@@ -107,14 +109,14 @@ class AnimesDigital:
             "filters": json.dumps(filters),
         }
         try:
-            response = httpx.post(
+            response = http_request_with_retry(
+                "POST",
                 API_URL,
                 data=payload,
                 headers=API_HEADERS,
                 timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
-            response.raise_for_status()
             data = response.json()
             results = self._parse_html_results(data.get("results", []))
             metadata = {
@@ -158,13 +160,12 @@ class AnimesDigital:
 
     def _extract_series_url(self, episode_url: str) -> str | None:
         try:
-            resp = httpx.get(
+            resp = http_get_with_retry(
                 episode_url,
                 headers=BROWSER_HEADERS,
                 timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
-            resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
             link = soup.select_one("div.epsL a[href*='/anime/a/']")
             if link:
@@ -405,10 +406,9 @@ class AnimesDigital:
 
     def _scrape_series_page(self, anime: str, url: str) -> tuple[list[str], list[str]]:
         url = _ensure_odr_param(url)
-        response = httpx.get(
+        response = http_get_with_retry(
             url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
         )
-        response.raise_for_status()
         tree = BeautifulSoup(response.text, "html.parser")
 
         episode_titles: list[str] = []
@@ -436,13 +436,12 @@ class AnimesDigital:
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            response = httpx.get(
+            response = http_get_with_retry(
                 url,
                 headers={"User-Agent": USER_AGENT},
                 timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
-            response.raise_for_status()
             html_content = response.text
 
             if hls_url := extract_anivideo_hls(html_content):
@@ -487,13 +486,12 @@ class AnimesDigital:
             logger.debug(f"Could not extract iframe src: {e}")
 
     def _fetch_homepage_episodes(self) -> list[dict]:
-        response = httpx.get(
+        response = http_get_with_retry(
             "https://animesdigital.org/home",
             headers={"User-Agent": USER_AGENT},
             timeout=10,
             follow_redirects=True,
         )
-        response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
 
         all_episodes = []
