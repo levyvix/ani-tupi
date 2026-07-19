@@ -3,6 +3,7 @@
 **Best Practices for writing Python code:**
 
 ### Design Principles
+
 - Apply the DRY principle - Don't Repeat Yourself
 - Prefer composition over inheritance for more maintainable code
 - Write pure functions when possible (no side effects, same output for same input)
@@ -11,6 +12,7 @@
 - Use dataclasses for data containers
 
 ### Handling Complexity
+
 - Hide implementation details behind clean interfaces
 - Create abstractions that eliminate complexity for users
 - Encapsulate related data and behavior in cohesive classes
@@ -123,7 +125,9 @@ class Scraper(Protocol):
 ```
 
 Why protocol, not ABC?
+
 - Scrapers auto-discover with duck typing
+
 - No base class boilerplate
 - Plugin loading is one loop: find `.py` files in `scrapers/plugins/`, import them, extract classes matching the protocol
 
@@ -145,7 +149,8 @@ Why? Scrapers are loaded dynamically. The repository tracks which ones exist, wh
 The repository automatically deduplicates anime results from multiple sources using intelligent title normalization. This means:
 
 **Same anime, different title formats are merged:**
-```
+
+```plaintext
 AnimesDigital: "Anime A: Revolucao Dublado"
 AnimeOnlineCC: "Anime A - Revolucao Dublado"
 AnimeFireTV:   "Anime A | Revolucao Dublado"
@@ -154,13 +159,15 @@ Result: Single entry "anime a revolucao dublado [animesdigital, animesonlinecc, 
 ```
 
 **How it works:**
+
 - `normalize_title_for_dedup()` strips away separators (`:`, `-`, `|`, `/`), language markers (`Dublado`, `Legendado`), and season indicators
 - When `add_anime()` is called, new titles are matched against existing normalized titles
 - If normalized forms match, the source is appended to the existing entry
 - If no match, a new entry is created
 
 **Examples of merged titles:**
-```
+
+```plaintext
 "Jujutsu Kaisen Season 2 Dublado" + "Jujutsu Kaisen 2nd Season"
 → "jujutsu kaisen 2 [both sources]"
 
@@ -228,6 +235,7 @@ Why Pydantic? Validation on entry (fail fast if scraper returns garbage), type h
 ### Add a New Scraper
 
 1. Create `scrapers/plugins/newsource.py`:
+
 ```python
 class NewSourceScraper:
     def search(self, query: str) -> list[AnimeMetadata]:
@@ -239,15 +247,16 @@ class NewSourceScraper:
         pass
 ```
 
-2. Auto-discovered by `scrapers/loader.py` on boot. No registration needed.
+1. Auto-discovered by `scrapers/loader.py` on boot. No registration needed.
 
-3. Test: `uv run pytest tests/` includes plugin discovery checks.
+2. Test: `uv run pytest tests/` includes plugin discovery checks.
 
 ### Add a New Service
 
 Most feature work belongs here. Example: adding "trending anime" feature:
 
 1. Create `services/trending_service.py`:
+
 ```python
 class TrendingService:
     def __init__(self, scrapers: list[Scraper], cache: Cache, api_client: APIClient):
@@ -260,7 +269,8 @@ class TrendingService:
         pass
 ```
 
-2. In the command layer (`commands/anime.py`), instantiate and use:
+1. In the command layer (`commands/anime.py`), instantiate and use:
+
 ```python
 service = TrendingService(get_scrapers(), cache, api_client)
 trending = service.get_trending("pt-br")
@@ -271,6 +281,7 @@ Services own the business logic. Commands own the CLI flow.
 ### Add a New Command
 
 1. Create `commands/newcommand.py`:
+
 ```python
 def handle_new_command(args):
     service = SomeService()
@@ -278,10 +289,12 @@ def handle_new_command(args):
     render_menu(result)
 ```
 
-2. Wire it in `main.py` argument parser, route to the function.
+1. Wire it in `main.py` argument parser, route to the function.
+
 ---
 
 **Testing**:
+
 ```bash
 uv run pytest tests/test_anilist_authentication.py -v
 ```
@@ -290,8 +303,8 @@ uv run pytest tests/test_anilist_authentication.py -v
 
 ## Development Workflow
 
-
 **Quality**:
+
 ```bash
 uv run ruff check .                      # Lint
 uv run ruff format .                     # Format
@@ -302,9 +315,11 @@ uv run pytest -v --cov=. --cov-report=html  # Coverage (whole repo)
 **Service-layer coverage gate**:
 The business-logic layer (`services/`) must stay at or above **80%** statement
 coverage. This is enforced in CI and can be checked locally with:
+
 ```bash
 uv run pytest --cov=services --cov-report=term-missing   # per-module report + gate
 ```
+
 The `fail_under = 80` threshold lives in `[tool.coverage.report]` (`pyproject.toml`)
 and only triggers when coverage is collected (i.e. when `--cov` is passed). A plain
 `uv run pytest` or a single-file run never trips the gate. New service tests must
@@ -313,6 +328,7 @@ mock **only** external boundaries (AniList GraphQL, HTTP, external tools) and us
 `tests/fixtures/anilist.py`.
 
 **Manage**:
+
 ```bash
 uv add package-name                      # Add dependency
 uv remove package-name                   # Remove dependency
@@ -320,6 +336,7 @@ uv sync --upgrade                        # Update all
 ```
 
 **Branch naming**:
+
 - Do **not** use the `cursor/` prefix for feature branches — it interferes with version-bump commits from the release bot.
 - Prefer descriptive names with conventional prefixes, e.g. `feat/anilist-sync`, `fix/scraper-timeout`, `chore/consolidate-pyright-config`.
 
@@ -344,11 +361,13 @@ git push
 ```
 
 **Never use `git commit --no-verify`.**
+
 - Commits must pass local hooks before they are created
 - If a hook fails, fix the root cause and rerun the commit
 - If hooks conflict with unrelated local changes, isolate the relevant changes properly instead of bypassing verification
 
 **Release Workflow**:
+
 - Triggers automatically after CI passes on main branch
 - Calculates next version from commit history since last release
 - Creates git tag (e.g., `v0.2.0`) and GitHub Release
@@ -359,12 +378,14 @@ git push
 The release bot commits the version bump and CHANGELOG directly to remote, so the local branch will be behind. This is expected — just rebase and push.
 
 **Configuration**:
+
 - Release rules: `[tool.semantic_release]` in `pyproject.toml` (what triggers bumps)
 - Workflow: `.github/workflows/release.yml` (GitHub Actions)
 - Tool: `python-semantic-release` (not Node.js `semantic-release`)
 - Always use conventional commits to get the correct version bump
 
 **Troubleshooting Release Failures**:
+
 - **Release workflow didn't trigger**: Check that CI workflow name is exactly "CI" (matches `workflow_run` trigger)
 - **Version not bumped**: Ensure commits use correct conventional format (`feat:`, `fix:`, etc.)
 - **Push permission error**: Ensure `GITHUB_TOKEN` has `contents: write` permission in workflow
@@ -373,27 +394,29 @@ The release bot commits the version bump and CHANGELOG directly to remote, so th
 
 ---
 
-
 ## Testing Strategy
 
 **Principle: NO MOCKING BY DEFAULT. Use real implementations. Only mock external tools, APIs, and destructive operations.**
 
 ### The Rule
+
 - **Start with real code**: Every test should exercise actual functions and services
 - **Only mock externals**: HTTP calls, database connections, external APIs (AniList)
 - **Use temp directories instead of mocking**: Never mock file operations—use `temp_dir` fixture
 - **Never mock internal services**: If you're mocking a service layer or plugin, you're not testing integration
 
 ### Test Approach
+
 - **Integration tests** with real services, plugins, and storage (NEVER mock these)
 - **Mock external APIs only**: AniList GraphQL, external video providers, HTTP requests
 - **Mock destructive operations**: Never delete real files—use temporary directories with auto-cleanup
 - **Real plugin loading**: Load actual scrapers from `scrapers/plugins/` directory
 - **Real storage**: Use temporary directories for cache/downloads (auto-cleanup via pytest fixtures)
 
-
 ### Refactoring Pattern
+
 Old (excessive mocks):
+
 ```python
 # Mock both scraper AND repository = no real integration testing
 with patch.object(scraper, 'search') as mock_search:
@@ -402,6 +425,7 @@ with patch.object(scraper, 'search') as mock_search:
 ```
 
 New (real integration):
+
 ```python
 # Use real repository with real scrapers, mock only external API
 with patch.object(httpx.Client, "get") as mock_http:  # External API mock only
@@ -442,8 +466,8 @@ git add . && git commit -m "msg" && git push
 rtk git add . && rtk git commit -m "msg" && rtk git push
 ```
 
-
 ### Git (59-80% savings)
+
 ```bash
 rtk git status          # Compact status
 rtk git log             # Compact log (works with all git flags)
@@ -462,6 +486,7 @@ rtk git worktree        # Compact worktree
 Note: Git passthrough works for ALL subcommands, even those not explicitly listed.
 
 ### GitHub (26-87% savings)
+
 ```bash
 rtk gh pr view <num>    # Compact PR view (87%)
 rtk gh pr checks        # Compact PR checks (79%)
@@ -470,8 +495,8 @@ rtk gh issue list       # Compact issue list (80%)
 rtk gh api              # Compact API responses (26%)
 ```
 
-
 ### Files & Search (60-75% savings)
+
 ```bash
 rtk ls <path>           # Tree format, compact (65%)
 rtk read <file>         # Code reading with filtering (60%)
@@ -480,6 +505,7 @@ rtk find <pattern>      # Find grouped by directory (70%)
 ```
 
 ### Analysis & Debug (70-90% savings)
+
 ```bash
 rtk json <file>         # JSON structure without values
 rtk deps                # Dependency overview
@@ -487,8 +513,8 @@ rtk env                 # Environment variables compact
 rtk diff                # Ultra-compact diffs
 ```
 
-
 ### Network (65-70% savings)
+
 ```bash
 rtk curl <url>          # Compact HTTP responses (70%)
 rtk wget <url>          # Compact download output (65%)

@@ -5,6 +5,7 @@ from os.path import abspath, dirname, isfile, join
 
 def get_resource_path(relative_path: str) -> str:
     """Get the path to resources relative to this loader."""
+
     return join(dirname(abspath(__file__)), relative_path)
 
 

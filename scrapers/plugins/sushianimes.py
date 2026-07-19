@@ -54,7 +54,11 @@ def _extract_embed_ids(soup: BeautifulSoup) -> list[str]:
     seen: set[str] = set()
     ids: list[str] = []
 
-    for selector in (".btn-service.selected[data-embed]", "[data-embed]", ".play-btn[data-id]"):
+    for selector in (
+        ".btn-service.selected[data-embed]",
+        "[data-embed]",
+        ".play-btn[data-id]",
+    ):
         for el in soup.select(selector):
             raw = el.get("data-embed") or el.get("data-id")
             if raw:
@@ -93,12 +97,15 @@ def _normalize_url(href: str) -> str:
 
 def _extract_season_number(text: str) -> int:
     lowered = text.lower()
+
     match = _SEASON_RE.search(lowered)
     if match:
         return int(match.group(1))
+
     match = _SEASON_ALT_RE.search(lowered)
     if match:
         return int(match.group(1))
+
     match = _SEASON_NUM_RE.search(lowered)
     if match:
         return int(match.group(1))
