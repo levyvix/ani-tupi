@@ -5,7 +5,12 @@ import httpx
 from bs4 import BeautifulSoup
 
 from models.models import AnimeMetadata, ScrapedEpisodes
-from scrapers.plugins.utils import DEFAULT_HEADERS, load_plugin, store_player_source
+from scrapers.plugins.utils import (
+    DEFAULT_HEADERS,
+    http_get_with_retry,
+    load_plugin,
+    store_player_source,
+)
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -27,8 +32,9 @@ class AnimesOnlineCloud:
         results = []
         try:
             url = f"{BASE_URL}/?s={urllib.parse.quote(query)}"
-            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-            r.raise_for_status()
+            r = http_get_with_retry(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             soup = BeautifulSoup(r.text, "html.parser")
             for article in soup.select("article"):
                 a = article.select_one(".details .title a[href*='/anime/']")
@@ -45,8 +51,9 @@ class AnimesOnlineCloud:
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         _ = params
         try:
-            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-            r.raise_for_status()
+            r = http_get_with_retry(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
             soup = BeautifulSoup(r.text, "html.parser")
 
             seen = set()
@@ -71,8 +78,9 @@ class AnimesOnlineCloud:
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            r = httpx.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True)
-            r.raise_for_status()
+            r = http_get_with_retry(
+                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+            )
 
             found = False
             for typ, post, nume in _PLAYER_OPTION_RE.findall(r.text):
@@ -92,13 +100,12 @@ class AnimesOnlineCloud:
     def _dooplayer_embed(self, referer: str, post: str, typ: str, nume: str) -> dict | None:
         api = f"{BASE_URL}/wp-json/dooplayer/v2/{post}/{typ}/{nume}"
         try:
-            r = httpx.get(
+            r = http_get_with_retry(
                 api,
                 headers={**HEADERS, "Referer": referer},
                 timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
-            r.raise_for_status()
             return r.json()
         except (httpx.HTTPError, ValueError) as e:
             logger.debug(f"AnimesOnlineCloud dooplayer API failed ({post}/{typ}/{nume}): {e}")

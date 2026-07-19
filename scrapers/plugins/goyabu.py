@@ -82,10 +82,9 @@ class Goyabu:
 
     def search_player_src(self, url: str, container: list, event) -> None:
         try:
-            response = httpx.get(
+            response = http_get_with_retry(
                 url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
             )
-            response.raise_for_status()
 
             # Extract playersData JSON from script
             match = _PLAYERS_DATA_RE.search(response.text)
