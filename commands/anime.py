@@ -12,8 +12,12 @@ This is a thin coordinator that delegates all business logic to services.
 from pathlib import Path
 
 from commands._shared import build_nav_options, is_next, is_prev, is_replay
-from services import anime_service
-from services.history_service import save_history
+from services.anime import (
+    offer_sequel_and_continue,
+    search_anime_flow,
+    switch_anime_source,
+)
+from services.core.history_service import save_history
 from services.repository import rep
 from services.anime.playback_service import (
     prepare_playback_from_search,
@@ -209,7 +213,7 @@ def handle_post_playback_confirmation(
                 # Delete local file after successful sync (if configured)
                 if is_local and file_path:
                     from models.config import settings
-                    from services.local_anime_service import LocalAnimeService
+                    from services.anime.local_anime_service import LocalAnimeService
 
                     if settings.offline_sync.enable_file_cleanup:
                         try:
@@ -240,7 +244,7 @@ def handle_post_playback_confirmation(
             # No AniList ID found - still handle local file deletion if configured
             if is_local and file_path:
                 from models.config import settings
-                from services.local_anime_service import LocalAnimeService
+                from services.anime.local_anime_service import LocalAnimeService
 
                 if settings.offline_sync.delete_after_watch:
                     try:
@@ -300,7 +304,7 @@ def anime(args) -> None:
                     return
         else:
             # Search for anime (handles -e flag internally)
-            result = anime_service.search_anime_flow(args)
+            result = search_anime_flow(args)
             selected_anime, episode_idx, source = result
             if not selected_anime or episode_idx is None:
                 return
@@ -311,7 +315,7 @@ def anime(args) -> None:
                 return
     else:
         # This path is used when called from main menu
-        result = anime_service.search_anime_flow(args)
+        result = search_anime_flow(args)
         selected_anime, episode_idx, source = result
         if not selected_anime or episode_idx is None:
             return
@@ -485,7 +489,7 @@ def anime(args) -> None:
 
         # Check for sequels when last episode is watched and confirmed
         if confirmed and ctx.anilist_id and final_episode == ctx.num_episodes:
-            if anime_service.offer_sequel_and_continue(ctx.anilist_id, args):
+            if offer_sequel_and_continue(ctx.anilist_id, args):
                 return  # Sequel started, exit this flow
 
         # Post-playback action layer
@@ -524,7 +528,7 @@ def anime(args) -> None:
                 continue  # Stay in action layer
 
             if selected_opt == "🔄 Trocar fonte":
-                result = anime_service.switch_anime_source(ctx.anime_title, args, ctx.anilist_id)
+                result = switch_anime_source(ctx.anime_title, args, ctx.anilist_id)
                 new_anime, new_episode_idx = result
                 if new_anime and new_episode_idx is not None:
                     new_ctx = prepare_playback_from_search(new_anime, new_episode_idx, source)

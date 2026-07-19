@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 
 from models.config import settings
-from services.update_check_service import UpdateCheckService
+from services.core.update_check_service import UpdateCheckService
 from utils.logging import get_logger
 
 logger = get_logger(__name__)

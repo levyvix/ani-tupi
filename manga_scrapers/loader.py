@@ -77,10 +77,6 @@ class MangaScraperProtocol(Protocol):
         ...
 
 
-# For backwards compatibility with existing code
-MangaScraperInterface = MangaScraperProtocol
-
-
 def get_resource_path(relative_path):
     """Get the path to resources relative to this loader."""
     return join(dirname(abspath(__file__)), relative_path)

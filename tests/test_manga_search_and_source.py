@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 from models.config import MangaSettings
 from models.models import MangaMetadata, MangaStatus
-from services.manga_service import UnifiedMangaService
+from services.manga.manga_service import UnifiedMangaService
 from services.manga.reading_flow import find_chapter_by_number
 from services.manga.source_selection import (
     research_manga_in_new_source,
@@ -38,7 +38,7 @@ class _FakePlugin:
 
 def _make_service(plugins: dict, tmp_path, monkeypatch) -> UnifiedMangaService:
     """Build a UnifiedMangaService with injected fake plugins."""
-    monkeypatch.setattr("services.manga_service.load_manga_plugins", lambda: plugins)
+    monkeypatch.setattr("services.manga.manga_service.load_manga_plugins", lambda: plugins)
     # Redirect metadata persistence into tmp.
     svc = UnifiedMangaService(MangaSettings(output_directory=tmp_path))
     svc.metadata_file = tmp_path / "meta.json"

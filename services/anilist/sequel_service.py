@@ -3,7 +3,7 @@
 Detects and offers sequels when anime finishes.
 """
 
-from services import ui_bridge
+from services.core import ui_bridge
 from services.anilist import anilist_client
 from models.models import Status
 from utils.logging import get_logger

@@ -235,7 +235,7 @@ def retry_offline_syncs() -> dict[str, int]:
                 # Delete local file if sync successful and file cleanup enabled
                 if entry.is_local and settings.offline_sync.enable_file_cleanup:
                     try:
-                        from services.local_anime_service import LocalAnimeService
+                        from services.anime.local_anime_service import LocalAnimeService
 
                         service = LocalAnimeService()
                         deleted = service.delete_episode(entry.anime_title, entry.episode_number)

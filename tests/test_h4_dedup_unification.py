@@ -8,7 +8,7 @@ Covers the three unifications:
 
 from services.anilist.formatters import format_title
 from services.manga.reading_flow import _MANGA_URL_TEMPLATES, build_manga_url
-from services.search_repository import SearchRepository
+from services.repository.search_repository import SearchRepository
 from utils.title_utils import normalize_title_for_filter
 
 

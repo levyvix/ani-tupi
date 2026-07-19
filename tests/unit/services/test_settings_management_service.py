@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from services.settings_management_service import SettingsManagementService
+from services.core.settings_management_service import SettingsManagementService
 
 
 def test_parse_input_value_supports_common_types():
@@ -25,7 +25,7 @@ def test_validate_staged_raises_for_invalid_values(monkeypatch):
     """Validation should reject staged overrides that violate constraints."""
     svc = SettingsManagementService()
     monkeypatch.setattr(
-        "services.settings_management_service.load_user_settings_overrides", lambda: {}
+        "services.core.settings_management_service.load_user_settings_overrides", lambda: {}
     )
 
     with pytest.raises(ValidationError):
@@ -91,11 +91,11 @@ def test_save_staged_merges_existing_overrides(monkeypatch):
     saved: dict = {}
 
     monkeypatch.setattr(
-        "services.settings_management_service.load_user_settings_overrides",
+        "services.core.settings_management_service.load_user_settings_overrides",
         lambda: {"cache": {"search_cache_ttl_seconds": 3600}},
     )
     monkeypatch.setattr(
-        "services.settings_management_service.save_user_settings_overrides",
+        "services.core.settings_management_service.save_user_settings_overrides",
         lambda payload: saved.update(payload),
     )
 

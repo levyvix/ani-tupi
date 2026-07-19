@@ -2,7 +2,7 @@
 
 from thefuzz import fuzz
 
-from services.search_repository import SearchRepository
+from services.repository.search_repository import SearchRepository
 from utils.title_utils import normalize_title_for_filter
 
 

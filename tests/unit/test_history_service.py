@@ -30,7 +30,7 @@ def _make_menu_responder(choices: list[str], calls: list[tuple[list[str], str]])
 class TestHistoryService:
     def test_load_history_returns_none_when_user_goes_back(self, temp_dir, repository, monkeypatch):
         import ui.components
-        from services import history_service
+        from services.core import history_service
 
         history_store = JSONStore(temp_dir / "history.json")
         monkeypatch.setattr(history_service, "_history_store", history_store)
@@ -45,7 +45,7 @@ class TestHistoryService:
         assert history_service.load_history() is None
 
     def test_save_history_persists_all_source_urls(self, temp_dir, repository, monkeypatch):
-        from services import history_service
+        from services.core import history_service
 
         history_store = JSONStore(temp_dir / "history.json")
         monkeypatch.setattr(history_service, "_history_store", history_store)
@@ -67,7 +67,7 @@ class TestHistoryService:
     def test_load_history_uses_saved_urls_and_skips_anime_search(
         self, temp_dir, repository, monkeypatch
     ):
-        from services import history_service
+        from services.core import history_service
 
         history_store = JSONStore(temp_dir / "history.json")
         monkeypatch.setattr(history_service, "_history_store", history_store)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
-from services.settings_management_service import SettingsManagementService
+from services.core.settings_management_service import SettingsManagementService
 from ui.components import menu_navigate
 from utils.logging import get_logger
 

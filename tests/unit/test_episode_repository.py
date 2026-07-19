@@ -4,7 +4,7 @@ import time
 
 import pytest
 from models.models import ScrapedEpisodes
-from services.episode_repository import EpisodeRepository
+from services.repository.episode_repository import EpisodeRepository
 
 
 @pytest.fixture

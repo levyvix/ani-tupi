@@ -9,10 +9,10 @@ from typing import Any
 
 from services.anilist import anilist_client
 from services.repository import rep
-from services import ui_bridge
+from services.core import ui_bridge
 from services.anilist.scraper_cache import get_scraper_cache
 from scrapers import loader
-from services.history_service import save_history
+from services.core.history_service import save_history
 from utils.video_player import VideoPlayer
 from services.anime.source_management import switch_anime_source
 from utils.logging import get_logger

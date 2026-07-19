@@ -5,8 +5,11 @@ from dataclasses import dataclass, field
 import pytest
 
 from models.models import AnimeMetadata
-from services.anime.search import _filter_anime_results
-from services.anime_service import IncrementalSearchState, incremental_search_anime
+from services.anime.search import (
+    IncrementalSearchState,
+    _filter_anime_results,
+    incremental_search_anime,
+)
 
 
 @dataclass
@@ -525,7 +528,7 @@ def test_filter_anime_results_punctuation_normalized():
 
 def test_search_result_set_filtered_flag():
     """Test that SearchResultSet has is_filtered field with default False."""
-    from services.anime_service import SearchResultSet
+    from services.anime.search import SearchResultSet
 
     # Create with default (should be False)
     result_set = SearchResultSet(

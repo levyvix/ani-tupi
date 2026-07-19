@@ -13,7 +13,7 @@ Covers the paths not exercised by tests/test_history_service.py:
 - save_history_from_event: with AniList sync
 
 Strategy (matches project CLAUDE.md):
-- Monkeypatch services.history_service._history_store to a real JSONStore in tmp
+- Monkeypatch services.core.history_service._history_store to a real JSONStore in tmp
 - Patch ui_bridge callables (menu_navigate, loading, prompt, menu_navigate_episodes)
 - Mock only external AniList HTTP boundary
 - Real Repository and real JSONStore
@@ -41,14 +41,14 @@ def history_store(tmp_path):
 @pytest.fixture(autouse=True)
 def patch_history_store(history_store):
     """Redirect module-level _history_store to temp store for every test."""
-    with patch("services.history_service._history_store", history_store):
+    with patch("services.core.history_service._history_store", history_store):
         yield history_store
 
 
 @pytest.fixture()
 def history_repository(repository, monkeypatch):
     """Bind history_service.rep to the real isolated Repository fixture."""
-    import services.history_service as hs
+    import services.core.history_service as hs
 
     monkeypatch.setattr(hs, "rep", repository)
     return repository
@@ -89,14 +89,14 @@ class TestLoadPersistedHistory:
     """Tests for the internal _load_persisted_history helper."""
 
     def test_returns_none_when_menu_cancelled(self, history_store):
-        from services.history_service import _load_persisted_history, save_history
+        from services.core.history_service import _load_persisted_history, save_history
 
         save_history("Naruto", 0)
         result = _load_persisted_history(menu=lambda items, msg="": None)
         assert result is None
 
     def test_returns_entry_on_selection(self, history_store):
-        from services.history_service import _load_persisted_history, save_history
+        from services.core.history_service import _load_persisted_history, save_history
 
         save_history("Bleach", 5, total_episodes=10)
 
@@ -114,7 +114,7 @@ class TestLoadPersistedHistory:
 
     def test_ep_info_with_total_episodes(self, history_store):
         """Format includes X/total when total_episodes is set."""
-        from services.history_service import _load_persisted_history, save_history
+        from services.core.history_service import _load_persisted_history, save_history
 
         save_history("One Piece", 3, total_episodes=20)
 
@@ -130,7 +130,7 @@ class TestLoadPersistedHistory:
 
     def test_ep_info_without_total_episodes(self, history_store):
         """Format uses 'Ep N' when total_episodes is None."""
-        from services.history_service import _load_persisted_history, save_history
+        from services.core.history_service import _load_persisted_history, save_history
 
         save_history("HxH", 10)
 
@@ -153,7 +153,7 @@ class TestResolveAnilistProgress:
     """Tests for _resolve_anilist_progress."""
 
     def test_returns_minus_one_when_no_anilist_id(self):
-        from services.history_service import _resolve_anilist_progress
+        from services.core.history_service import _resolve_anilist_progress
 
         aid, title, ep_idx = _resolve_anilist_progress(
             None, "scraper", "My Anime", progress=make_loading()
@@ -163,7 +163,7 @@ class TestResolveAnilistProgress:
         assert ep_idx == -1
 
     def test_fetches_progress_when_anilist_id_provided(self, monkeypatch):
-        from services.history_service import _resolve_anilist_progress
+        from services.core.history_service import _resolve_anilist_progress
 
         fake_info = MagicMock()
         fake_info.title.romaji = "Test Anime"
@@ -187,7 +187,7 @@ class TestResolveAnilistProgress:
         assert ep_idx == 4  # progress - 1
 
     def test_no_progress_returns_minus_one(self, monkeypatch):
-        from services.history_service import _resolve_anilist_progress
+        from services.core.history_service import _resolve_anilist_progress
 
         fake_client = MagicMock()
         fake_client.get_anime_by_id.return_value = None
@@ -213,7 +213,7 @@ class TestValidateAnimeSources:
     """Tests for _validate_anime_sources."""
 
     def test_no_valid_sources_returns_none_empty(self, history_repository):
-        from services.history_service import _validate_anime_sources
+        from services.core.history_service import _validate_anime_sources
 
         # SearchResults with no sources that return episodes
         search_results = MagicMock()
@@ -228,10 +228,10 @@ class TestValidateAnimeSources:
         assert eps == []
 
     def test_single_valid_source_returns_without_menu(self, history_repository):
-        from services.history_service import _validate_anime_sources
+        from services.core.history_service import _validate_anime_sources
 
         # Mock rep.search_episodes and rep.get_episode_list
-        import services.history_service as hs
+        import services.core.history_service as hs
 
         episode_mock = [MagicMock(number=1), MagicMock(number=2)]
         hs.rep.get_episode_list = MagicMock(return_value=episode_mock)
@@ -257,8 +257,8 @@ class TestValidateAnimeSources:
         assert eps is episode_mock
 
     def test_multiple_sources_shows_menu(self, history_repository):
-        from services.history_service import _validate_anime_sources, _RETRY
-        import services.history_service as hs
+        from services.core.history_service import _validate_anime_sources, _RETRY
+        import services.core.history_service as hs
 
         episode_mock = [MagicMock(number=1)]
         hs.rep.get_episode_list = MagicMock(return_value=episode_mock)
@@ -292,7 +292,7 @@ class TestPickEpisode:
         return [MagicMock(number=i + 1) for i in range(n)]
 
     def test_pick_next_episode(self):
-        from services.history_service import _pick_episode
+        from services.core.history_service import _pick_episode
 
         episodes = self._episodes(5)
 
@@ -312,7 +312,7 @@ class TestPickEpisode:
         assert result == 2  # next episode index
 
     def test_pick_current_episode(self):
-        from services.history_service import _pick_episode
+        from services.core.history_service import _pick_episode
 
         episodes = self._episodes(5)
 
@@ -332,7 +332,7 @@ class TestPickEpisode:
         assert result == 2
 
     def test_pick_previous_episode(self):
-        from services.history_service import _pick_episode
+        from services.core.history_service import _pick_episode
 
         episodes = self._episodes(5)
 
@@ -352,7 +352,7 @@ class TestPickEpisode:
         assert result == 1
 
     def test_pick_choose_another_episode(self):
-        from services.history_service import _pick_episode
+        from services.core.history_service import _pick_episode
 
         episodes = self._episodes(5)
 
@@ -371,7 +371,7 @@ class TestPickEpisode:
         assert result == 3
 
     def test_reset_history_confirmed(self, history_store):
-        from services.history_service import _pick_episode, save_history
+        from services.core.history_service import _pick_episode, save_history
 
         save_history("FMA", 5)
         episodes = self._episodes(10)
@@ -395,7 +395,7 @@ class TestPickEpisode:
         assert result == 0
 
     def test_reset_history_cancelled(self, history_store):
-        from services.history_service import _pick_episode, save_history
+        from services.core.history_service import _pick_episode, save_history
 
         save_history("FMA", 5)
         episodes = self._episodes(10)
@@ -419,7 +419,7 @@ class TestPickEpisode:
         assert result is None
 
     def test_cancelled_menu_returns_none(self):
-        from services.history_service import _pick_episode
+        from services.core.history_service import _pick_episode
 
         episodes = self._episodes(5)
         result = _pick_episode(
@@ -435,7 +435,7 @@ class TestPickEpisode:
 
     def test_awaiting_episode_prompts_and_returns_none(self):
         """Selecting 'next' when at last episode prompts user and returns None."""
-        from services.history_service import _pick_episode
+        from services.core.history_service import _pick_episode
 
         episodes = self._episodes(3)
 
@@ -467,8 +467,8 @@ class TestLoadHistoryHappyPath:
 
     def test_happy_path_local_episodes(self, history_store, history_repository, monkeypatch):
         """load_history returns (anime, ep_idx, anilist_id, anilist_title) on success."""
-        from services.history_service import load_history, save_history
-        import services.history_service as hs
+        from services.core.history_service import load_history, save_history
+        import services.core.history_service as hs
 
         save_history("Cowboy Bebop", 2, source="testscr", total_episodes=26)
 
@@ -525,8 +525,8 @@ class TestLoadHistoryNotFound:
 
     def test_remove_from_history(self, history_store, history_repository, monkeypatch):
         """Choosing 'remove from history' deletes the entry."""
-        from services.history_service import load_history, save_history
-        import services.history_service as hs
+        from services.core.history_service import load_history, save_history
+        import services.core.history_service as hs
 
         save_history("Ghost In The Shell", 3, source="scraper")
 
@@ -564,8 +564,8 @@ class TestLoadHistoryNotFound:
 
     def test_back_to_menu_continues_loop(self, history_store, history_repository, monkeypatch):
         """Choosing 'back' in not-found flow continues the loop, eventually returns None."""
-        from services.history_service import load_history, save_history
-        import services.history_service as hs
+        from services.core.history_service import load_history, save_history
+        import services.core.history_service as hs
 
         save_history("Trigun", 1, source="scraper")
 
@@ -608,8 +608,8 @@ class TestLoadHistoryManualSearch:
         self, history_store, history_repository, monkeypatch
     ):
         """Empty manual query continues the loop without crashing."""
-        from services.history_service import load_history, save_history
-        import services.history_service as hs
+        from services.core.history_service import load_history, save_history
+        import services.core.history_service as hs
 
         save_history("Unknown Anime", 0, source="scraper")
 
@@ -653,7 +653,7 @@ class TestSaveHistoryAutoTotal:
     """save_history derives total_episodes from repository when not given."""
 
     def test_derives_total_from_repo(self, history_store, history_repository):
-        from services.history_service import save_history
+        from services.core.history_service import save_history
 
         history_repository.add_episode_list(
             "Shingeki",
@@ -678,7 +678,7 @@ class TestSaveHistoryFromEventAniList:
 
     def test_authenticated_adds_to_list(self, history_store, history_repository, monkeypatch):
         import services.anilist as anilist_service
-        from services.history_service import save_history_from_event
+        from services.core.history_service import save_history_from_event
 
         fake_client = MagicMock()
         fake_client.is_authenticated.return_value = True
@@ -701,7 +701,7 @@ class TestSaveHistoryFromEventAniList:
 
     def test_planning_status_moves_to_current(self, history_store, history_repository, monkeypatch):
         import services.anilist as anilist_service
-        from services.history_service import save_history_from_event
+        from services.core.history_service import save_history_from_event
 
         fake_entry = MagicMock()
         fake_entry.status = "PLANNING"
@@ -723,7 +723,7 @@ class TestSaveHistoryFromEventAniList:
         self, history_store, history_repository, monkeypatch
     ):
         import services.anilist as anilist_service
-        from services.history_service import save_history_from_event
+        from services.core.history_service import save_history_from_event
         from models.models import Status
 
         fake_entry = MagicMock()
@@ -747,7 +747,7 @@ class TestSaveHistoryFromEventAniList:
     ):
         """If change_status returns False, progress update is skipped."""
         import services.anilist as anilist_service
-        from services.history_service import save_history_from_event
+        from services.core.history_service import save_history_from_event
 
         fake_entry = MagicMock()
         fake_entry.status = "COMPLETED"
@@ -768,7 +768,7 @@ class TestSaveHistoryFromEventAniList:
     ):
         """action='started' does not trigger AniList sync."""
         import services.anilist as anilist_service
-        from services.history_service import save_history_from_event
+        from services.core.history_service import save_history_from_event
 
         fake_client = MagicMock()
         fake_client.is_authenticated.return_value = True
@@ -795,14 +795,14 @@ class TestFindEpisodes:
 
     @pytest.fixture()
     def fake_rep(self, monkeypatch):
-        import services.history_service as hs
+        import services.core.history_service as hs
 
         rep = MagicMock()
         monkeypatch.setattr(hs, "rep", rep)
         return rep
 
     def test_saved_urls_dict_loads_episodes(self, fake_rep):
-        from services.history_service import _find_episodes
+        from services.core.history_service import _find_episodes
 
         eps = [MagicMock(number=1), MagicMock(number=2)]
         fake_rep.get_episode_list.return_value = eps
@@ -823,7 +823,7 @@ class TestFindEpisodes:
 
     def test_saved_urls_string_loads_episodes(self, fake_rep):
         """Non-dict saved_urls hits the else branch (line 128)."""
-        from services.history_service import _find_episodes
+        from services.core.history_service import _find_episodes
 
         eps = [MagicMock(number=1)]
         fake_rep.get_episode_list.return_value = eps
@@ -842,7 +842,7 @@ class TestFindEpisodes:
 
     def test_anilist_cache_loads_episodes(self, fake_rep, monkeypatch):
         """anilist_id with cached urls hits lines 135-145."""
-        import services.history_service as hs
+        import services.core.history_service as hs
 
         eps = [MagicMock(number=1), MagicMock(number=2), MagicMock(number=3)]
         fake_rep.get_episode_list.return_value = eps
@@ -864,7 +864,7 @@ class TestFindEpisodes:
 
     def test_local_source_returns_empty(self, fake_rep, monkeypatch):
         """saved_source == 'local' returns anilist_title and empty list (147-148)."""
-        import services.history_service as hs
+        import services.core.history_service as hs
 
         monkeypatch.setattr(hs, "load_anilist_urls", lambda aid: {})
 
@@ -884,7 +884,7 @@ class TestFindEpisodes:
 
     def test_search_no_results(self, fake_rep):
         """Scraper search returning nothing hits lines 155-157."""
-        from services.history_service import _find_episodes
+        from services.core.history_service import _find_episodes
 
         search_results = MagicMock()
         search_results.get_anime_titles.return_value = []
@@ -905,7 +905,7 @@ class TestFindEpisodes:
 
     def test_search_single_result_with_source(self, fake_rep):
         """Single search result with saved_source hits lines 159-167."""
-        from services.history_service import _find_episodes
+        from services.core.history_service import _find_episodes
 
         eps = [MagicMock(number=1), MagicMock(number=2)]
         search_results = MagicMock()
@@ -929,7 +929,7 @@ class TestFindEpisodes:
 
     def test_search_single_result_without_source(self, fake_rep):
         """Single search result without saved_source hits the else at 164-166."""
-        from services.history_service import _find_episodes
+        from services.core.history_service import _find_episodes
 
         eps = [MagicMock(number=1)]
         search_results = MagicMock()
@@ -952,7 +952,7 @@ class TestFindEpisodes:
 
     def test_search_multiple_results_retry(self, fake_rep):
         """Multiple results where _validate returns _RETRY hits 169-171."""
-        from services.history_service import _find_episodes
+        from services.core.history_service import _find_episodes
 
         search_results = MagicMock()
         search_results.get_anime_titles.return_value = ["A", "B"]
@@ -987,8 +987,8 @@ class TestLoadHistoryManualSearchSuccess:
     """Full manual-search-and-replace path through load_history."""
 
     def test_manual_search_replaces_history(self, history_store, monkeypatch):
-        from services.history_service import load_history, save_history
-        import services.history_service as hs
+        from services.core.history_service import load_history, save_history
+        import services.core.history_service as hs
 
         save_history("Old Name", 4, source="animefire", total_episodes=12)
 
@@ -1050,8 +1050,8 @@ class TestLoadHistoryManualSearchSuccess:
 
     def test_manual_search_no_results_continues(self, history_store, monkeypatch):
         """Manual query returning no results logs and continues (312-315)."""
-        from services.history_service import load_history, save_history
-        import services.history_service as hs
+        from services.core.history_service import load_history, save_history
+        import services.core.history_service as hs
 
         save_history("Vanished", 0, source="animefire")
 
@@ -1092,8 +1092,8 @@ class TestLoadHistoryManualSearchSuccess:
 
     def test_manual_search_selected_no_episodes_continues(self, history_store, monkeypatch):
         """Selected title without episodes logs and continues (333-336)."""
-        from services.history_service import load_history, save_history
-        import services.history_service as hs
+        from services.core.history_service import load_history, save_history
+        import services.core.history_service as hs
 
         save_history("Empty Source", 0, source="animefire")
 

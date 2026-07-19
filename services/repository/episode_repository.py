@@ -6,7 +6,7 @@ from threading import Lock, Thread
 
 from models.config import settings
 from models.models import EpisodeData
-from services.priority_utils import sort_by_priority
+from services.repository.priority_utils import sort_by_priority
 from utils.logging import get_logger
 
 logger = get_logger(__name__)

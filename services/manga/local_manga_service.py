@@ -249,7 +249,7 @@ class LocalMangaService:
             logger.debug(f"Syncing to AniList: {manga_title} - Cap. {local_chapter}")
 
             # Import here to avoid circular imports
-            from services.manga_service import MangaHistory
+            from services.manga.manga_service import MangaHistory
 
             # Try to find AniList ID from history
             history = MangaHistory.load()

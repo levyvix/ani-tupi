@@ -16,7 +16,7 @@ from models.models import (
     AnimeDownloadHistory,
     DownloadedEpisode,
 )
-from services.local_anime_service import LocalAnimeService
+from services.anime.local_anime_service import LocalAnimeService
 
 
 # ---------------------------------------------------------------------------

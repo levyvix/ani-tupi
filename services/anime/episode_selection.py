@@ -3,8 +3,8 @@
 Handles determining which episode the user should start watching.
 """
 
-from services import ui_bridge
-from services.history_service import reset_history
+from services.core import ui_bridge
+from services.core.history_service import reset_history
 from utils.logging import get_logger
 
 logger = get_logger(__name__)

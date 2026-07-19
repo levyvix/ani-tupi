@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-from services.local_manga_service import LocalMangaService
+from services.manga.local_manga_service import LocalMangaService
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +234,7 @@ class TestAutoCreatePdfIfNeeded:
             dest.write_bytes(b"%PDF fake")
 
         with patch(
-            "services.local_manga_service.create_pdf_from_images", side_effect=fake_create_pdf
+            "services.manga.local_manga_service.create_pdf_from_images", side_effect=fake_create_pdf
         ):
             result = svc.auto_create_pdf_if_needed("Manga", "01")
 
@@ -246,7 +246,7 @@ class TestAutoCreatePdfIfNeeded:
         svc = LocalMangaService(tmp_path)
 
         with patch(
-            "services.local_manga_service.create_pdf_from_images", side_effect=OSError("fail")
+            "services.manga.local_manga_service.create_pdf_from_images", side_effect=OSError("fail")
         ):
             result = svc.auto_create_pdf_if_needed("Manga", "01")
 
@@ -259,10 +259,10 @@ class TestAutoCreatePdfIfNeeded:
             dest.write_bytes(b"%PDF fake")
 
         monkeypatch.setattr(
-            "services.local_manga_service.settings.manga.delete_images_after_pdf", True
+            "services.manga.local_manga_service.settings.manga.delete_images_after_pdf", True
         )
         with patch(
-            "services.local_manga_service.create_pdf_from_images", side_effect=fake_create_pdf
+            "services.manga.local_manga_service.create_pdf_from_images", side_effect=fake_create_pdf
         ):
             svc = LocalMangaService(tmp_path)
             result = svc.auto_create_pdf_if_needed("Manga", "01")
@@ -280,10 +280,10 @@ class TestAutoCreatePdfIfNeeded:
             dest.write_bytes(b"%PDF fake")
 
         monkeypatch.setattr(
-            "services.local_manga_service.settings.manga.delete_images_after_pdf", False
+            "services.manga.local_manga_service.settings.manga.delete_images_after_pdf", False
         )
         with patch(
-            "services.local_manga_service.create_pdf_from_images", side_effect=fake_create_pdf
+            "services.manga.local_manga_service.create_pdf_from_images", side_effect=fake_create_pdf
         ):
             svc = LocalMangaService(tmp_path)
             svc.auto_create_pdf_if_needed("Manga", "01")
@@ -312,7 +312,7 @@ class TestSyncToAnilistIfAhead:
         svc = LocalMangaService(tmp_path)
         anilist = MagicMock()
 
-        with patch("services.manga_service.MangaHistory") as mock_history:
+        with patch("services.manga.manga_service.MangaHistory") as mock_history:
             mock_history.load.return_value = {}
             with patch("services.anilist.discovery.get_anilist_id_from_title", return_value=None):
                 result = svc.sync_to_anilist_if_ahead("Manga", "5", anilist)
@@ -328,7 +328,7 @@ class TestSyncToAnilistIfAhead:
         anilist.get_manga_list_entry.return_value = anilist_entry
         anilist.update_manga_progress.return_value = None
 
-        with patch("services.manga_service.MangaHistory") as mock_history:
+        with patch("services.manga.manga_service.MangaHistory") as mock_history:
             mock_history.load.return_value = {"Manga": MagicMock(anilist_id=123, last_chapter="5")}
             result = svc.sync_to_anilist_if_ahead("Manga", "5", anilist)
 
@@ -343,7 +343,7 @@ class TestSyncToAnilistIfAhead:
         anilist_entry.progress = 10  # AniList is ahead
         anilist.get_manga_list_entry.return_value = anilist_entry
 
-        with patch("services.manga_service.MangaHistory") as mock_history:
+        with patch("services.manga.manga_service.MangaHistory") as mock_history:
             mock_history.load.return_value = {"Manga": MagicMock(anilist_id=123, last_chapter="5")}
             result = svc.sync_to_anilist_if_ahead("Manga", "5", anilist)
 
@@ -358,7 +358,7 @@ class TestSyncToAnilistIfAhead:
         anilist_entry.progress = None
         anilist.get_manga_list_entry.return_value = anilist_entry
 
-        with patch("services.manga_service.MangaHistory") as mock_history:
+        with patch("services.manga.manga_service.MangaHistory") as mock_history:
             mock_history.load.return_value = {"Manga": MagicMock(anilist_id=123, last_chapter="5")}
             result = svc.sync_to_anilist_if_ahead("Manga", "5", anilist)
 
@@ -369,7 +369,7 @@ class TestSyncToAnilistIfAhead:
         anilist = MagicMock()
         anilist.get_manga_list_entry.side_effect = ValueError("network error")
 
-        with patch("services.manga_service.MangaHistory") as mock_history:
+        with patch("services.manga.manga_service.MangaHistory") as mock_history:
             mock_history.load.return_value = {"Manga": MagicMock(anilist_id=123, last_chapter="5")}
             result = svc.sync_to_anilist_if_ahead("Manga", "5", anilist)
 
@@ -384,7 +384,7 @@ class TestSyncToAnilistIfAhead:
         anilist_entry.progress = 3
         anilist.get_manga_list_entry.return_value = anilist_entry
 
-        with patch("services.manga_service.MangaHistory") as mock_history:
+        with patch("services.manga.manga_service.MangaHistory") as mock_history:
             mock_history.load.return_value = {"Manga": MagicMock(anilist_id=99, last_chapter="6.5")}
             result = svc.sync_to_anilist_if_ahead("Manga", "6.5", anilist)
 
@@ -398,7 +398,7 @@ class TestSyncToAnilistIfAhead:
         anilist_entry.progress = 1
         anilist.get_manga_list_entry.return_value = anilist_entry
 
-        with patch("services.manga_service.MangaHistory") as mock_history:
+        with patch("services.manga.manga_service.MangaHistory") as mock_history:
             mock_history.load.return_value = {}
             with patch("services.anilist.discovery.get_anilist_id_from_title", return_value=42):
                 result = svc.sync_to_anilist_if_ahead("Manga", "5", anilist)

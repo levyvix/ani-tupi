@@ -7,7 +7,7 @@ while maintaining episode progress and AniList synchronization.
 import json
 
 from models.config import get_data_path
-from services import ui_bridge
+from services.core import ui_bridge
 from services.repository import rep
 from services.anime.title_normalization import (
     normalize_anime_title,

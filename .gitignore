@@ -77,6 +77,8 @@ node_modules/
 target/
 vendor/
 coverage/
+.coverage
+htmlcov/
 .cache/
 tmp/
 /.pi

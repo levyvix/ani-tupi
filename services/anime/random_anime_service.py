@@ -23,8 +23,8 @@ from services.anime.playback_service import (
 )
 from utils.logging import get_logger
 from utils.video_player import VideoPlayer
-from services import ui_bridge
-from services.history_service import save_history
+from services.core import ui_bridge
+from services.core.history_service import save_history
 
 logger = get_logger(__name__)
 

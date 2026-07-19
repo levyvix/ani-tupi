@@ -3,7 +3,7 @@
 import time
 
 from models.config import get_data_path
-from services import ui_bridge
+from services.core import ui_bridge
 from services.repository import rep
 from utils.persistence import JSONStore
 from utils.title_utils import clean_title_for_display

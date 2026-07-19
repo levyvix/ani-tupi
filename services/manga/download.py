@@ -11,7 +11,7 @@ from os import cpu_count
 from pathlib import Path
 from InquirerPy import inquirer
 
-from services.manga_service import DownloadedChaptersTracker
+from services.manga.manga_service import DownloadedChaptersTracker
 from utils.pdf_converter import create_pdf_from_images
 from utils.logging import get_logger
 from utils.range_parser import parse_range_input
