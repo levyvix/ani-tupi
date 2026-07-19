@@ -4,7 +4,6 @@ import time
 import httpx
 from bs4 import BeautifulSoup
 
-from scrapers.core.blogger_resolver import resolve_blogger_streams
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -261,6 +260,8 @@ def extract_blogger_from_bg_mp4(
     timeout: float = 30,
 ) -> list[str]:
     """Follow bg.mp4 redirector iframes and resolve Blogger streams (HD first)."""
+    from scrapers.core.blogger_resolver import resolve_blogger_streams
+
     request_headers = headers or DEFAULT_HEADERS
     iframe_urls = _BG_MP4_IFRAME_RE.findall(html)
     if not iframe_urls:
