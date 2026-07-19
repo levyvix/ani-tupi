@@ -1,0 +1,1 @@
+"""AniList UI subpackage."""
