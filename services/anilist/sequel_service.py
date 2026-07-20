@@ -58,15 +58,25 @@ def offer_sequel_and_continue(
     if not anilist_client.is_authenticated():
         return False
 
-    # If we know the AniList episode count, check if series is actually complete
-    # This prevents offering sequels when the current source has fewer episodes
+    # `anilist_episodes` here is the count of episodes that have ACTUALLY aired
+    # (see _available_episode_count). If the current source stopped before the
+    # last aired episode, the gap already exists somewhere — hint at other
+    # sources. We never claim certainty (the episode "should" be there) and we
+    # stay silent when the aired count is unknown ("na dúvida, nem mostra nada").
     if anilist_episodes and current_episode:
         if current_episode < anilist_episodes:
-            # User has more episodes to watch - don't offer sequel
-            remaining = anilist_episodes - current_episode
-            logger.info(
-                f"\n💡 Existem mais {remaining} episódio(s) disponível(is) em outras fontes."
-            )
+            next_ep = current_episode + 1
+            if anilist_episodes - current_episode == 1:
+                logger.info(
+                    f"\n💡 Sua fonte vai até o episódio {current_episode}, mas o episódio "
+                    f"{next_ep} já foi lançado — deve estar disponível em outra fonte."
+                )
+            else:
+                logger.info(
+                    f"\n💡 Sua fonte vai até o episódio {current_episode}, mas os episódios "
+                    f"{next_ep} a {anilist_episodes} já foram lançados — devem estar "
+                    f"disponíveis em outras fontes."
+                )
             return False
 
     # Get sequels from AniList

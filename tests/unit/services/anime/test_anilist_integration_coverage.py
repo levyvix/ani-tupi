@@ -991,10 +991,10 @@ class TestMaybeOfferSequelOnFinish:
         result = mod._maybe_offer_sequel_on_finish(0, _make_args(), 5)
         assert result is False
 
-    def test_with_anime_info_passes_episodes(self, monkeypatch):
+    def test_with_finished_anime_passes_total_episodes(self, monkeypatch):
         mod = _mod()
         client = MagicMock()
-        anime = SimpleNamespace(episodes=12)
+        anime = SimpleNamespace(episodes=12, status="FINISHED", nextAiringEpisode=None)
         client.get_anime_by_id.return_value = anime
         monkeypatch.setattr(mod, "anilist_client", client)
         calls = []
@@ -1004,6 +1004,42 @@ class TestMaybeOfferSequelOnFinish:
         result = mod._maybe_offer_sequel_on_finish(1, _make_args(), 12)
         assert result is True
         assert calls[0]["anilist_episodes"] == 12
+
+    def test_unknown_status_without_airing_data_passes_none(self, monkeypatch):
+        # "Na dúvida, nem mostra nada": no nextAiringEpisode and status not
+        # FINISHED => we cannot know how many episodes aired => pass None.
+        mod = _mod()
+        client = MagicMock()
+        anime = SimpleNamespace(episodes=12, status=None, nextAiringEpisode=None)
+        client.get_anime_by_id.return_value = anime
+        monkeypatch.setattr(mod, "anilist_client", client)
+        calls = []
+        monkeypatch.setattr(
+            mod, "offer_sequel_and_continue", lambda *a, **kw: calls.append(kw) or True
+        )
+        mod._maybe_offer_sequel_on_finish(1, _make_args(), 12)
+        assert calls[0]["anilist_episodes"] is None
+
+    def test_releasing_anime_passes_aired_count_not_planned_total(self, monkeypatch):
+        # Regression: for a currently-airing anime, `episodes` is the PLANNED
+        # total (e.g. 14) but only aired episodes exist in any source.
+        # nextAiringEpisode.episode == 5 => 4 aired. Passing 14 would falsely
+        # claim 10 more episodes are available in other sources.
+        mod = _mod()
+        client = MagicMock()
+        anime = SimpleNamespace(
+            episodes=14,
+            status="RELEASING",
+            nextAiringEpisode={"episode": 5},
+        )
+        client.get_anime_by_id.return_value = anime
+        monkeypatch.setattr(mod, "anilist_client", client)
+        calls = []
+        monkeypatch.setattr(
+            mod, "offer_sequel_and_continue", lambda *a, **kw: calls.append(kw) or True
+        )
+        mod._maybe_offer_sequel_on_finish(1, _make_args(), 4)
+        assert calls[0]["anilist_episodes"] == 4
 
 
 # ---------------------------------------------------------------------------
