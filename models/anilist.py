@@ -104,6 +104,10 @@ class AniListAnime(BaseModel):
     startDate: dict[str, int | None] | None = Field(
         None, description="Start date with year, month, day"
     )
+    nextAiringEpisode: dict[str, int | None] | None = Field(
+        None,
+        description="Next airing episode info (episode, airingAt); null if not currently airing",
+    )
 
 
 class JikanAnimeEntry(BaseModel):

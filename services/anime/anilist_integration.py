@@ -490,6 +490,27 @@ def _download_episodes(
         logger.warning(f"❌ Erro ao baixar: {e!r}", exc_info=True)
 
 
+def _available_episode_count(anime_info) -> int | None:
+    """Episodes that have actually aired, or None when it can't be determined.
+
+    The "more episodes in other sources" hint only makes sense when we know how
+    many episodes actually exist somewhere. For a currently-airing anime AniList
+    exposes the next *unaired* episode via ``nextAiringEpisode.episode`` (aired ==
+    episode - 1); the ``episodes`` field is the PLANNED total and counts unaired
+    episodes too. For a FINISHED anime every planned episode has aired. When
+    neither is known we return None so the caller stays silent — "na dúvida, nem
+    mostra nada".
+    """
+    total = anime_info.episodes
+    next_airing = getattr(anime_info, "nextAiringEpisode", None)
+    if isinstance(next_airing, dict) and next_airing.get("episode"):
+        aired = next_airing["episode"] - 1
+        return min(aired, total) if total else aired
+    if getattr(anime_info, "status", None) == "FINISHED":
+        return total
+    return None
+
+
 def _maybe_offer_sequel_on_finish(
     anilist_id: int,
     args,
@@ -500,7 +521,7 @@ def _maybe_offer_sequel_on_finish(
     if anilist_id:
         anime_info = anilist_client.get_anime_by_id(anilist_id)
         if anime_info:
-            anilist_episodes = anime_info.episodes
+            anilist_episodes = _available_episode_count(anime_info)
 
     return offer_sequel_and_continue(
         anilist_id,

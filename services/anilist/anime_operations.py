@@ -331,6 +331,9 @@ class AnimeOperationsMixin(_AnimeOperationsRequired):  # type: ignore[misc]
                     month
                     day
                 }
+                nextAiringEpisode {
+                    episode
+                }
             }
         }
         """
