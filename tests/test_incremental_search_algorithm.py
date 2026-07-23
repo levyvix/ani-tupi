@@ -722,7 +722,7 @@ def test_incremental_search_season_2_query_real_world(incremental_search_env):
             "Tate no Yuusha no Nariagari Season 2",
             "Tate no Yuusha no Nariagari Season 3",
             "Tate no Yuusha no Nariagari Season 4",
-            *titled_variants("Tate", 15),
+            *titled_variants("Tate", 16),
         ],
     )
 
