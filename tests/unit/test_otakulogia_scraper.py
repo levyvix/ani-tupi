@@ -66,15 +66,116 @@ class TestOtakulogiaScraper:
 
     @patch("scrapers.plugins.otakulogia.http_request_with_retry")
     def test_search_anime_returns_results(self, mock_req):
-        mock_req.side_effect = _router({"SearchVideo": {"SearchVideo": _wrapped(SEARCH_RECORDS)}})
+        mock_req.side_effect = _router(
+            {
+                "SearchVideo": {"SearchVideo": _wrapped(SEARCH_RECORDS)},
+                "CheckTemporada": {"CheckTemporada": {"has_temporada": False}},
+            }
+        )
 
         results = self.scraper.search_anime("naruto")
 
         assert len(results) == 2
-        assert results[0].title == "Naruto SD"
-        assert results[0].url == "https://otakulogia.com/anime/8160"
-        assert results[0].params == {"cid": "8160"}
-        assert results[0].source == "otakulogia"
+        titles = {r.title for r in results}
+        assert titles == {"Naruto SD", "Naruto: Blood Prison"}
+        sd = next(r for r in results if r.title == "Naruto SD")
+        assert sd.url == "https://otakulogia.com/anime/8160"
+        assert sd.params == {"cid": "8160"}
+        assert sd.source == "otakulogia"
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_search_anime_expands_seasons(self, mock_req):
+        seasons = {
+            "has_temporada": True,
+            "temporadas": [
+                {"tid": 100, "name": "Temporada 01 | Dublado"},
+                {"tid": 200, "name": "Temporada 03 | Legendado"},
+            ],
+        }
+
+        def side_effect(method, url, **kwargs):
+            query = kwargs["json"]["query"]
+            if "SearchVideo" in query:
+                return _response(
+                    {"SearchVideo": _wrapped([{"cid": "33205", "category_name": "Jujutsu Kaisen"}])}
+                )
+            if "CheckTemporada" in query:
+                return _response({"CheckTemporada": seasons})
+            raise AssertionError(query)
+
+        mock_req.side_effect = side_effect
+
+        results = self.scraper.search_anime("jujutsu")
+
+        by_title = {r.title: r for r in results}
+        assert set(by_title) == {
+            "Jujutsu Kaisen Temporada 1 Dublado",
+            "Jujutsu Kaisen Temporada 3 Legendado",
+        }
+        assert by_title["Jujutsu Kaisen Temporada 3 Legendado"].params == {
+            "cid": "33205",
+            "tid": 200,
+            "season": 3,
+        }
+        assert by_title["Jujutsu Kaisen Temporada 1 Dublado"].params == {
+            "cid": "33205",
+            "tid": 100,
+            "season": 1,
+        }
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_search_anime_movie_entry(self, mock_req):
+        seasons = {
+            "has_temporada": True,
+            "temporadas": [
+                {"tid": 300, "name": "Jujutsu Kaisen 0 Movie | Dublado"},
+            ],
+        }
+
+        def side_effect(method, url, **kwargs):
+            query = kwargs["json"]["query"]
+            if "SearchVideo" in query:
+                return _response(
+                    {"SearchVideo": _wrapped([{"cid": "33205", "category_name": "Jujutsu Kaisen"}])}
+                )
+            if "CheckTemporada" in query:
+                return _response({"CheckTemporada": seasons})
+            raise AssertionError(query)
+
+        mock_req.side_effect = side_effect
+
+        results = self.scraper.search_anime("jujutsu")
+
+        assert len(results) == 1
+        assert results[0].title == "Jujutsu Kaisen 0 Movie | Dublado"
+        assert results[0].params == {"cid": "33205", "tid": 300}
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_search_episodes_uses_tid_param(self, mock_req):
+        captured_tids = []
+
+        def side_effect(method, url, **kwargs):
+            query = kwargs["json"]["query"]
+            if "CheckTemporada" in query:
+                raise AssertionError("CheckTemporada should not be called when tid is provided")
+            if "VideoByCatId" in query:
+                variables = kwargs["json"]["variables"]
+                captured_tids.append(variables["input"].get("tid"))
+                if variables["input"]["page"] == 1:
+                    return _response({"VideoByCatId": _wrapped(FLAT_EPISODES)})
+                return _response({"VideoByCatId": _wrapped([])})
+            raise AssertionError(query)
+
+        mock_req.side_effect = side_effect
+
+        result = self.scraper.search_episodes(
+            "Jujutsu",
+            "https://otakulogia.com/anime/33205",
+            {"cid": "33205", "tid": 200, "season": 3},
+        )
+
+        assert result[0].season == 3
+        assert captured_tids[0] == 200
 
     @patch("scrapers.plugins.otakulogia.http_request_with_retry")
     def test_search_anime_empty_returns_empty_list(self, mock_req):
