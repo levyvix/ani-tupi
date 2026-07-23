@@ -18,6 +18,7 @@ PRESERVES (does NOT remove):
 from services.anime.title_normalization import (
     are_language_version_markers_compatible,
     are_season_markers_compatible,
+    dedup_signature,
     get_compact_normalized_title_key,
     normalize_title_for_dedup,
 )
@@ -435,3 +436,52 @@ class TestCompactFallbackHelpers:
         left = normalize_title_for_dedup("Anime A Season 2")
         right = normalize_title_for_dedup("Anime A Season 3")
         assert are_season_markers_compatible(left, right) is False
+
+
+class TestDedupSignature:
+    def test_explicit_wordings_share_signature(self):
+        a = dedup_signature("Jujutsu Kaisen Temporada 3 Dublado")
+        b = dedup_signature("Jujutsu Kaisen Season 3 Dublado")
+        c = dedup_signature("Jujutsu Kaisen 3rd Season Dublado")
+        assert a == b == c
+        assert a == ("jujutsukaisen", 3, frozenset({"dub"}))
+
+    def test_bare_trailing_number_is_season(self):
+        assert dedup_signature("Jujutsu Kaisen 3 Dublado") == (
+            "jujutsukaisen",
+            3,
+            frozenset({"dub"}),
+        )
+
+    def test_bare_and_explicit_share_signature(self):
+        assert dedup_signature("Jujutsu Kaisen 3 Dublado") == dedup_signature(
+            "Jujutsu Kaisen Temporada 3 Dublado"
+        )
+
+    def test_season_one_normalizes_to_none(self):
+        assert dedup_signature("One Piece Season 1")[1] is None
+        assert dedup_signature("One Piece Temporada 1")[1] is None
+        assert dedup_signature("One Piece")[1] is None
+
+    def test_no_season_matches_season_one(self):
+        assert dedup_signature("One Piece") == dedup_signature("One Piece Season 1")
+
+    def test_number_ge_100_is_not_season(self):
+        base, season, _ = dedup_signature("Mob Psycho 100")
+        assert season is None
+        assert base == "mobpsycho100"
+
+    def test_pure_numeric_title_is_not_season(self):
+        base, season, _ = dedup_signature("86")
+        assert season is None
+        assert base == "86"
+
+    def test_different_seasons_differ(self):
+        assert dedup_signature("Anime A 3") != dedup_signature("Anime A 4")
+
+    def test_language_separates_signature(self):
+        dub = dedup_signature("Anime A Temporada 3 Dublado")
+        sub = dedup_signature("Anime A Temporada 3 Legendado")
+        assert dub != sub
+        assert dub[2] == frozenset({"dub"})
+        assert sub[2] == frozenset({"sub"})
