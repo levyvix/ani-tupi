@@ -173,30 +173,113 @@ def are_season_markers_compatible(title_a: str, title_b: str) -> bool:
 
 _SEASON_EXPLICIT_PATTERNS = (
     re.compile(r"\bseason\s+(\d+)\b"),
-    re.compile(r"\b(\d+)(?:st|nd|rd|th)\s+season\b"),
+    # Ordinal is optional so "2 season" (goyabu) matches like "2nd season".
+    re.compile(r"\b(\d+)(?:st|nd|rd|th)?\s+season\b"),
     re.compile(r"\btemporada\s+(\d+)\b"),
+    re.compile(r"\bparte\s+(\d+)\b"),
+    re.compile(r"\bpart\s+(\d+)\b"),
+    re.compile(r"\bcour\s+(\d+)\b"),
     re.compile(r"(?<=\s)s(\d+)\b"),
 )
 _BARE_TRAILING_NUMBER = re.compile(r"\s(\d{1,2})$")
 _LANGUAGE_WORDS = _DUB_MARKERS + _SUB_MARKERS
+
+# Scraper boilerplate that carries no title identity (e.g. anitube's
+# "... Todos os Episódios", MAL-style "(TV)" media tags). Stripped before season
+# extraction so it never leaks into the base key. Accents are already removed by
+# normalize_title_for_dedup, and parentheses collapsed to bare words.
+# Kept deliberately narrow: a bare "online" would wrongly gut "Sword Art Online".
+_JUNK_PHRASES = (
+    re.compile(r"\btodos\s+(?:os\s+)?episodios?\b"),
+    re.compile(r"\btv\b"),
+)
+# Cross-language synonyms canonicalized to one token so equivalent labels merge.
+# We canonicalize rather than delete: dropping "movie" outright would collapse a
+# film into its parent series (e.g. "Detective Conan Movie 1" -> the TV series).
+_SYNONYMS = ((re.compile(r"\bfilme\b"), "movie"),)
+
+# Roman numerals used as season/part markers (e.g. "Parte III", "Overlord III").
+_ROMAN_VALUES = {
+    "i": 1,
+    "ii": 2,
+    "iii": 3,
+    "iv": 4,
+    "v": 5,
+    "vi": 6,
+    "vii": 7,
+    "viii": 8,
+    "ix": 9,
+    "x": 10,
+    "xi": 11,
+    "xii": 12,
+    "xiii": 13,
+    "xiv": 14,
+    "xv": 15,
+    "xvi": 16,
+    "xvii": 17,
+    "xviii": 18,
+    "xix": 19,
+    "xx": 20,
+}
+# Season/part keywords after which even a single-letter roman (Parte I / Parte V)
+# is unambiguously a numeral. Outside this context single letters are left alone
+# so titles like "Hunter x Hunter" survive untouched.
+_SEASON_KEYWORD = r"(?:season|temporada|parte|part|cour)"
+_KEYWORD_ROMAN_RE = re.compile(rf"\b({_SEASON_KEYWORD})\s+([ivx]+)\b", re.IGNORECASE)
+# Standalone romans are only converted when at least two letters long.
+_STANDALONE_ROMAN_RE = re.compile(r"\b([ivx]{2,})\b", re.IGNORECASE)
+
+
+def roman_to_int(token: str) -> int | None:
+    """Return the integer value of a roman numeral token, or None if unknown."""
+    return _ROMAN_VALUES.get(token.lower())
+
+
+def _normalize_roman_seasons(text: str) -> str:
+    """Rewrite roman-numeral season/part markers as arabic digits.
+
+    Keyword-scoped conversion handles single-letter numerals ("Parte I" -> "parte 1");
+    the standalone pass only touches multi-letter romans so ambiguous single letters
+    (the "x" in "Hunter x Hunter") are preserved.
+    """
+
+    def _keyword(match: re.Match) -> str:
+        value = roman_to_int(match.group(2))
+        return f"{match.group(1)} {value}" if value is not None else match.group(0)
+
+    def _standalone(match: re.Match) -> str:
+        value = roman_to_int(match.group(1))
+        return str(value) if value is not None else match.group(0)
+
+    text = _KEYWORD_ROMAN_RE.sub(_keyword, text)
+    return _STANDALONE_ROMAN_RE.sub(_standalone, text)
 
 
 def dedup_signature(title: str) -> tuple[str, int | None, frozenset[str]]:
     """Reduce a title to a merge signature: (base_key, season_num, lang_markers).
 
     Titles from different sources merge iff their signatures are equal. Season is
-    extracted from explicit wordings (season N / Nth season / temporada N / sN) or,
-    failing that, a trailing bare number 2-99. Season 1 (or absent) normalizes to
-    None. Language and season tokens are stripped from the base so wording differs
-    but signatures match.
+    extracted from explicit wordings (season N / Nth season / temporada N / parte N
+    / part N / cour N / sN, roman or arabic) or, failing that, a trailing bare
+    number 2-99. Season 1 (or absent) normalizes to None. Language and season tokens
+    are stripped from the base so wording differs but signatures match.
+
+    "Legendado"/sub is the implicit default in the pt-br ecosystem: sources that omit
+    a language marker are subtitled. Only an explicit dub distinguishes a release, so
+    sub-marked and unmarked titles share a signature and merge.
     """
     normalized = normalize_title_for_dedup(title)
-    lang_markers = frozenset(get_language_version_markers(normalized))
+    lang_markers = frozenset(get_language_version_markers(normalized)) & {"dub"}
 
-    base = normalized
-    # Strip language words first so a trailing season number is exposed.
+    base = _normalize_roman_seasons(normalized)
+    # Strip language words and scraper boilerplate first so a trailing season
+    # number is exposed and junk never leaks into the base key.
     for word in _LANGUAGE_WORDS:
         base = re.sub(rf"\b{word}\b", " ", base)
+    for junk in _JUNK_PHRASES:
+        base = junk.sub(" ", base)
+    for pattern, canonical in _SYNONYMS:
+        base = pattern.sub(canonical, base)
     base = re.sub(r"\s+", " ", base).strip()
 
     season: int | None = None
