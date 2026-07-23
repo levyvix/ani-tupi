@@ -9,6 +9,10 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Sentinel returned by ``_resolve_start_episode_idx`` when the user asks to
+# switch sources. The caller owns the switch flow (it has args/anilist_id/etc.).
+SWITCH_SOURCE = object()
+
 
 def _build_continue_menu(
     selected_anime: str,
@@ -51,6 +55,7 @@ def _build_continue_menu(
 
     options.append("📋 Escolher outro episódio")
     options.append("🔄 Começar do zero")
+    options.append("🔀 Trocar fonte")
 
     menu_msg = f"{selected_anime} - De onde quer continuar?"
     if total_episodes and scraper_episode_count:
@@ -123,10 +128,11 @@ def _resolve_start_episode_idx(
     local_progress: int,
     total_episodes: int | None,
     scraper_episode_count: int | None,
-) -> int | None:
+) -> int | object | None:
     """Ask the user where to start and return the 0-indexed episode.
 
-    Returns ``None`` when the user cancels or the episode is unavailable.
+    Returns ``None`` when the user cancels or the episode is unavailable, or
+    the ``SWITCH_SOURCE`` sentinel when the user wants to switch sources.
     """
     max_progress = max(anilist_progress, local_progress)
 
@@ -147,6 +153,9 @@ def _resolve_start_episode_idx(
 
     if not choice:
         return None
+
+    if choice == "🔀 Trocar fonte":
+        return SWITCH_SOURCE
 
     if choice == "📋 Escolher outro episódio":
         return ui_bridge.menu_navigate_episodes(episode_list)

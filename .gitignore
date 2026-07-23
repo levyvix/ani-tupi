@@ -13,6 +13,7 @@ log.txt
 .serena
 .playwright
 graphify-out/*
+.claire/
 
 
 # Virtual environmentsn

@@ -29,7 +29,7 @@ from services.anime.awaiting_episodes import registry as awaiting_registry
 from utils.video_player import _format_episode_progress
 
 # Import extracted functions
-from services.anime.episode_selection import _resolve_start_episode_idx
+from services.anime.episode_selection import _resolve_start_episode_idx, SWITCH_SOURCE
 from services.anime.episode_loader import _load_episode_list, _read_local_progress
 from services.anime.anime_choice_persistence import _persist_anime_choice
 from services.anilist.progress_sync import _sync_anilist_progress
@@ -781,16 +781,33 @@ def anilist_anime_flow(
 
     # 4. Decide which episode to start from.
     local_progress = _read_local_progress(selected_anime)
-    start_episode_idx = _resolve_start_episode_idx(
-        selected_anime,
-        episode_list,
-        anilist_progress,
-        local_progress,
-        total_episodes,
-        scraper_episode_count,
-    )
-    if start_episode_idx is None:
-        return
+    while True:
+        start_episode_idx = _resolve_start_episode_idx(
+            selected_anime,
+            episode_list,
+            anilist_progress,
+            local_progress,
+            total_episodes,
+            scraper_episode_count,
+        )
+        if start_episode_idx is None:
+            return
+
+        if start_episode_idx is not SWITCH_SOURCE:
+            break
+
+        # User chose to switch sources: run a fresh search + selection. On
+        # success, jump straight to playback with the new source; on cancel,
+        # re-show the "de onde continuar" menu.
+        new_anime, new_episode_idx = switch_anime_source(
+            selected_anime, args, anilist_id, display_title
+        )
+        if new_anime and new_episode_idx is not None:
+            selected_anime = new_anime
+            episode_list = rep.get_episode_list(selected_anime)
+            scraper_episode_count = len(episode_list)
+            start_episode_idx = new_episode_idx
+            break
 
     if not isinstance(start_episode_idx, int):
         raise ValueError(f"episode_idx should be int, got {type(start_episode_idx)}")

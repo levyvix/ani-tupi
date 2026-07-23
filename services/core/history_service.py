@@ -19,6 +19,8 @@ HISTORY_PATH = get_data_path()
 _history_store = JSONStore(HISTORY_PATH / "history.json")
 
 _RETRY = object()
+# Sentinel returned by ``_pick_episode`` when the user asks to switch sources.
+_SWITCH_SOURCE = object()
 
 
 def _load_persisted_history(menu=ui_bridge.menu_navigate):
@@ -205,10 +207,14 @@ def _pick_episode(
 
     options.append("📋 Escolher outro episódio")
     options.append("🔄 Começar do zero")
+    options.append("🔀 Trocar fonte")
 
     choice = menu(options, msg=f"{anime} - De onde quer continuar?")
     if not choice:
         return None
+
+    if choice == "🔀 Trocar fonte":
+        return _SWITCH_SOURCE
 
     if choice == "📋 Escolher outro episódio":
         return menu_episodes(episode_list)
@@ -366,6 +372,16 @@ def load_history(
             menu_episodes=menu_episodes,
             prompt=prompt,
         )
+        if episode_idx is _SWITCH_SOURCE:
+            # switch_anime_source only forwards ``args`` to its own recursion, so
+            # passing None is safe here. Lazy import avoids a circular dependency.
+            from services.anime.source_management import switch_anime_source
+
+            new_anime, new_episode_idx = switch_anime_source(anime, None, anilist_id, anilist_title)
+            if new_anime and new_episode_idx is not None:
+                return new_anime, new_episode_idx, anilist_id, anilist_title
+            continue  # switch cancelled — restart the history flow
+
         if episode_idx is None:
             continue
 
