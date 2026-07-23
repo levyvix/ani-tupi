@@ -151,6 +151,46 @@ class TestOtakulogiaScraper:
         assert results[0].params == {"cid": "33205", "tid": 300}
 
     @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_search_anime_part_seasons_anchor_on_category(self, mock_req):
+        # Part-based catalogs name their temporadas "T01: Parte III" with no anime
+        # name of their own. The entry must anchor on the category and map the part
+        # number (roman or arabic) to a season so it merges with other sources.
+        seasons = {
+            "has_temporada": True,
+            "temporadas": [
+                {"tid": 201, "name": "T01: Parte I | Legendado"},
+                {"tid": 202, "name": "T01: Parte II | Dublado"},
+                {"tid": 7312, "name": "T01: Parte III | Legendado"},
+            ],
+        }
+
+        def side_effect(method, url, **kwargs):
+            query = kwargs["json"]["query"]
+            if "SearchVideo" in query:
+                return _response(
+                    {"SearchVideo": _wrapped([{"cid": "34091", "category_name": "Kimi no Koto"}])}
+                )
+            if "CheckTemporada" in query:
+                return _response({"CheckTemporada": seasons})
+            raise AssertionError(query)
+
+        mock_req.side_effect = side_effect
+
+        results = self.scraper.search_anime("kimi")
+
+        by_title = {r.title: r for r in results}
+        assert set(by_title) == {
+            "Kimi no Koto Temporada 1 Legendado",
+            "Kimi no Koto Temporada 2 Dublado",
+            "Kimi no Koto Temporada 3 Legendado",
+        }
+        assert by_title["Kimi no Koto Temporada 3 Legendado"].params == {
+            "cid": "34091",
+            "tid": 7312,
+            "season": 3,
+        }
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
     def test_search_anime_isolates_failing_temporada(self, mock_req):
         seasons = {
             "has_temporada": True,
@@ -257,6 +297,41 @@ class TestOtakulogiaScraper:
         assert batch.urls == [
             "https://otakulogia.com/watch/1",
             "https://otakulogia.com/watch/3",
+        ]
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_search_episodes_rebases_continuous_numbering(self, mock_req):
+        # Otakulogia keeps a running count across parts: season 3 starts at EP 25.
+        # The scraper should rebase it so the batch begins at episode 1.
+        part_three = [
+            {"id": "25", "video_ep": "EP 25 | LEG"},
+            {"id": "26", "video_ep": "EP 26 | LEG"},
+            {"id": "27", "video_ep": "EP 27 | LEG"},
+        ]
+
+        def side_effect(method, url, **kwargs):
+            query = kwargs["json"]["query"]
+            if "VideoByCatId" in query:
+                if kwargs["json"]["variables"]["input"]["page"] == 1:
+                    return _response({"VideoByCatId": _wrapped(part_three)})
+                return _response({"VideoByCatId": _wrapped([])})
+            raise AssertionError(query)
+
+        mock_req.side_effect = side_effect
+
+        result = self.scraper.search_episodes(
+            "Kimi no Koto",
+            "https://otakulogia.com/anime/33205",
+            {"cid": "33205", "tid": 7035, "season": 3},
+        )
+
+        batch = result[0]
+        assert batch.titles == ["Episódio 1", "Episódio 2", "Episódio 3"]
+        # URLs stay pinned to the original video ids.
+        assert batch.urls == [
+            "https://otakulogia.com/watch/25",
+            "https://otakulogia.com/watch/26",
+            "https://otakulogia.com/watch/27",
         ]
 
     @patch("scrapers.plugins.otakulogia.http_request_with_retry")

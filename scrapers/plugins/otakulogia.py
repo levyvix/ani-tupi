@@ -29,6 +29,7 @@ from scrapers.plugins.utils import (
     load_plugin,
     store_player_source,
 )
+from services.anime.title_normalization import roman_to_int
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -52,7 +53,8 @@ SINGLE_QUERY = "query SingleVideo($input: SingleVideoInput!){ SingleVideo(input:
 
 _WATCH_RE = re.compile(r"/watch/(\d+)")
 _EP_NUM_RE = re.compile(r"\bEP\.?\s*(\d+)", re.IGNORECASE)
-_SEASON_NAME_RE = re.compile(r"temporada\s*0*(\d+)", re.IGNORECASE)
+_SEASON_NAME_RE = re.compile(r"(?:temporada|\bt)\s*0*(\d+)", re.IGNORECASE)
+_PART_NAME_RE = re.compile(r"\bparte\s+([ivx]+|\d+)\b", re.IGNORECASE)
 
 
 def _gql(query: str, variables: dict) -> dict | None:
@@ -115,15 +117,32 @@ def _language_of(name: str) -> str:
     return ""
 
 
+def _effective_season(name: str) -> int | None:
+    """Return the user-facing season number parsed from a temporada name.
+
+    Otakulogia splits catalogs either into numbered seasons ("Temporada 02") or
+    into parts within a season ("T01: Parte III"). Parts are the progression users
+    think of as seasons, so a part number takes precedence; otherwise the temporada
+    number is used. Returns None for entries with neither (movies, OVAs, specials).
+    """
+    part_match = _PART_NAME_RE.search(name)
+    if part_match:
+        token = part_match.group(1)
+        return int(token) if token.isdigit() else roman_to_int(token)
+    season_match = _SEASON_NAME_RE.search(name)
+    return int(season_match.group(1)) if season_match else None
+
+
 def _temporada_entry(cid: str, category: str, temp: dict) -> AnimeMetadata:
     """Build one AnimeMetadata for a single temporada (numbered season or movie)."""
     name = str(temp.get("name") or "")
     tid = temp.get("tid")
     language = _language_of(name)
     url = f"{BASE_URL}/anime/{cid}"
-    match = _SEASON_NAME_RE.search(name)
-    if match:
-        season = int(match.group(1))
+    season = _effective_season(name)
+    if season is not None:
+        # Always anchor on the catalog title: part names like "T01: Parte III"
+        # carry no anime name of their own and would otherwise isolate the source.
         title = f"{category} Temporada {season}"
         if language:
             title = f"{title} {language}"
@@ -223,8 +242,7 @@ class Otakulogia:
             return None, 1
 
         def season_of(temp: dict) -> int:
-            match = _SEASON_NAME_RE.search(str(temp.get("name") or ""))
-            return int(match.group(1)) if match else 1
+            return _effective_season(str(temp.get("name") or "")) or 1
 
         if requested_season is not None:
             for temp in temporadas:
@@ -275,7 +293,11 @@ class Otakulogia:
                 return []
 
             ordered = sorted(episodes.items())
-            titles = [f"Episódio {number}" for number, _ in ordered]
+            # Otakulogia keeps a continuous episode count across seasons/parts
+            # (e.g. season 3 starts at "EP 25"). Rebase to the local minimum so
+            # each temporada begins at episode 1, as the UI expects.
+            offset = ordered[0][0] - 1
+            titles = [f"Episódio {number - offset}" for number, _ in ordered]
             urls = [episode_url for _, episode_url in ordered]
             return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name, season=season)]
         except httpx.HTTPError as exc:
