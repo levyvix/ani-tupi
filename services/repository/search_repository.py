@@ -10,8 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from models.config import settings
 from models.models import SearchResults, SearchMetadata, AnimeSearchResult
 from services.anime.title_normalization import (
-    are_language_version_markers_compatible,
-    are_season_markers_compatible,
+    dedup_signature,
     get_compact_normalized_title_key,
     normalize_search_cache_key,
     normalize_title_for_dedup,
@@ -60,8 +59,7 @@ class SearchRepository:
         self.sources = {}
         self.anime_to_urls = defaultdict(list)
         self.norm_titles = {}
-        self._norm_idx: dict[str, str] = {}
-        self._compact_idx: dict[str, list[tuple[str, str]]] = {}
+        self._sig_idx: dict[tuple, str] = {}
         self._last_search_metadata = {}
         self._add_lock = threading.Lock()
         # Tracks whether a population step (search/add/cache-load) has run since
@@ -86,8 +84,7 @@ class SearchRepository:
     def clear_search_results(self) -> None:
         self.anime_to_urls = defaultdict(list)
         self.norm_titles = {}
-        self._norm_idx = {}
-        self._compact_idx = {}
+        self._sig_idx = {}
         self._populated = False
 
     def _build_search_results(self, query: str) -> SearchResults:
@@ -351,31 +348,19 @@ class SearchRepository:
         return sorted({src for entries in self.anime_to_urls.values() for _, src, _ in entries})
 
     def add_anime(self, title: str, url: str, source: str, params: dict | None = None) -> None:
-        """Add anime with multi-source deduplication via title normalization."""
+        """Add anime with multi-source deduplication via dedup signature."""
         with self._add_lock:
             self._populated = True
             params = params or {}
-            normalized_new = normalize_title_for_dedup(title)
-            compact_new = get_compact_normalized_title_key(normalized_new)
-            self.norm_titles[title] = normalized_new
+            self.norm_titles[title] = normalize_title_for_dedup(title)
 
-            # O(1) exact-norm match
-            existing_title = self._norm_idx.get(normalized_new)
+            signature = dedup_signature(title)
+            existing_title = self._sig_idx.get(signature)
             if existing_title is not None:
                 self.anime_to_urls[existing_title].append((url, source, params))
                 return
 
-            # O(k) compact-key match (k = titles sharing the same compact key, typically 0-3)
-            for existing_norm, existing_title in self._compact_idx.get(compact_new, []):
-                if are_language_version_markers_compatible(
-                    normalized_new, existing_norm
-                ) and are_season_markers_compatible(normalized_new, existing_norm):
-                    self.anime_to_urls[existing_title].append((url, source, params))
-                    return
-
-            # New entry — update both indices
-            self._norm_idx[normalized_new] = title
-            self._compact_idx.setdefault(compact_new, []).append((normalized_new, title))
+            self._sig_idx[signature] = title
             self.anime_to_urls[title].append((url, source, params))
 
     def _guard_sources(self, query: str) -> SearchResults | None:

@@ -171,6 +171,57 @@ def are_season_markers_compatible(title_a: str, title_b: str) -> bool:
     return get_season_markers(title_a) == get_season_markers(title_b)
 
 
+_SEASON_EXPLICIT_PATTERNS = (
+    re.compile(r"\bseason\s+(\d+)\b"),
+    re.compile(r"\b(\d+)(?:st|nd|rd|th)\s+season\b"),
+    re.compile(r"\btemporada\s+(\d+)\b"),
+    re.compile(r"(?<=\s)s(\d+)\b"),
+)
+_BARE_TRAILING_NUMBER = re.compile(r"\s(\d{1,2})$")
+_LANGUAGE_WORDS = _DUB_MARKERS + _SUB_MARKERS
+
+
+def dedup_signature(title: str) -> tuple[str, int | None, frozenset[str]]:
+    """Reduce a title to a merge signature: (base_key, season_num, lang_markers).
+
+    Titles from different sources merge iff their signatures are equal. Season is
+    extracted from explicit wordings (season N / Nth season / temporada N / sN) or,
+    failing that, a trailing bare number 2-99. Season 1 (or absent) normalizes to
+    None. Language and season tokens are stripped from the base so wording differs
+    but signatures match.
+    """
+    normalized = normalize_title_for_dedup(title)
+    lang_markers = frozenset(get_language_version_markers(normalized))
+
+    base = normalized
+    # Strip language words first so a trailing season number is exposed.
+    for word in _LANGUAGE_WORDS:
+        base = re.sub(rf"\b{word}\b", " ", base)
+    base = re.sub(r"\s+", " ", base).strip()
+
+    season: int | None = None
+    for pattern in _SEASON_EXPLICIT_PATTERNS:
+        match = pattern.search(base)
+        if match:
+            season = int(match.group(1))
+            base = pattern.sub(" ", base)
+            break
+    else:
+        match = _BARE_TRAILING_NUMBER.search(base)
+        if match:
+            candidate = int(match.group(1))
+            if 2 <= candidate <= 99:
+                season = candidate
+                base = _BARE_TRAILING_NUMBER.sub("", base)
+
+    if season == 1:
+        season = None
+
+    base = re.sub(r"\s+", " ", base).strip()
+    base_key = base.replace(" ", "")
+    return base_key, season, lang_markers
+
+
 def normalize_anime_title(title: str, is_english: bool = False):
     """Generate sensible title variations for searching.
 

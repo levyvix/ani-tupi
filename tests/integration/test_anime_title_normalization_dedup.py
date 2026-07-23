@@ -77,23 +77,32 @@ class TestLanguageMarkerPreservation:
 
 
 class TestSeasonFormatPreservation:
-    """Test that different season wordings stay separate."""
+    """Different explicit season wordings for the same season MERGE now."""
 
-    def test_season_vs_temporada_separate(self, clean_repository):
-        """'Season 2' and 'Temporada 2' are different."""
+    def test_season_and_temporada_merge(self, clean_repository):
         clean_repository.add_anime("Anime A Season 2", "url1", "source1")
         clean_repository.add_anime("Anime A Temporada 2", "url2", "source2")
+        assert len(clean_repository.get_anime_titles()) == 1
 
-        titles = clean_repository.get_anime_titles()
-        assert len(titles) == 2
-
-    def test_season_vs_ordinal_separate(self, clean_repository):
-        """'Season 2' and '2nd Season' are different."""
+    def test_season_and_ordinal_merge(self, clean_repository):
         clean_repository.add_anime("Anime A Season 2", "url1", "source1")
         clean_repository.add_anime("Anime A 2nd Season", "url2", "source2")
+        assert len(clean_repository.get_anime_titles()) == 1
 
-        titles = clean_repository.get_anime_titles()
-        assert len(titles) == 2
+    def test_bare_number_merges_with_temporada(self, clean_repository):
+        clean_repository.add_anime("Anime A 3 Dublado", "url1", "source1")
+        clean_repository.add_anime("Anime A Temporada 3 Dublado", "url2", "source2")
+        assert len(clean_repository.get_anime_titles()) == 1
+
+    def test_different_seasons_stay_separate(self, clean_repository):
+        clean_repository.add_anime("Anime A Temporada 2", "url1", "source1")
+        clean_repository.add_anime("Anime A Temporada 3", "url2", "source2")
+        assert len(clean_repository.get_anime_titles()) == 2
+
+    def test_dub_and_sub_stay_separate(self, clean_repository):
+        clean_repository.add_anime("Anime A Temporada 3 Dublado", "url1", "source1")
+        clean_repository.add_anime("Anime A Temporada 3 Legendado", "url2", "source2")
+        assert len(clean_repository.get_anime_titles()) == 2
 
 
 class TestExactMatches:
@@ -153,13 +162,9 @@ class TestComplexScenarios:
         clean_repository.add_anime("One Piece Season 1", "url3", "source3")
         clean_repository.add_anime("One Piece Temporada 1", "url4", "source4")
 
-        # Should have 4 entries (2 Naruto merges into 1, 2 One Piece stay separate due to different season format)
-        titles = clean_repository.get_anime_titles()
-        naruto_count = sum(1 for t in titles if "Naruto" in t)
-        onepiece_count = sum(1 for t in titles if "One Piece" in t)
-
-        assert naruto_count == 1  # Naruto versions merge
-        assert onepiece_count == 2  # One Piece versions stay separate
+        # "One Piece Season 1" and "One Piece Temporada 1" both normalize to
+        # season None and now merge; the two Naruto entries also merge.
+        assert len(clean_repository.get_anime_titles()) == 2
 
 
 class TestNormTitlesMapping:

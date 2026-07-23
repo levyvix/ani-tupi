@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
@@ -104,9 +105,63 @@ def _resolve_cid(url: str, params: dict | None) -> str | None:
     return match.group(1) if match else None
 
 
+def _language_of(name: str) -> str:
+    """Return the display language suffix parsed from a temporada name."""
+    lowered = name.lower()
+    if "dublado" in lowered:
+        return "Dublado"
+    if "legendado" in lowered:
+        return "Legendado"
+    return ""
+
+
+def _temporada_entry(cid: str, category: str, temp: dict) -> AnimeMetadata:
+    """Build one AnimeMetadata for a single temporada (numbered season or movie)."""
+    name = str(temp.get("name") or "")
+    tid = temp.get("tid")
+    language = _language_of(name)
+    url = f"{BASE_URL}/anime/{cid}"
+    match = _SEASON_NAME_RE.search(name)
+    if match:
+        season = int(match.group(1))
+        title = f"{category} Temporada {season}"
+        if language:
+            title = f"{title} {language}"
+        params = {"cid": cid, "season": season}
+        if tid is not None:
+            params["tid"] = int(tid)
+    else:
+        title = name or category
+        params = {"cid": cid}
+        if tid is not None:
+            params["tid"] = int(tid)
+    return AnimeMetadata(title=title, url=url, source=Otakulogia.name, params=params)
+
+
 class Otakulogia:
     name = "otakulogia"
     base_url = BASE_URL
+
+    def _fetch_temporadas(self, cid: str) -> list[dict]:
+        """Return the temporada list for a catalog, or [] for a flat catalog.
+
+        Never raises: a per-catalog failure is isolated (logged at debug and
+        degraded to []) so one bad catalog cannot abort the whole search.
+        """
+        try:
+            data = _gql(TEMPORADA_QUERY, {"catId": cid})
+            info = (data or {}).get("CheckTemporada")
+            if isinstance(info, str):
+                try:
+                    info = json.loads(info)
+                except (ValueError, TypeError):
+                    info = None
+            if not isinstance(info, dict) or not info.get("has_temporada"):
+                return []
+            return [t for t in (info.get("temporadas") or []) if isinstance(t, dict)]
+        except Exception as exc:
+            logger.debug("Otakulogia CheckTemporada failed for cid %s: %s", cid, exc)
+            return []
 
     def search_anime(self, query: str) -> list[AnimeMetadata]:
         results: list[AnimeMetadata] = []
@@ -114,19 +169,34 @@ class Otakulogia:
             data = _gql(SEARCH_QUERY, {"input": {"searchText": query}})
             if not data:
                 return results
+
+            catalogs: list[tuple[str, str]] = []
             for entry in _unwrap(data.get("SearchVideo")):
                 cid = entry.get("cid")
                 title = (entry.get("category_name") or "").strip()
-                if not cid or not title:
-                    continue
-                results.append(
-                    AnimeMetadata(
-                        title=title,
-                        url=f"{BASE_URL}/anime/{cid}",
-                        source=self.name,
-                        params={"cid": str(cid)},
-                    )
+                if cid and title:
+                    catalogs.append((str(cid), title))
+            if not catalogs:
+                return results
+
+            with ThreadPoolExecutor(max_workers=min(len(catalogs), 8)) as executor:
+                temporada_lists = list(
+                    executor.map(lambda pair: self._fetch_temporadas(pair[0]), catalogs)
                 )
+
+            for (cid, title), temporadas in zip(catalogs, temporada_lists):
+                if not temporadas:
+                    results.append(
+                        AnimeMetadata(
+                            title=title,
+                            url=f"{BASE_URL}/anime/{cid}",
+                            source=self.name,
+                            params={"cid": str(cid)},
+                        )
+                    )
+                    continue
+                for temp in temporadas:
+                    results.append(_temporada_entry(cid, title, temp))
         except httpx.HTTPError as exc:
             logger.debug("Otakulogia search_anime failed for %r: %s", query, exc)
         return results
@@ -172,11 +242,18 @@ class Otakulogia:
             return []
 
         requested_season = None
-        if isinstance(params, dict) and params.get("season"):
-            requested_season = int(params["season"])
+        tid_param = None
+        if isinstance(params, dict):
+            if params.get("season"):
+                requested_season = int(params["season"])
+            if params.get("tid") is not None:
+                tid_param = int(params["tid"])
 
         try:
-            tid, season = self._pick_temporada(cid, requested_season)
+            if tid_param is not None:
+                tid, season = tid_param, (requested_season or 1)
+            else:
+                tid, season = self._pick_temporada(cid, requested_season)
 
             episodes: dict[int, str] = {}
             for page in range(1, MAX_PAGES + 1):
