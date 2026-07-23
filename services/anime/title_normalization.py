@@ -178,17 +178,7 @@ _SEASON_EXPLICIT_PATTERNS = (
     re.compile(r"(?<=\s)s(\d+)\b"),
 )
 _BARE_TRAILING_NUMBER = re.compile(r"\s(\d{1,2})$")
-_LANGUAGE_WORDS = (
-    "dublado",
-    "dubbed",
-    "dub",
-    "legendado",
-    "legendadas",
-    "subbed",
-    "subtitles",
-    "subtitle",
-    "sub",
-)
+_LANGUAGE_WORDS = _DUB_MARKERS + _SUB_MARKERS
 
 
 def dedup_signature(title: str) -> tuple[str, int | None, frozenset[str]]:
