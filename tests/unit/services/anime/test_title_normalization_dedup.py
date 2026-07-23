@@ -479,9 +479,69 @@ class TestDedupSignature:
     def test_different_seasons_differ(self):
         assert dedup_signature("Anime A 3") != dedup_signature("Anime A 4")
 
-    def test_language_separates_signature(self):
+    def test_dub_separates_from_default(self):
         dub = dedup_signature("Anime A Temporada 3 Dublado")
         sub = dedup_signature("Anime A Temporada 3 Legendado")
         assert dub != sub
         assert dub[2] == frozenset({"dub"})
-        assert sub[2] == frozenset({"sub"})
+        # "Legendado"/sub is the implicit default: it carries no distinguishing marker.
+        assert sub[2] == frozenset()
+
+    def test_sub_merges_with_unmarked_default(self):
+        # A source that omits the language marker is subtitled by default, so it
+        # must share a signature with an explicit "Legendado" entry.
+        assert dedup_signature("Jujutsu Kaisen Temporada 2 Legendado") == dedup_signature(
+            "Jujutsu Kaisen 2"
+        )
+
+    def test_parte_shares_signature_with_season_and_bare_number(self):
+        base = dedup_signature("Anime A 3")
+        assert dedup_signature("Anime A Parte 3") == base
+        assert dedup_signature("Anime A Temporada 3") == base
+
+    def test_roman_numeral_part_normalizes_to_arabic(self):
+        assert dedup_signature("Anime A Parte III") == dedup_signature("Anime A 3")
+        assert dedup_signature("Anime A Parte II Legendado") == dedup_signature("Anime A 2")
+
+    def test_standalone_roman_numeral_is_season(self):
+        assert dedup_signature("Overlord III") == dedup_signature("Overlord 3")
+
+    def test_single_letter_roman_is_not_mangled(self):
+        # The lone "x" in "Hunter x Hunter" must not be read as a numeral.
+        base, season, _ = dedup_signature("Hunter x Hunter")
+        assert base == "hunterxhunter"
+        assert season is None
+
+    def test_number_before_season_word_is_recognized(self):
+        # "2 Season" (goyabu) must match "2nd Season" and "Season 2".
+        base = dedup_signature("Jujutsu Kaisen 2nd Season")
+        assert dedup_signature("Jujutsu Kaisen 2 Season") == base
+        assert base == ("jujutsukaisen", 2, frozenset())
+
+    def test_all_episodes_boilerplate_is_stripped(self):
+        # anitube's "Todos os Episódios" tail must not leak into the base key.
+        assert dedup_signature("Jujutsu Kaisen 2 Todos Episodios") == dedup_signature(
+            "Jujutsu Kaisen 2"
+        )
+        assert dedup_signature("Jujutsu Kaisen Todos os Episodios") == dedup_signature(
+            "Jujutsu Kaisen"
+        )
+
+    def test_online_in_title_is_preserved(self):
+        # A bare "online" strip would wrongly gut "Sword Art Online".
+        base, _, _ = dedup_signature("Sword Art Online")
+        assert base == "swordartonline"
+
+    def test_tv_media_tag_is_stripped(self):
+        # animefire's "(TV)" media tag must not isolate the entry.
+        assert dedup_signature("Jujutsu Kaisen (TV)") == dedup_signature("Jujutsu Kaisen")
+        assert dedup_signature("Jujutsu Kaisen (TV) (Dublado)") == dedup_signature(
+            "Jujutsu Kaisen Dublado"
+        )
+
+    def test_filme_and_movie_are_synonyms(self):
+        # Cross-language movie labels merge; the film is not merged into the series.
+        assert dedup_signature("Jujutsu Kaisen 0 Filme") == dedup_signature(
+            "Jujutsu Kaisen 0 Movie"
+        )
+        assert dedup_signature("Jujutsu Kaisen 0 Movie") != dedup_signature("Jujutsu Kaisen 0")
