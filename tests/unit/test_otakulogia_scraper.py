@@ -151,6 +151,49 @@ class TestOtakulogiaScraper:
         assert results[0].params == {"cid": "33205", "tid": 300}
 
     @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_search_anime_isolates_failing_temporada(self, mock_req):
+        seasons = {
+            "has_temporada": True,
+            "temporadas": [
+                {"tid": 100, "name": "Temporada 01 | Dublado"},
+            ],
+        }
+
+        def side_effect(method, url, **kwargs):
+            query = kwargs["json"]["query"]
+            if "SearchVideo" in query:
+                return _response(
+                    {
+                        "SearchVideo": _wrapped(
+                            [
+                                {"cid": "1", "category_name": "Good Anime"},
+                                {"cid": "2", "category_name": "Bad Anime"},
+                            ]
+                        )
+                    }
+                )
+            if "CheckTemporada" in query:
+                cid = kwargs["json"]["variables"]["catId"]
+                if cid == "2":
+                    raise RuntimeError("unexpected API shape for cid 2")
+                return _response({"CheckTemporada": seasons})
+            raise AssertionError(query)
+
+        mock_req.side_effect = side_effect
+
+        results = self.scraper.search_anime("anime")
+
+        by_title = {r.title: r for r in results}
+        # Good catalog expands into its season entry; the failing catalog
+        # degrades to a flat single entry instead of aborting the whole search.
+        assert by_title["Good Anime Temporada 1 Dublado"].params == {
+            "cid": "1",
+            "tid": 100,
+            "season": 1,
+        }
+        assert by_title["Bad Anime"].params == {"cid": "2"}
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
     def test_search_episodes_uses_tid_param(self, mock_req):
         captured_tids = []
 

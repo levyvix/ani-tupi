@@ -143,17 +143,25 @@ class Otakulogia:
     base_url = BASE_URL
 
     def _fetch_temporadas(self, cid: str) -> list[dict]:
-        """Return the temporada list for a catalog, or [] for a flat catalog."""
-        data = _gql(TEMPORADA_QUERY, {"catId": cid})
-        info = (data or {}).get("CheckTemporada")
-        if isinstance(info, str):
-            try:
-                info = json.loads(info)
-            except (ValueError, TypeError):
-                info = None
-        if not isinstance(info, dict) or not info.get("has_temporada"):
+        """Return the temporada list for a catalog, or [] for a flat catalog.
+
+        Never raises: a per-catalog failure is isolated (logged at debug and
+        degraded to []) so one bad catalog cannot abort the whole search.
+        """
+        try:
+            data = _gql(TEMPORADA_QUERY, {"catId": cid})
+            info = (data or {}).get("CheckTemporada")
+            if isinstance(info, str):
+                try:
+                    info = json.loads(info)
+                except (ValueError, TypeError):
+                    info = None
+            if not isinstance(info, dict) or not info.get("has_temporada"):
+                return []
+            return [t for t in (info.get("temporadas") or []) if isinstance(t, dict)]
+        except Exception as exc:
+            logger.debug("Otakulogia CheckTemporada failed for cid %s: %s", cid, exc)
             return []
-        return [t for t in (info.get("temporadas") or []) if isinstance(t, dict)]
 
     def search_anime(self, query: str) -> list[AnimeMetadata]:
         results: list[AnimeMetadata] = []
