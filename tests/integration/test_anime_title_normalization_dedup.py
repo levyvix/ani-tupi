@@ -224,3 +224,44 @@ class TestBackwardCompatibility:
         clean_repository.anime_episodes_urls[title] = ["ep1_url", "ep2_url"]
 
         assert len(clean_repository.anime_episodes_numbers[title]) == 2
+
+
+class TestTransliterationVarianceMerging:
+    """Sources spell romaji inconsistently; near-identical titles must still merge."""
+
+    def test_otakulogia_caramelise_merges_with_other_sources(self, clean_repository):
+        # otakulogia grafa "Caramelise"; as demais fontes usam "Carameliser".
+        clean_repository.add_anime(
+            "Otome Kaijuu Caramelise Temporada 1 Legendado", "url1", "otakulogia"
+        )
+        clean_repository.add_anime("Otome Kaijuu Carameliser", "url2", "animefire")
+        clean_repository.add_anime("Otome Kaijuu Carameliser", "url3", "anroll")
+
+        titles = clean_repository.get_anime_titles()
+        assert len(titles) == 1
+
+        sources_str = str(clean_repository.anime_to_urls[titles[0]])
+        assert "otakulogia" in sources_str
+        assert "animefire" in sources_str
+        assert "anroll" in sources_str
+
+    def test_dub_and_sub_variants_stay_separate(self, clean_repository):
+        clean_repository.add_anime(
+            "Otome Kaijuu Caramelise Temporada 1 Dublado", "url1", "otakulogia"
+        )
+        clean_repository.add_anime(
+            "Otome Kaijuu Caramelise Temporada 1 Legendado", "url2", "otakulogia"
+        )
+        clean_repository.add_anime("Otome Kaijuu Carameliser", "url3", "animefire")
+        clean_repository.add_anime("Otome Kaijuu Carameliser Dublado", "url4", "anroll")
+
+        # Two entries: one dub (otakulogia + anroll), one sub (otakulogia + animefire).
+        titles = clean_repository.get_anime_titles()
+        assert len(titles) == 2
+
+    def test_distinct_titles_are_not_over_merged(self, clean_repository):
+        clean_repository.add_anime("Death Note", "url1", "source1")
+        clean_repository.add_anime("Death March", "url2", "source2")
+
+        titles = clean_repository.get_anime_titles()
+        assert len(titles) == 2
