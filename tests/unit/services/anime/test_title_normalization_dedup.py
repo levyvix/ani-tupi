@@ -21,6 +21,7 @@ from services.anime.title_normalization import (
     dedup_signature,
     get_compact_normalized_title_key,
     normalize_title_for_dedup,
+    signatures_merge,
 )
 
 
@@ -545,3 +546,43 @@ class TestDedupSignature:
             "Jujutsu Kaisen 0 Movie"
         )
         assert dedup_signature("Jujutsu Kaisen 0 Movie") != dedup_signature("Jujutsu Kaisen 0")
+
+
+class TestSignaturesMerge:
+    """Fuzzy cross-source merge fallback for transliteration variance."""
+
+    def test_exact_signatures_merge(self):
+        sig = dedup_signature("Otome Kaijuu Caramelise")
+        assert signatures_merge(sig, sig)
+
+    def test_transliteration_variance_merges(self):
+        # otakulogia "Caramelise" vs other sources "Carameliser" — the real case.
+        otakulogia = dedup_signature("Otome Kaijuu Caramelise Temporada 1 Legendado")
+        others = dedup_signature("Otome Kaijuu Carameliser")
+        assert otakulogia != others  # exact match fails
+        assert signatures_merge(otakulogia, others)  # fuzzy fallback bridges it
+
+    def test_transliteration_variance_merges_with_matching_dub(self):
+        otakulogia = dedup_signature("Otome Kaijuu Caramelise Temporada 1 Dublado")
+        others = dedup_signature("Otome Kaijuu Carameliser Dublado")
+        assert signatures_merge(otakulogia, others)
+
+    def test_different_language_markers_never_merge(self):
+        # A dub and a sub release must stay separate even with identical base keys.
+        dub = dedup_signature("Otome Kaijuu Caramelise Dublado")
+        sub = dedup_signature("Otome Kaijuu Carameliser Legendado")
+        assert not signatures_merge(dub, sub)
+
+    def test_different_seasons_never_merge(self):
+        s1 = dedup_signature("Otome Kaijuu Caramelise")
+        s2 = dedup_signature("Otome Kaijuu Carameliser 2")
+        assert not signatures_merge(s1, s2)
+
+    def test_distinct_titles_do_not_merge(self):
+        # Different animes sharing season/language must not be fused.
+        assert not signatures_merge(dedup_signature("Death Note"), dedup_signature("Death March"))
+        assert not signatures_merge(dedup_signature("One Piece"), dedup_signature("One Punch Man"))
+
+    def test_short_base_keys_stay_on_exact_match(self):
+        # Below the length floor a single edit is proportionally huge — no fuzzy merge.
+        assert not signatures_merge(dedup_signature("Naruto"), dedup_signature("Boruto"))

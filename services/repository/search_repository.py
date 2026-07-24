@@ -14,6 +14,7 @@ from services.anime.title_normalization import (
     get_compact_normalized_title_key,
     normalize_search_cache_key,
     normalize_title_for_dedup,
+    signatures_merge,
 )
 from utils.logging import get_logger
 from utils.title_utils import normalize_title_for_filter
@@ -356,6 +357,14 @@ class SearchRepository:
 
             signature = dedup_signature(title)
             existing_title = self._sig_idx.get(signature)
+            if existing_title is None:
+                # Fuzzy fallback: bridge minor cross-source transliteration variance
+                # ("Caramelise" vs "Carameliser") so entries still merge for fallback.
+                for existing_sig, candidate_title in self._sig_idx.items():
+                    if signatures_merge(signature, existing_sig):
+                        existing_title = candidate_title
+                        break
+
             if existing_title is not None:
                 self.anime_to_urls[existing_title].append((url, source, params))
                 return

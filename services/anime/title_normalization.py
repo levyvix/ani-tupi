@@ -7,6 +7,8 @@ for improved search results across different anime sources.
 import re
 import unicodedata
 
+from thefuzz import fuzz
+
 
 # Normalize typographic apostrophe variants to straight apostrophe before any processing
 def _normalize_apostrophes(text: str) -> str:
@@ -303,6 +305,39 @@ def dedup_signature(title: str) -> tuple[str, int | None, frozenset[str]]:
     base = re.sub(r"\s+", " ", base).strip()
     base_key = base.replace(" ", "")
     return base_key, season, lang_markers
+
+
+# Guards for the fuzzy cross-source merge fallback. Sources transliterate romaji
+# inconsistently ("Caramelise" vs "Carameliser"), so base keys that differ only by
+# minor spelling variance never merge under exact matching and the fallback stays
+# disabled. The length floor keeps short titles on exact matching (where a single
+# edit is proportionally huge), and the ratio was calibrated so real variants score
+# ~98 while distinct titles stay <=80.
+_FUZZY_MERGE_MIN_LEN = 8
+_FUZZY_MERGE_THRESHOLD = 90
+
+
+def signatures_merge(
+    sig_a: tuple[str, int | None, frozenset[str]],
+    sig_b: tuple[str, int | None, frozenset[str]],
+) -> bool:
+    """Return True when two dedup signatures should merge into one entry.
+
+    Exact equality always merges. As a fallback, base keys that differ only by
+    minor transliteration variance merge — but ONLY when season and language
+    markers are identical, so the dub/leg/season separation that :func:`dedup_signature`
+    encodes is never collapsed.
+    """
+    if sig_a == sig_b:
+        return True
+
+    base_a, season_a, lang_a = sig_a
+    base_b, season_b, lang_b = sig_b
+    if season_a != season_b or lang_a != lang_b:
+        return False
+    if len(base_a) < _FUZZY_MERGE_MIN_LEN or len(base_b) < _FUZZY_MERGE_MIN_LEN:
+        return False
+    return fuzz.ratio(base_a, base_b) >= _FUZZY_MERGE_THRESHOLD
 
 
 def normalize_anime_title(title: str, is_english: bool = False):
