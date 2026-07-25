@@ -229,6 +229,7 @@ class PluginSettings(BaseModel):
     )
     priority_order: list[str] = Field(
         default_factory=lambda: [
+            "otakulogia",
             "dattebayo",
             "sushianimes",
             "anitube",
