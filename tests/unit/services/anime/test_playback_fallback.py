@@ -1,11 +1,14 @@
 """Tests for automatic source fallback during episode playback."""
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+
+import httpx
 
 from services.anime.playback_fallback import (
     MPV_USER_ABORT_CODE,
     PlaybackFallbackResult,
     play_episode_with_fallback,
+    probe_url_playable,
 )
 from utils.video_player import VideoPlaybackResult
 
@@ -366,3 +369,135 @@ class TestPlayEpisodeWithFallbackIntegration:
         assert result.source_used == "sushianimes"
         assert len(result.sources_tried) == 3
         assert player.play_episode.call_count == 3
+
+
+class TestUrlProbe:
+    """Test the pre-MPV URL availability check."""
+
+    def test_probe_skips_missing_url_and_falls_back(self):
+        """A candidate the probe rejects is skipped without spawning MPV."""
+        player = Mock()
+        player.play_episode.side_effect = [
+            VideoPlaybackResult(exit_code=0, action="quit", data=None)
+        ]
+        sources = [("https://dead.m3u8", "anitube"), ("https://alive.m3u8", "animesdigital")]
+
+        result = play_episode_with_fallback(
+            player=player,
+            sources=sources,
+            anime_title="Test Anime",
+            episode_number=4,
+            total_episodes=12,
+            url_probe=lambda url, referrer: url != "https://dead.m3u8",
+        )
+
+        assert result.source_used == "animesdigital"
+        assert result.all_failed is False
+        assert player.play_episode.call_count == 1
+        assert player.play_episode.call_args[1]["url"] == "https://alive.m3u8"
+        # The skipped source never counts as an attempt.
+        assert result.sources_tried == [("animesdigital", 0)]
+
+    def test_probe_rejecting_everything_fails_without_playing(self):
+        """When no candidate survives the probe, MPV is never invoked."""
+        player = Mock()
+        sources = [("https://dead1.m3u8", "anitube"), ("https://dead2.m3u8", "animefire")]
+
+        result = play_episode_with_fallback(
+            player=player,
+            sources=sources,
+            anime_title="Test Anime",
+            episode_number=4,
+            total_episodes=12,
+            url_probe=lambda url, referrer: False,
+        )
+
+        assert result.all_failed is True
+        assert result.source_used is None
+        assert result.sources_tried == []
+        assert player.play_episode.call_count == 0
+
+    def test_probe_receives_referrer(self):
+        """The probe gets the same referrer the player would send."""
+        player = self.create_probe_player()
+        seen: list[tuple[str, str | None]] = []
+        sources = [("https://url1.m3u8", "anitube", "https://anitube.zip/video/1/")]
+
+        play_episode_with_fallback(
+            player=player,
+            sources=sources,
+            anime_title="Test Anime",
+            episode_number=1,
+            total_episodes=12,
+            url_probe=lambda url, referrer: seen.append((url, referrer)) or True,
+        )
+
+        assert seen == [("https://url1.m3u8", "https://anitube.zip/video/1/")]
+
+    def test_no_probe_plays_every_candidate(self):
+        """Default (no probe) behaviour is unchanged."""
+        player = self.create_probe_player()
+        sources = [("https://url1.m3u8", "anitube")]
+
+        play_episode_with_fallback(
+            player=player,
+            sources=sources,
+            anime_title="Test Anime",
+            episode_number=1,
+            total_episodes=12,
+        )
+
+        assert player.play_episode.call_count == 1
+
+    def create_probe_player(self):
+        player = Mock()
+        player.play_episode.return_value = VideoPlaybackResult(
+            exit_code=0, action="quit", data=None
+        )
+        return player
+
+
+class TestProbeUrlPlayable:
+    """Test the HEAD-based probe itself."""
+
+    def test_missing_stream_is_rejected(self):
+        """An explicit 404 marks the stream as unplayable."""
+        response = httpx.Response(404, request=httpx.Request("HEAD", "https://cdn/dead.m3u8"))
+        with patch(
+            "scrapers.plugins.utils.http_head_with_fallback",
+            side_effect=httpx.HTTPStatusError("404", request=response.request, response=response),
+        ):
+            assert probe_url_playable("https://cdn/dead.m3u8") is False
+
+    def test_available_stream_is_accepted(self):
+        """A 2xx response marks the stream as playable."""
+        response = httpx.Response(200, request=httpx.Request("HEAD", "https://cdn/ok.m3u8"))
+        with patch("scrapers.plugins.utils.http_head_with_fallback", return_value=response):
+            assert probe_url_playable("https://cdn/ok.m3u8") is True
+
+    def test_forbidden_fails_open(self):
+        """403 is a referrer/HEAD quirk, not a missing stream - let MPV decide."""
+        response = httpx.Response(403, request=httpx.Request("HEAD", "https://cdn/auth.m3u8"))
+        with patch(
+            "scrapers.plugins.utils.http_head_with_fallback",
+            side_effect=httpx.HTTPStatusError("403", request=response.request, response=response),
+        ):
+            assert probe_url_playable("https://cdn/auth.m3u8") is True
+
+    def test_network_error_fails_open(self):
+        """A transient network failure must never skip a working source."""
+        with patch(
+            "scrapers.plugins.utils.http_head_with_fallback",
+            side_effect=httpx.ConnectError("boom"),
+        ):
+            assert probe_url_playable("https://cdn/ok.m3u8") is True
+
+    def test_referrer_is_sent_as_header(self):
+        """The referrer is forwarded so referrer-gated CDNs answer correctly."""
+        response = httpx.Response(200, request=httpx.Request("HEAD", "https://cdn/ok.m3u8"))
+        with patch(
+            "scrapers.plugins.utils.http_head_with_fallback", return_value=response
+        ) as mock_head:
+            probe_url_playable("https://cdn/ok.m3u8", "https://site/video/1/")
+
+        assert mock_head.call_args[1]["headers"]["Referer"] == "https://site/video/1/"
