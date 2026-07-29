@@ -6,6 +6,9 @@ or all sources are exhausted.
 """
 
 from typing import Callable, NamedTuple
+
+import httpx
+
 from utils.video_player import VideoPlayer, VideoPlaybackResult
 from utils.logging import get_logger
 
@@ -14,6 +17,46 @@ logger = get_logger(__name__)
 
 # Exit code 3 indicates user abort (Ctrl+C) - stop immediately, don't fallback
 MPV_USER_ABORT_CODE = 3
+
+# Statuses that mean the CDN definitively does not host this stream. Kept
+# deliberately narrow: 403/405 are excluded because they usually signal a
+# referrer/HEAD quirk on a stream MPV can still play.
+_MISSING_STATUSES = frozenset({404, 410})
+
+
+def probe_url_playable(url: str, referrer: str | None = None, timeout: float = 5.0) -> bool:
+    """Check whether *url* is worth handing to MPV.
+
+    Scrapers occasionally return a stale CDN path that answers 404, which costs a
+    full MPV spawn to discover. A cheap HEAD skips those upfront.
+
+    Fails open: anything other than an explicit 404/410 returns ``True``, so a
+    transient network error or a HEAD-hostile CDN never skips a working source.
+
+    Args:
+        url: Candidate video URL.
+        referrer: Referer header the player would send, if any.
+        timeout: Per-request timeout in seconds.
+
+    Returns:
+        ``False`` only when the server explicitly reports the stream as missing.
+    """
+    from scrapers.plugins.utils import DEFAULT_HEADERS, http_head_with_fallback
+
+    headers = dict(DEFAULT_HEADERS)
+    if referrer:
+        headers["Referer"] = referrer
+    try:
+        http_head_with_fallback(url, headers=headers, timeout=timeout, max_retries=1)
+        return True
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in _MISSING_STATUSES:
+            return False
+        logger.debug(f"probe_url_playable: status {exc.response.status_code} for {url}")
+        return True
+    except Exception as exc:
+        logger.debug(f"probe_url_playable: {exc!r} for {url}")
+        return True
 
 
 class PlaybackFallbackResult(NamedTuple):
@@ -58,6 +101,7 @@ def play_episode_with_fallback(
     anilist_id: int | None = None,
     anilist_episodes: int | None = None,
     extractor: Callable[[str, str], str | list[str] | None] | None = None,
+    url_probe: Callable[[str, str | None], bool] | None = None,
 ) -> PlaybackFallbackResult:
     """Play episode using rank-major fallback until one attempt succeeds.
 
@@ -86,6 +130,9 @@ def play_episode_with_fallback(
             May return a single URL or an ordered list of candidates to try with MPV
             before moving to the next source. When None, tuple elements are already
             extracted video URLs.
+        url_probe: Optional ``(url, referrer) -> bool`` check run before spawning MPV.
+            Returning False skips the candidate without counting it as an attempt.
+            When None, every candidate goes straight to MPV.
 
     Returns:
         PlaybackFallbackResult with outcome details
@@ -140,6 +187,12 @@ def play_episode_with_fallback(
             played_at_rank = True
             url = candidates[rank]
 
+            if url_probe is not None and not url_probe(url, referrer_cache[idx]):
+                logger.info(
+                    f"   ⏭️  '{source}' (qualidade {rank + 1}) indisponível no servidor, pulando"
+                )
+                continue
+
             attempt_num = len(sources_tried) + 1
             if len(sources) > 1:
                 logger.info(
@@ -182,7 +235,10 @@ def play_episode_with_fallback(
 
     tried_names = list(dict.fromkeys(s for s, _ in sources_tried))
     logger.info(f"\n❌ Nenhuma fonte funcionou para o episódio {episode_number}.")
-    logger.info(f"   Fontes tentadas: {', '.join(tried_names)}")
+    if tried_names:
+        logger.info(f"   Fontes tentadas: {', '.join(tried_names)}")
+    else:
+        logger.info("   Nenhuma fonte tinha um vídeo disponível.")
     logger.info("   💡 Tente trocar de fonte manualmente ou verifique sua conexão.")
 
     return PlaybackFallbackResult(

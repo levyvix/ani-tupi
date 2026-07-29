@@ -24,7 +24,7 @@ from services.anime.mappings import (
 from services.anime.search import incremental_search_anime
 from services.anime.search import _rank_anime_results_by_reference
 from services.anime.title_normalization import normalize_title_for_dedup
-from services.anime.playback_fallback import play_episode_with_fallback
+from services.anime.playback_fallback import play_episode_with_fallback, probe_url_playable
 from services.anime.awaiting_episodes import registry as awaiting_registry
 from utils.video_player import _format_episode_progress
 
@@ -578,6 +578,7 @@ def _run_playback_loop(
             anilist_id=anilist_id,
             anilist_episodes=total_episodes,
             extractor=rep.search_player_from_page,
+            url_probe=probe_url_playable,
         )
 
         result = fallback_result.playback_result
