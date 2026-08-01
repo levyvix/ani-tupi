@@ -10,7 +10,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, NamedTuple
 
 from models.config import settings
 from utils.logging import get_logger
@@ -20,6 +20,59 @@ if TYPE_CHECKING:
     from utils.video_player import VideoPlaybackResult, VideoPlayer
 
 logger = get_logger(__name__)
+
+
+class NextSource(NamedTuple):
+    """Next source picked from the episode's candidate cycle.
+
+    Attributes:
+        url: Playable URL, or the page URL when it still needs extraction.
+        source: Source name.
+        referrer: Referer associated with the candidate, if any.
+        position: 1-indexed position of this source in the cycle.
+        total: Number of distinct sources in the cycle.
+    """
+
+    url: str
+    source: str
+    referrer: str | None
+    position: int
+    total: int
+
+
+def select_next_source(
+    candidates: list[tuple[str, str, str | None]] | None,
+    current_source: str | None,
+) -> NextSource | None:
+    """Pick the source that follows *current_source* in the candidate cycle.
+
+    Candidates may repeat a source with several quality ranks; the cycle keeps one
+    entry per source name (the first, best-quality one) in the original priority
+    order and wraps around at the end. A ``current_source`` absent from the cycle
+    starts from the first entry.
+
+    Returns:
+        The next source, or ``None`` when there is no cycle or it holds a single
+        source (nothing to switch to).
+    """
+    if not candidates:
+        return None
+
+    cycle: list[tuple[str, str, str | None]] = []
+    seen: set[str] = set()
+    for url, source, referrer in candidates:
+        if source in seen:
+            continue
+        seen.add(source)
+        cycle.append((url, source, referrer))
+
+    if len(cycle) < 2:
+        return None
+
+    current_idx = next((i for i, entry in enumerate(cycle) if entry[1] == current_source), -1)
+    next_idx = (current_idx + 1) % len(cycle)
+    url, source, referrer = cycle[next_idx]
+    return NextSource(url, source, referrer, next_idx + 1, len(cycle))
 
 
 class IPCHandler:
@@ -92,6 +145,9 @@ class IPCHandler:
                     action="toggle-autoplay",
                     data={"enabled": self._player.autoplay},
                 )
+            case "next-source":
+                # Handled in-place by ipc_event_loop; nothing to hand back to the caller.
+                return None
             case "toggle-sub-dub":
                 return VideoPlaybackResult(
                     exit_code=0,
@@ -100,6 +156,31 @@ class IPCHandler:
                 )
             case _:
                 return None
+
+    @staticmethod
+    def _resolve_candidate_url(
+        candidate: NextSource,
+        extractor: Callable[[str, str], str | list[str] | None] | None,
+    ) -> tuple[str | None, str | None]:
+        """Resolve a candidate to a playable URL plus the referrer to use.
+
+        Without an extractor the candidate already holds a video URL. With one, the
+        candidate's URL is an episode page resolved on demand (the page then doubles
+        as referrer when the candidate has none).
+        """
+        if extractor is None:
+            return candidate.url, candidate.referrer
+
+        try:
+            resolved = extractor(candidate.url, candidate.source)
+        except Exception as e:
+            logger.debug(f"[{candidate.source}] erro ao extrair vídeo na troca de fonte: {e!r}")
+            return None, None
+
+        urls = [resolved] if isinstance(resolved, str) else list(resolved or [])
+        if not urls:
+            return None, None
+        return urls[0], candidate.referrer or candidate.url
 
     def _restart_without_ipc(
         self,
@@ -152,6 +233,11 @@ class IPCHandler:
             logger.debug("[PLAYBACK DEBUG] IPC socket failed; restarting without IPC.")
             return self._restart_without_ipc(mpv_process, episode_context)
 
+        # Observe playback position so a source switch can resume where it stopped.
+        # Purely reactive: the loop never blocks on a get_property round-trip.
+        self.send_mpv_command(sock, "observe_property", [1, "time-pos"])
+        last_time_pos: float | None = None
+
         try:
             buffer = ""
             while mpv_process.poll() is None:
@@ -168,6 +254,12 @@ class IPCHandler:
 
                         try:
                             msg = json.loads(line)
+                            if msg.get("event") == "property-change":
+                                if msg.get("name") == "time-pos":
+                                    pos = msg.get("data")
+                                    if isinstance(pos, (int, float)):
+                                        last_time_pos = float(pos)
+                                continue
                             if msg.get("event") == "client-message":
                                 args = msg.get("args", [])
                                 if args:
@@ -336,6 +428,82 @@ class IPCHandler:
                                             )
                                             continue
 
+                                    elif action == "next-source":
+                                        candidates = episode_context.get("candidates")
+                                        next_source = select_next_source(
+                                            candidates, episode_context.get("source")
+                                        )
+
+                                        if not candidates:
+                                            self.send_mpv_command(
+                                                sock,
+                                                "show-text",
+                                                ["Troca de fonte não disponível"],
+                                            )
+                                            continue
+
+                                        if next_source is None:
+                                            self.send_mpv_command(
+                                                sock,
+                                                "show-text",
+                                                ["Não há outra fonte disponível"],
+                                            )
+                                            continue
+
+                                        self.send_mpv_command(
+                                            sock,
+                                            "show-text",
+                                            [
+                                                f"Trocando para {next_source.source} "
+                                                f"({next_source.position}/{next_source.total})..."
+                                            ],
+                                        )
+
+                                        new_url, new_referrer = self._resolve_candidate_url(
+                                            next_source,
+                                            episode_context.get("candidates_extractor"),
+                                        )
+                                        if not new_url:
+                                            self.send_mpv_command(
+                                                sock,
+                                                "show-text",
+                                                [f"Falha ao carregar a fonte {next_source.source}"],
+                                            )
+                                            logger.info(
+                                                f"❌ Falha ao trocar para a fonte "
+                                                f"{next_source.source}"
+                                            )
+                                            continue
+
+                                        if last_time_pos:
+                                            self.send_mpv_command(
+                                                sock,
+                                                "set_property",
+                                                ["start", f"{last_time_pos:.3f}"],
+                                            )
+                                        if new_referrer != episode_context.get("referrer"):
+                                            self.send_mpv_command(
+                                                sock,
+                                                "set_property",
+                                                ["referrer", new_referrer or ""],
+                                            )
+
+                                        self.send_mpv_command(
+                                            sock, "loadfile", [new_url, "replace"]
+                                        )
+                                        self.send_mpv_command(
+                                            sock, "set_property", ["start", "none"]
+                                        )
+
+                                        episode_context["url"] = new_url
+                                        episode_context["source"] = next_source.source
+                                        episode_context["referrer"] = new_referrer
+                                        logger.info(
+                                            f"🔄 Trocando para a fonte {next_source.source} "
+                                            f"({next_source.position}/{next_source.total})"
+                                        )
+                                        continue
+
                                     elif action == "toggle-autoplay":
                                         self._player.autoplay = not self._player.autoplay
                                         status = (
@@ -445,14 +613,18 @@ class IPCHandler:
                 return VideoPlaybackResult(
                     exit_code=exit_code,
                     action="auto-next",
-                    data={"episode": episode_number},
+                    data={"episode": episode_number, "source": source},
                 )
 
             final_episode = episode_context.get("episode_number", 1)
             return VideoPlaybackResult(
                 exit_code=exit_code,
                 action="quit",
-                data={"episode": final_episode, "error_hint": error_hint},
+                data={
+                    "episode": final_episode,
+                    "error_hint": error_hint,
+                    "source": episode_context.get("source"),
+                },
             )
         finally:
             if sock:

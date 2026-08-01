@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from utils.mpv import MPVLauncher, MPVLogManager
+from utils.mpv.ipc_handler import select_next_source
 
 
 class TestMPVLogManagerRotation:
@@ -109,6 +110,36 @@ class TestMPVLogManagerErrorClassification:
         assert MPVLogManager.classify_mpv_error("all good", "playing") is None
 
 
+class TestSelectNextSource:
+    """Source cycle used by the Shift+F switch."""
+
+    def test_advances_to_following_source(self):
+        candidates = [("u-a", "a", None), ("u-b", "b", None), ("u-c", "c", None)]
+        assert select_next_source(candidates, "a") == ("u-b", "b", None, 2, 3)
+
+    def test_wraps_around_on_last_source(self):
+        candidates = [("u-a", "a", None), ("u-b", "b", None), ("u-c", "c", None)]
+        assert select_next_source(candidates, "c") == ("u-a", "a", None, 1, 3)
+
+    def test_multiple_qualities_count_as_one_source(self):
+        """Extra quality ranks of a source never become separate cycle entries."""
+        candidates = [("hd-a", "a", None), ("sd-a", "a", None), ("u-b", "b", "ref-b")]
+        result = select_next_source(candidates, "a")
+        assert result == ("u-b", "b", "ref-b", 2, 2)
+
+    def test_unknown_current_source_starts_from_first(self):
+        candidates = [("u-a", "a", None), ("u-b", "b", None)]
+        assert select_next_source(candidates, "unknown") == ("u-a", "a", None, 1, 2)
+
+    def test_single_source_has_nothing_to_switch_to(self):
+        candidates = [("hd-a", "a", None), ("sd-a", "a", None)]
+        assert select_next_source(candidates, "a") is None
+
+    def test_missing_candidates_return_none(self):
+        assert select_next_source([], "a") is None
+        assert select_next_source(None, "a") is None
+
+
 class TestMPVLauncherProcess:
     """MPV command construction for IPC and plain playback."""
 
@@ -141,6 +172,7 @@ class TestMPVLauncherInputConf:
             assert "shift+r script-message reload-episode" in content
             assert "shift+a script-message toggle-autoplay" in content
             assert "shift+t script-message toggle-sub-dub" in content
+            assert "shift+f script-message next-source" in content
 
             # File is written to disk with the same content
             from pathlib import Path

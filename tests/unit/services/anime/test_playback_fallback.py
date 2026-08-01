@@ -338,6 +338,57 @@ class TestPlayEpisodeWithFallbackLazyExtraction:
         ]
 
 
+class TestPlayEpisodeWithFallbackCandidates:
+    """Candidates for the Shift+F source switch reach the player."""
+
+    def test_candidates_forwarded_with_referrers(self):
+        """Every candidate is handed to the player, referrer included."""
+        player = Mock()
+        player.play_episode.return_value = VideoPlaybackResult(exit_code=0)
+        sources = [
+            ("https://video1.mp4", "anitube", "https://page1"),
+            ("https://video2.mp4", "animefire"),
+        ]
+
+        play_episode_with_fallback(
+            player=player,
+            sources=sources,
+            anime_title="Test Anime",
+            episode_number=1,
+            total_episodes=12,
+        )
+
+        call_args = player.play_episode.call_args[1]
+        assert call_args["candidates"] == [
+            ("https://video1.mp4", "anitube", "https://page1"),
+            ("https://video2.mp4", "animefire", None),
+        ]
+        assert call_args["candidates_extractor"] is None
+
+    def test_extractor_forwarded_for_lazy_sources(self):
+        """With lazy extraction the player also gets the resolver callback."""
+        player = Mock()
+        player.play_episode.return_value = VideoPlaybackResult(exit_code=0)
+        extractor = Mock(return_value=["https://video1.mp4"])
+        sources = [("https://page1", "anitube"), ("https://page2", "animefire")]
+
+        play_episode_with_fallback(
+            player=player,
+            sources=sources,
+            anime_title="Test Anime",
+            episode_number=1,
+            total_episodes=12,
+            extractor=extractor,
+        )
+
+        call_args = player.play_episode.call_args[1]
+        assert call_args["candidates"] == [
+            ("https://page1", "anitube", None),
+            ("https://page2", "animefire", None),
+        ]
+        assert call_args["candidates_extractor"] is extractor
+
+
 class TestPlayEpisodeWithFallbackIntegration:
     """Integration tests for fallback flow."""
 

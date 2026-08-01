@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import Callable, NamedTuple
 
 import subprocess
 from pathlib import Path
@@ -15,8 +15,10 @@ class VideoPlaybackResult(NamedTuple):
 
     Attributes:
         exit_code: MPV exit code (0=normal, 2=error, 3=abort)
-        action: Action triggered by keybinding ("quit", "next", "previous", "mark-menu", "reload", "toggle-autoplay", "toggle-sub-dub")
-        data: Optional metadata about the action (e.g., next episode URL, episode number)
+        action: Action triggered by keybinding ("quit", "next", "previous", "mark-menu", "reload", "toggle-autoplay", "toggle-sub-dub").
+            "next-source" (Shift+F) is handled in-place by the IPC loop and never surfaces here.
+        data: Optional metadata about the action (e.g., next episode URL, episode number,
+            and "source" with the source actually being watched when playback ended)
     """
 
     exit_code: int
@@ -69,6 +71,8 @@ class VideoPlayer:
         anilist_id: int | None = None,
         anilist_episodes: int | None = None,
         referrer: str | None = None,
+        candidates: list[tuple[str, str, str | None]] | None = None,
+        candidates_extractor: Callable[[str, str], str | list[str] | None] | None = None,
     ) -> VideoPlaybackResult:
         """Play a single episode with optional IPC support for episode navigation.
 
@@ -82,6 +86,12 @@ class VideoPlayer:
             debug: Skip playback and return simulated result
             anilist_id: AniList ID for syncing progress (optional)
             anilist_episodes: Total episodes from AniList (optional, for display)
+            referrer: Referer header MPV should send for this stream
+            candidates: All (url, source, referrer) candidates of this episode, used by the
+                Shift+F source switch. When ``candidates_extractor`` is set, the first tuple
+                element is a page URL resolved on demand at switch time.
+            candidates_extractor: Optional ``(page_url, source_name) -> urls | None`` callback
+                used to resolve a candidate's playable URL when the user switches source.
 
         Returns:
             VideoPlaybackResult with exit code, action, and optional data
@@ -112,6 +122,8 @@ class VideoPlayer:
             "url": url,
             "referrer": referrer,
             "anilist_id": anilist_id,
+            "candidates": candidates,
+            "candidates_extractor": candidates_extractor,
         }
 
         try:
@@ -335,6 +347,8 @@ def play_episode(
     anilist_id: int | None = None,
     anilist_episodes: int | None = None,
     referrer: str | None = None,
+    candidates: list[tuple[str, str, str | None]] | None = None,
+    candidates_extractor: Callable[[str, str], str | list[str] | None] | None = None,
 ) -> VideoPlaybackResult:
     """Play a single episode with optional IPC support."""
     return _default_player.play_episode(
@@ -348,4 +362,6 @@ def play_episode(
         anilist_id=anilist_id,
         anilist_episodes=anilist_episodes,
         referrer=referrer,
+        candidates=candidates,
+        candidates_extractor=candidates_extractor,
     )
