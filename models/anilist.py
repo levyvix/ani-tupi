@@ -171,8 +171,12 @@ class AniListMediaListEntry(BaseModel):
     status: str | None = Field(None, description="List status")
     progress: int | None = Field(None, ge=0, description="Episode progress")
     score: int | None = Field(None, ge=0, le=100, description="User score")
-    startedAt: dict[str, int] | None = Field(None, description="Start date (year, month, day)")
-    completedAt: dict[str, int] | None = Field(
+    # AniList devolve FuzzyDate com year/month/day nulos quando a data não foi
+    # preenchida, então os valores internos são opcionais.
+    startedAt: dict[str, int | None] | None = Field(
+        None, description="Start date (year, month, day)"
+    )
+    completedAt: dict[str, int | None] | None = Field(
         None, description="Completion date (year, month, day)"
     )
     media: AniListAnime | None = Field(None, description="Anime media object")
