@@ -196,18 +196,38 @@ class AniListClient(AnimeOperationsMixin, MangaOperationsMixin):
         if use_token:
             headers["Authorization"] = f"Bearer {use_token}"
 
-        response = http_request_with_retry(
-            "POST",
-            settings.anilist.api_url,
-            json={"query": query, "variables": variables or {}},
-            headers=headers,
-            timeout=settings.anilist.request_timeout_seconds,
-            follow_redirects=True,
-        )
+        not_found_exc: httpx.HTTPStatusError | None = None
+        try:
+            response = http_request_with_retry(
+                "POST",
+                settings.anilist.api_url,
+                json={"query": query, "variables": variables or {}},
+                headers=headers,
+                timeout=settings.anilist.request_timeout_seconds,
+                follow_redirects=True,
+            )
+        except httpx.HTTPStatusError as exc:
+            # AniList sinaliza "entrada inexistente" (ex.: MediaList de um anime
+            # fora da lista do usuário) com 404, mas devolve um corpo GraphQL
+            # válido cujo data traz nulls. Tratamos como resposta normal.
+            if exc.response.status_code != 404:
+                raise
+            logger.debug(f"AniList 404 tratado como resposta GraphQL: {exc.response.text}")
+            response = exc.response
+            not_found_exc = exc
 
-        result = response.json()
+        try:
+            result = response.json()
+        except json.JSONDecodeError:
+            # 404 sem corpo GraphQL não veio do AniList (proxy, portal cativo):
+            # o erro HTTP original é mais informativo que o de parsing.
+            if not_found_exc is not None:
+                raise not_found_exc from None
+            raise
 
-        if "errors" in result:
+        # Num 404 os "errors" apenas descrevem o recurso ausente; o data com
+        # nulls é a resposta legítima e quem chamou sabe interpretá-la.
+        if "errors" in result and not (not_found_exc is not None and "data" in result):
             msg = f"GraphQL error: {result['errors']}"
             raise Exception(msg)
 
