@@ -237,7 +237,11 @@ Tente usar o nome do anime em japonês ou romaji para maior precisão. Por exemp
 |--------|------|
 | `Shift+N` | Próximo episódio |
 | `Shift+P` | Episódio anterior |
+| `Shift+M` | Marcar como assistido e abrir menu |
+| `Shift+R` | Recarregar o episódio atual |
+| `Shift+F` | Trocar de fonte (próxima fonte do episódio) |
 | `Shift+A` | Ativar auto-play |
+| `Shift+T` | Alternar legendado/dublado (se disponível) |
 
 ---
 

@@ -40,6 +40,9 @@ shift+a script-message toggle-autoplay
 
 # Toggle Subtitle/Dub (switch if available)
 shift+t script-message toggle-sub-dub
+
+# Next Source (switch current episode to the next available source)
+shift+f script-message next-source
 """
         with tempfile.NamedTemporaryFile(
             mode="w",

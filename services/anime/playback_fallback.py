@@ -213,6 +213,10 @@ def play_episode_with_fallback(
                 anilist_id=anilist_id,
                 anilist_episodes=anilist_episodes,
                 referrer=referrer_cache[idx],
+                candidates=[
+                    (entry[0], entry[1], entry[2] if len(entry) > 2 else None) for entry in sources
+                ],
+                candidates_extractor=extractor,
             )
             last_result = result
             sources_tried.append((source, result.exit_code))
