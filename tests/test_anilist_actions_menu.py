@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 import commands.anilist as cmd
-import services.anilist as svc_anilist
+import services.anilist.client as svc_anilist
 import services.anime.download_service as dl_service
 import ui.anilist_menus as menus
 from models.models import Status
@@ -171,7 +171,7 @@ class TestHandleStatusChange:
         client.is_authenticated.return_value = True
         client.change_status.return_value = True
         with (
-            patch("services.anilist.anilist_client", client),
+            patch("services.anilist.client.anilist_client", client),
             patch.object(cmd, "status_select_menu", return_value=Status.PAUSED),
             patch.object(cmd, "pause"),
             patch.object(cmd, "show_success") as ok,
@@ -185,7 +185,7 @@ class TestHandleStatusChange:
         client.is_authenticated.return_value = True
         client.change_status.return_value = False
         with (
-            patch("services.anilist.anilist_client", client),
+            patch("services.anilist.client.anilist_client", client),
             patch.object(cmd, "status_select_menu", return_value=Status.DROPPED),
             patch.object(cmd, "pause"),
             patch.object(cmd, "show_error") as err,
@@ -197,7 +197,7 @@ class TestHandleStatusChange:
         client = Mock()
         client.is_authenticated.return_value = False
         with (
-            patch("services.anilist.anilist_client", client),
+            patch("services.anilist.client.anilist_client", client),
             patch.object(cmd, "pause"),
             patch.object(cmd, "show_warning") as warn,
         ):
@@ -209,7 +209,7 @@ class TestHandleStatusChange:
         client = Mock()
         client.is_authenticated.return_value = True
         with (
-            patch("services.anilist.anilist_client", client),
+            patch("services.anilist.client.anilist_client", client),
             patch.object(cmd, "status_select_menu", return_value=None),
         ):
             cmd._handle_status_change(42)

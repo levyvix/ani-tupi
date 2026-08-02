@@ -174,7 +174,7 @@ class TestResolveAnilistProgress:
         fake_client.get_anime_by_id.return_value = fake_info
         fake_client.get_media_list_entry.return_value = fake_entry
 
-        import services.anilist as anilist_mod
+        import services.anilist.client as anilist_mod
 
         monkeypatch.setattr(anilist_mod, "anilist_client", fake_client)
 
@@ -193,7 +193,7 @@ class TestResolveAnilistProgress:
         fake_client.get_anime_by_id.return_value = None
         fake_client.get_media_list_entry.return_value = None
 
-        import services.anilist as anilist_mod
+        import services.anilist.client as anilist_mod
 
         monkeypatch.setattr(anilist_mod, "anilist_client", fake_client)
 
@@ -677,7 +677,7 @@ class TestSaveHistoryFromEventAniList:
     """save_history_from_event syncs progress when AniList is authenticated."""
 
     def test_authenticated_adds_to_list(self, history_store, history_repository, monkeypatch):
-        import services.anilist as anilist_service
+        import services.anilist.client as anilist_service
         from services.core.history_service import save_history_from_event
 
         fake_client = MagicMock()
@@ -700,7 +700,7 @@ class TestSaveHistoryFromEventAniList:
         fake_client.update_progress.assert_called_once_with(9253, 4)
 
     def test_planning_status_moves_to_current(self, history_store, history_repository, monkeypatch):
-        import services.anilist as anilist_service
+        import services.anilist.client as anilist_service
         from services.core.history_service import save_history_from_event
 
         fake_entry = MagicMock()
@@ -722,7 +722,7 @@ class TestSaveHistoryFromEventAniList:
     def test_completed_status_changes_to_repeating(
         self, history_store, history_repository, monkeypatch
     ):
-        import services.anilist as anilist_service
+        import services.anilist.client as anilist_service
         from services.core.history_service import save_history_from_event
         from models.models import Status
 
@@ -746,7 +746,7 @@ class TestSaveHistoryFromEventAniList:
         self, history_store, history_repository, monkeypatch
     ):
         """If change_status returns False, progress update is skipped."""
-        import services.anilist as anilist_service
+        import services.anilist.client as anilist_service
         from services.core.history_service import save_history_from_event
 
         fake_entry = MagicMock()
@@ -767,7 +767,7 @@ class TestSaveHistoryFromEventAniList:
         self, history_store, history_repository, monkeypatch
     ):
         """action='started' does not trigger AniList sync."""
-        import services.anilist as anilist_service
+        import services.anilist.client as anilist_service
         from services.core.history_service import save_history_from_event
 
         fake_client = MagicMock()

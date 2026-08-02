@@ -10,7 +10,7 @@ from thefuzz import fuzz
 
 from models.config import settings
 from models.models import AniListAnime, AnimeTitleResolution, AnimeMetadataEntry
-from services.anilist import anilist_client
+from services.anilist.client import anilist_client
 from services.anime.metadata_provider import get_metadata_provider
 from services.anime.title_normalization import normalize_search_cache_key
 from utils.cache import get_cache

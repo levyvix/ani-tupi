@@ -50,7 +50,7 @@ def incremental_search_env(repository, monkeypatch):
     monkeypatch.setattr(scraper_search_module, "rep", repository)
     monkeypatch.setattr(cache_module, "_global_cache", MemoryCache())
     monkeypatch.setattr(
-        "services.anilist.discovery.auto_discover_anilist_id",
+        "services.anilist.anilist_service.auto_discover_anilist_id",
         lambda _query: [],
     )
     return repository, plugin

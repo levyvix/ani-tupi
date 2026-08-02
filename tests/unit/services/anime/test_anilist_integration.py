@@ -51,7 +51,7 @@ def test_playback_loop_preserves_autoplay_between_episodes(monkeypatch):
 
     monkeypatch.setattr(mod, "rep", Repository())
     monkeypatch.setattr(mod, "play_episode_with_fallback", play_with_fallback)
-    monkeypatch.setattr(mod, "_sync_anilist_progress", lambda *_args: None)
+    monkeypatch.setattr(mod, "sync_anilist_progress", lambda *_args: None)
     monkeypatch.setattr(mod, "_maybe_offer_sequel_on_finish", lambda *_args: False)
 
     mod._run_playback_loop(

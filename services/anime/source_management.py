@@ -190,7 +190,7 @@ def switch_anime_source(
     # 8. If have anilist_id, always check AniList (source of truth)
     # Use AniList as primary when available (you might have watched via web/mobile)
     if anilist_id:
-        from services.anilist import anilist_client
+        from services.anilist.client import anilist_client
 
         if anilist_client.is_authenticated():
             # Get media list entry for this anime

@@ -12,7 +12,7 @@ from models.models import AnimeTitleResolution
 from services.anime.title_resolution import AnimeTitleResolver
 from services.repository import rep
 from services.core import ui_bridge
-from services.anilist.scraper_cache import get_scraper_cache
+from services.anilist.anilist_service import get_scraper_cache
 from services.anime.title_normalization import normalize_anime_title
 from services.anime.search.incremental_search_state import IncrementalSearchState
 from services.anime.search.filtering import _filter_anime_results

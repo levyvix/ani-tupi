@@ -314,7 +314,9 @@ class TestSyncToAnilistIfAhead:
 
         with patch("services.manga.manga_service.MangaHistory") as mock_history:
             mock_history.load.return_value = {}
-            with patch("services.anilist.discovery.get_anilist_id_from_title", return_value=None):
+            with patch(
+                "services.anilist.anilist_service.get_anilist_id_from_title", return_value=None
+            ):
                 result = svc.sync_to_anilist_if_ahead("Manga", "5", anilist)
 
         assert result is False
@@ -400,7 +402,9 @@ class TestSyncToAnilistIfAhead:
 
         with patch("services.manga.manga_service.MangaHistory") as mock_history:
             mock_history.load.return_value = {}
-            with patch("services.anilist.discovery.get_anilist_id_from_title", return_value=42):
+            with patch(
+                "services.anilist.anilist_service.get_anilist_id_from_title", return_value=42
+            ):
                 result = svc.sync_to_anilist_if_ahead("Manga", "5", anilist)
 
         assert result is True

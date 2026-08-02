@@ -7,10 +7,10 @@ sequel detection, and synchronization with AniList API.
 from collections.abc import Callable
 from typing import Any
 
-from services.anilist import anilist_client
+from services.anilist.client import anilist_client
 from services.repository import rep
 from services.core import ui_bridge
-from services.anilist.scraper_cache import get_scraper_cache
+from services.anilist.anilist_service import get_scraper_cache
 from scrapers import loader
 from services.core.history_service import save_history
 from utils.video_player import VideoPlayer
@@ -32,8 +32,8 @@ from utils.video_player import _format_episode_progress
 from services.anime.episode_selection import _resolve_start_episode_idx, SWITCH_SOURCE
 from services.anime.episode_loader import _load_episode_list, _read_local_progress
 from services.anime.anime_choice_persistence import _persist_anime_choice
-from services.anilist.progress_sync import _sync_anilist_progress
-from services.anilist.sequel_service import offer_sequel_and_continue
+from services.anilist.anilist_service import sync_anilist_progress
+from services.anilist.anilist_service import offer_sequel_and_continue
 
 logger = get_logger(__name__)
 
@@ -615,7 +615,7 @@ def _run_playback_loop(
         elif result.action == "auto-next":
             current_episode = result.data.get("episode", episode) if result.data else episode
 
-            _sync_anilist_progress(anilist_id, current_episode, num_episodes)
+            sync_anilist_progress(anilist_id, current_episode, num_episodes)
 
             episode_idx = current_episode - 1
             current_episode_idx = current_episode - 1
@@ -659,7 +659,7 @@ def _run_playback_loop(
                 episode = current_episode_idx + 1
                 save_history(selected_anime, episode_idx, anilist_id, source)
 
-                _sync_anilist_progress(anilist_id, episode, num_episodes)
+                sync_anilist_progress(anilist_id, episode, num_episodes)
 
                 if episode == num_episodes and _maybe_offer_sequel_on_finish(
                     anilist_id, args, episode

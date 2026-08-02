@@ -7,7 +7,7 @@ into a single parameterized function to eliminate code duplication.
 from collections.abc import Callable
 
 from services.core import ui_bridge
-from services.anilist import anilist_client
+from services.anilist.client import anilist_client
 from services.manga.manga_service import UnifiedMangaService
 from utils.logging import get_logger
 

@@ -17,7 +17,7 @@ class TestAniListDiscoveryResult:
 
     def test_result_is_frozen_dataclass(self):
         """AniListDiscoveryResult should be immutable (frozen)."""
-        from services.anilist.discovery import AniListDiscoveryResult
+        from services.anilist.anilist_service import AniListDiscoveryResult
 
         result = AniListDiscoveryResult(
             anilist_id=None,
@@ -33,7 +33,7 @@ class TestAniListDiscoveryResult:
 
     def test_result_with_all_fields_populated(self):
         """Should create result with all fields populated."""
-        from services.anilist.discovery import AniListDiscoveryResult
+        from services.anilist.anilist_service import AniListDiscoveryResult
 
         result = AniListDiscoveryResult(
             anilist_id=12345,
@@ -51,7 +51,7 @@ class TestAniListDiscoveryResult:
 
     def test_result_not_found_case(self):
         """Should create result for not found case."""
-        from services.anilist.discovery import AniListDiscoveryResult
+        from services.anilist.anilist_service import AniListDiscoveryResult
 
         result = AniListDiscoveryResult(
             anilist_id=None,
@@ -71,10 +71,10 @@ class TestAniListDiscoveryResult:
 class TestDiscoverAnilistInfo:
     """Tests for discover_anilist_info function."""
 
-    @patch("services.anilist.discovery.anilist_client")
+    @patch("services.anilist.anilist_service.anilist_client")
     def test_not_authenticated_returns_empty_result(self, mock_anilist):
         """When not authenticated, should return result with authenticated=False."""
-        from services.anilist.discovery import discover_anilist_info
+        from services.anilist.anilist_service import discover_anilist_info
 
         # Setup: AniList not authenticated
         mock_anilist.is_authenticated.return_value = False
@@ -89,12 +89,12 @@ class TestDiscoverAnilistInfo:
         assert result.anilist_title is None
         assert result.total_episodes is None
 
-    @patch("services.anilist.discovery.normalize_title_for_search")
-    @patch("services.anilist.discovery.auto_discover_anilist_id")
-    @patch("services.anilist.discovery.anilist_client")
+    @patch("services.anilist.anilist_service.normalize_title_for_search")
+    @patch("services.anilist.anilist_service.auto_discover_anilist_id")
+    @patch("services.anilist.anilist_service.anilist_client")
     def test_authenticated_no_match_found(self, mock_anilist, mock_auto_discover, mock_normalize):
         """When authenticated but no match found, return found=False."""
-        from services.anilist.discovery import discover_anilist_info
+        from services.anilist.anilist_service import discover_anilist_info
 
         # Setup
         mock_anilist.is_authenticated.return_value = True
@@ -111,15 +111,15 @@ class TestDiscoverAnilistInfo:
         assert result.anilist_title is None
         mock_normalize.assert_called_once_with("Nonexistent Anime (Dublado)")
 
-    @patch("services.anilist.discovery.get_anilist_metadata")
-    @patch("services.anilist.discovery.normalize_title_for_search")
-    @patch("services.anilist.discovery.auto_discover_anilist_id")
-    @patch("services.anilist.discovery.anilist_client")
+    @patch("services.anilist.anilist_service.get_anilist_metadata")
+    @patch("services.anilist.anilist_service.normalize_title_for_search")
+    @patch("services.anilist.anilist_service.auto_discover_anilist_id")
+    @patch("services.anilist.anilist_service.anilist_client")
     def test_authenticated_successful_discovery(
         self, mock_anilist, mock_auto_discover, mock_normalize, mock_get_metadata
     ):
         """Successful discovery returns complete result with title normalization."""
-        from services.anilist.discovery import discover_anilist_info
+        from services.anilist.anilist_service import discover_anilist_info
 
         # Setup: Authenticated, title normalization, and metadata retrieval
         mock_anilist.is_authenticated.return_value = True
@@ -152,15 +152,15 @@ class TestDiscoverAnilistInfo:
         # Verify auto_discover was called with normalized title
         mock_auto_discover.assert_called_once_with("dandadan")
 
-    @patch("services.anilist.discovery.get_anilist_metadata")
-    @patch("services.anilist.discovery.normalize_title_for_search")
-    @patch("services.anilist.discovery.auto_discover_anilist_id")
-    @patch("services.anilist.discovery.anilist_client")
+    @patch("services.anilist.anilist_service.get_anilist_metadata")
+    @patch("services.anilist.anilist_service.normalize_title_for_search")
+    @patch("services.anilist.anilist_service.auto_discover_anilist_id")
+    @patch("services.anilist.anilist_service.anilist_client")
     def test_error_handling_graceful_degradation(
         self, mock_anilist, mock_auto_discover, mock_normalize, mock_get_metadata
     ):
         """Test graceful error handling in various failure scenarios."""
-        from services.anilist.discovery import discover_anilist_info
+        from services.anilist.anilist_service import discover_anilist_info
 
         # Scenario 1: API discovery fails - return no match
         mock_anilist.is_authenticated.return_value = True
@@ -194,15 +194,15 @@ class TestDiscoverAnilistInfo:
         assert result.anilist_title is None
         assert result.total_episodes is None
 
-    @patch("services.anilist.discovery.get_anilist_metadata")
-    @patch("services.anilist.discovery.normalize_title_for_search")
-    @patch("services.anilist.discovery.auto_discover_anilist_id")
-    @patch("services.anilist.discovery.anilist_client")
+    @patch("services.anilist.anilist_service.get_anilist_metadata")
+    @patch("services.anilist.anilist_service.normalize_title_for_search")
+    @patch("services.anilist.anilist_service.auto_discover_anilist_id")
+    @patch("services.anilist.anilist_service.anilist_client")
     def test_anime_with_unknown_episode_count(
         self, mock_anilist, mock_auto_discover, mock_normalize, mock_get_metadata
     ):
         """When anime episodes count is unknown (None), result should have None."""
-        from services.anilist.discovery import discover_anilist_info
+        from services.anilist.anilist_service import discover_anilist_info
 
         # Setup: Ongoing anime with unknown episode count
         mock_anilist.is_authenticated.return_value = True
@@ -230,11 +230,11 @@ class TestDiscoverAnilistInfo:
         assert result.anilist_title == "One Piece"
         assert result.total_episodes is None
 
-    @patch("services.anilist.discovery.normalize_title_for_search")
-    @patch("services.anilist.discovery.anilist_client")
+    @patch("services.anilist.anilist_service.normalize_title_for_search")
+    @patch("services.anilist.anilist_service.anilist_client")
     def test_empty_title_returns_not_found(self, mock_anilist, mock_normalize):
         """When title is empty after normalization, should return not found."""
-        from services.anilist.discovery import discover_anilist_info
+        from services.anilist.anilist_service import discover_anilist_info
 
         # Setup: Title normalizes to empty string
         mock_anilist.is_authenticated.return_value = True

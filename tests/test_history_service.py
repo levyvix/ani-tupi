@@ -193,7 +193,7 @@ class TestSaveHistoryFromEvent:
         self, history_store, history_repository, monkeypatch
     ):
         """save_history_from_event stores the provided anilist_id."""
-        import services.anilist as anilist_service
+        import services.anilist.client as anilist_service
         from services.core.history_service import save_history_from_event
 
         history_repository.add_anime(
@@ -256,7 +256,7 @@ class TestSaveHistoryFromEvent:
         self, history_store, history_repository, monkeypatch
     ):
         """If anilist_id not in repo, it is read from an existing history entry."""
-        import services.anilist as anilist_service
+        import services.anilist.client as anilist_service
         from services.core.history_service import save_history, save_history_from_event
 
         save_history("Mob Psycho 100", 1, anilist_id=97988, source="animefire")

@@ -24,11 +24,11 @@ def _mod():
 
 
 def _mod_progress_sync():
-    return importlib.import_module("services.anilist.progress_sync")
+    return importlib.import_module("services.anilist.anilist_service")
 
 
 def _mod_sequel_service():
-    return importlib.import_module("services.anilist.sequel_service")
+    return importlib.import_module("services.anilist.anilist_service")
 
 
 def _mod_episode_loader():
@@ -103,7 +103,7 @@ class TestBuildAnilistPostPlaybackOptions:
 
 
 # ---------------------------------------------------------------------------
-# _is_anime_released  (lives in services.anilist.sequel_service)
+# _is_anime_released  (lives in services.anilist.anilist_service)
 # ---------------------------------------------------------------------------
 
 
@@ -449,7 +449,7 @@ class TestPromptSavedTitleChoice:
 
 
 # ---------------------------------------------------------------------------
-# _sync_anilist_progress  (lives in services.anilist.progress_sync)
+# sync_anilist_progress  (lives in services.anilist.anilist_service)
 # ---------------------------------------------------------------------------
 
 
@@ -469,14 +469,14 @@ class TestSyncAnilistProgress:
         mod = _mod_progress_sync()
         client = self._make_client(authenticated=False)
         monkeypatch.setattr(mod, "anilist_client", client)
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
         client.update_progress.assert_not_called()
 
     def test_not_in_list_adds_current(self, monkeypatch):
         mod = _mod_progress_sync()
         client = self._make_client(authenticated=True, in_list=False, update_success=True)
         monkeypatch.setattr(mod, "anilist_client", client)
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
         client.add_to_list.assert_called()
         client.update_progress.assert_called_with(1, 5)
 
@@ -489,7 +489,7 @@ class TestSyncAnilistProgress:
         monkeypatch.setattr(mod, "anilist_client", client)
         from models.models import Status
 
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
         client.add_to_list.assert_called_with(1, Status.CURRENT)
 
     def test_current_status_last_ep_completes(self, monkeypatch):
@@ -501,7 +501,7 @@ class TestSyncAnilistProgress:
         monkeypatch.setattr(mod, "anilist_client", client)
         from models.models import Status
 
-        mod._sync_anilist_progress(1, 12, 12)
+        mod.sync_anilist_progress(1, 12, 12)
         client.change_status.assert_called_with(1, Status.COMPLETED)
 
     def test_current_status_not_last_ep_no_complete(self, monkeypatch):
@@ -511,7 +511,7 @@ class TestSyncAnilistProgress:
             authenticated=True, in_list=True, entry=entry, update_success=True
         )
         monkeypatch.setattr(mod, "anilist_client", client)
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
         client.change_status.assert_not_called()
 
     def test_update_fails_gets_viewer(self, monkeypatch):
@@ -520,7 +520,7 @@ class TestSyncAnilistProgress:
             authenticated=True, in_list=True, entry=None, update_success=False, viewer=None
         )
         monkeypatch.setattr(mod, "anilist_client", client)
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
         client.get_viewer_info.assert_called()
 
     def test_update_fails_viewer_exists_logs_warning(self, monkeypatch):
@@ -531,7 +531,7 @@ class TestSyncAnilistProgress:
         )
         monkeypatch.setattr(mod, "anilist_client", client)
         # Should not raise
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
 
 
 # ---------------------------------------------------------------------------
@@ -563,7 +563,7 @@ class TestGetAnilistTitles:
 
 
 # ---------------------------------------------------------------------------
-# offer_sequel_and_continue  (lives in services.anilist.sequel_service)
+# offer_sequel_and_continue  (lives in services.anilist.anilist_service)
 # ---------------------------------------------------------------------------
 
 
@@ -1380,7 +1380,7 @@ class TestRunPlaybackLoopBranches:
         rep.get_episode_list.return_value = ep_list
         monkeypatch.setattr(mod, "rep", rep)
 
-        monkeypatch.setattr(mod, "_sync_anilist_progress", lambda *a, **kw: None)
+        monkeypatch.setattr(mod, "sync_anilist_progress", lambda *a, **kw: None)
         monkeypatch.setattr(mod, "_maybe_offer_sequel_on_finish", lambda *a, **kw: False)
         monkeypatch.setattr(mod, "save_history", lambda *a, **kw: None)
 
@@ -1398,7 +1398,7 @@ class TestRunPlaybackLoopBranches:
         rep = MagicMock()
         rep.get_all_episode_sources.return_value = []
         monkeypatch.setattr(mod, "rep", rep)
-        monkeypatch.setattr(mod, "_sync_anilist_progress", lambda *a: None)
+        monkeypatch.setattr(mod, "sync_anilist_progress", lambda *a: None)
         monkeypatch.setattr(mod, "_maybe_offer_sequel_on_finish", lambda *a, **kw: False)
         monkeypatch.setattr(mod, "save_history", lambda *a, **kw: None)
         monkeypatch.setattr(mod, "ui_bridge", _make_ui_bridge_mock())

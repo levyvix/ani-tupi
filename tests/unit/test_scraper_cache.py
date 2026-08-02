@@ -7,7 +7,7 @@ and mocking only the external AniList lookup.
 
 from utils import cache as cache_module
 from utils.cache import DiskCache
-from services.anilist.scraper_cache import get_scraper_cache, set_scraper_cache
+from services.anilist.anilist_service import get_scraper_cache, set_scraper_cache
 
 
 def test_scraper_cache_round_trip(temp_dir, monkeypatch):
@@ -18,7 +18,7 @@ def test_scraper_cache_round_trip(temp_dir, monkeypatch):
 
     # No AniList ID available -> key falls back to the anime title.
     monkeypatch.setattr(
-        "services.anilist.scraper_cache.get_anilist_id_from_title", lambda _title: None
+        "services.anilist.anilist_service.get_anilist_id_from_title", lambda _title: None
     )
     monkeypatch.setattr(cache_module.settings.cache, "episodes_cache_enabled", True)
 
@@ -37,7 +37,7 @@ def test_scraper_cache_miss_returns_none(temp_dir, monkeypatch):
     disk_cache = DiskCache(cache_dir=temp_dir / "cache")
     monkeypatch.setattr(cache_module, "_global_cache", disk_cache)
     monkeypatch.setattr(
-        "services.anilist.scraper_cache.get_anilist_id_from_title", lambda _title: None
+        "services.anilist.anilist_service.get_anilist_id_from_title", lambda _title: None
     )
     monkeypatch.setattr(cache_module.settings.cache, "episodes_cache_enabled", True)
 

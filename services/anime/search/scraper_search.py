@@ -46,7 +46,7 @@ def _perform_scraper_search(partial_query: str) -> _ScraperSearchOutcome:
     anilist_reference_title: str | None = None
     anilist_results = None
     try:
-        from services.anilist.discovery import auto_discover_anilist_id
+        from services.anilist.anilist_service import auto_discover_anilist_id
 
         anilist_results = auto_discover_anilist_id(used_query)
         if anilist_results:

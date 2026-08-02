@@ -14,7 +14,7 @@ def handle_clear_cache(target) -> None:
         target: ``True`` clears everything; a string clears only that title's
             cache (resolving its AniList id when possible for a precise prefix).
     """
-    from services.anilist.discovery import auto_discover_anilist_id
+    from services.anilist.anilist_service import auto_discover_anilist_id
     from services.anime.mappings import clear_anilist_mapping
     from utils.cache import clear_cache_all_with_mappings, clear_cache_by_prefix
 

@@ -12,7 +12,7 @@ Key responsibilities:
 
 from dataclasses import dataclass
 
-from services.anilist.discovery import AniListDiscoveryResult
+from services.anilist.anilist_service import AniListDiscoveryResult
 
 
 @dataclass(frozen=True)

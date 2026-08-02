@@ -374,7 +374,7 @@ def anime(args) -> None:
 
         # Format progress string
         from services.anime.progress_service import get_episode_progress_info
-        from services.anilist.discovery import AniListDiscoveryResult
+        from services.anilist.anilist_service import AniListDiscoveryResult
 
         anilist_result = None
         if ctx.anilist_id:
