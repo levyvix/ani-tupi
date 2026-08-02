@@ -404,12 +404,12 @@ class TestPrefetchEpisodeUrls:
             return ("http://cdn.example.net/anime/01.mp4/index.m3u8", "src")
 
         with (
-            patch("services.anime.episode_url_pattern.detect_episode_pattern", return_value=True),
+            patch("services.anime.episode_service.detect_episode_pattern", return_value=True),
             patch(
-                "services.anime.episode_url_pattern.derive_episode_url",
+                "services.anime.episode_service.derive_episode_url",
                 side_effect=lambda url, ep: f"http://cdn.example.net/anime/{ep:02d}.mp4/index.m3u8",
             ),
-            patch("services.anime.episode_url_pattern.validate_episode_url", return_value=True),
+            patch("services.anime.episode_service.validate_episode_url", return_value=True),
         ):
             result = svc._prefetch_episode_urls("Anime", [1, 2, 3], getter)
 
@@ -431,12 +431,12 @@ class TestPrefetchEpisodeUrls:
             return (f"http://cdn.example.net/anime/{ep:02d}.mp4/index.m3u8", "src")
 
         with (
-            patch("services.anime.episode_url_pattern.detect_episode_pattern", return_value=True),
+            patch("services.anime.episode_service.detect_episode_pattern", return_value=True),
             patch(
-                "services.anime.episode_url_pattern.derive_episode_url",
+                "services.anime.episode_service.derive_episode_url",
                 return_value="http://bad.url/",
             ),
-            patch("services.anime.episode_url_pattern.validate_episode_url", return_value=False),
+            patch("services.anime.episode_service.validate_episode_url", return_value=False),
         ):
             svc._prefetch_episode_urls("Anime", [1, 2], getter)
 

@@ -32,7 +32,7 @@ def _mod_sequel_service():
 
 
 def _mod_episode_loader():
-    return importlib.import_module("services.anime.episode_loader")
+    return importlib.import_module("services.anime.episode_service")
 
 
 def _mod_anime_choice_persistence():
@@ -40,7 +40,7 @@ def _mod_anime_choice_persistence():
 
 
 def _mod_episode_selection():
-    return importlib.import_module("services.anime.episode_selection")
+    return importlib.import_module("services.anime.episode_service")
 
 
 def _make_args(**kwargs):
@@ -235,7 +235,7 @@ class TestCurrentUsedQuery:
 
 
 # ---------------------------------------------------------------------------
-# _read_local_progress  (lives in services.anime.episode_loader)
+# _read_local_progress  (lives in services.anime.episode_service)
 # ---------------------------------------------------------------------------
 
 
@@ -272,7 +272,7 @@ class TestReadLocalProgress:
 
 
 # ---------------------------------------------------------------------------
-# _build_continue_menu  (lives in services.anime.episode_selection)
+# _build_continue_menu  (lives in services.anime.episode_service)
 # ---------------------------------------------------------------------------
 
 
@@ -331,7 +331,7 @@ class TestBuildContinueMenu:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_start_episode_idx - simple branches (lives in services.anime.episode_selection)
+# _resolve_start_episode_idx - simple branches (lives in services.anime.episode_service)
 # ---------------------------------------------------------------------------
 
 
@@ -823,7 +823,7 @@ class TestConfirmWatchOrDownload:
 
 
 # ---------------------------------------------------------------------------
-# _load_episode_list  (lives in services.anime.episode_loader)
+# _load_episode_list  (lives in services.anime.episode_service)
 # ---------------------------------------------------------------------------
 
 
@@ -895,7 +895,7 @@ class TestLoadEpisodeList:
 
 
 # ---------------------------------------------------------------------------
-# _find_awaiting_episode_idx  (lives in services.anime.episode_selection)
+# _find_awaiting_episode_idx  (lives in services.anime.episode_service)
 # Note: rep and awaiting_registry are imported inside the function, so we
 # must patch their source modules directly.
 # ---------------------------------------------------------------------------
@@ -928,7 +928,7 @@ class TestFindAwaitingEpisodeIdx:
 
         monkeypatch.setattr(repo_mod, "rep", rep)
         registry = MagicMock()
-        import services.anime.awaiting_episodes as awaiting_mod
+        import services.anime.episode_service as awaiting_mod
 
         monkeypatch.setattr(awaiting_mod, "registry", registry)
         ui = _make_ui_bridge_mock()

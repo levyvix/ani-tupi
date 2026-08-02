@@ -25,12 +25,12 @@ from services.anime.search import incremental_search_anime
 from services.anime.search import _rank_anime_results_by_reference
 from services.anime.title_normalization import normalize_title_for_dedup
 from services.anime.playback_service import play_episode_with_fallback, probe_url_playable
-from services.anime.awaiting_episodes import registry as awaiting_registry
+from services.anime.episode_service import registry as awaiting_registry
 from utils.video_player import _format_episode_progress
 
 # Import extracted functions
-from services.anime.episode_selection import _resolve_start_episode_idx, SWITCH_SOURCE
-from services.anime.episode_loader import _load_episode_list, _read_local_progress
+from services.anime.episode_service import _resolve_start_episode_idx, SWITCH_SOURCE
+from services.anime.episode_service import _load_episode_list, _read_local_progress
 from services.anime.anime_choice_persistence import _persist_anime_choice
 from services.anilist.anilist_service import sync_anilist_progress
 from services.anilist.anilist_service import offer_sequel_and_continue

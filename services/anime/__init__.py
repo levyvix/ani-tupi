@@ -15,7 +15,7 @@ from .mappings import (
     save_anilist_mapping,
     load_anilist_search_title,
 )
-from .episode_context import get_next_episode_context
+from .episode_service import get_next_episode_context
 from .anilist_integration import (
     offer_sequel_and_continue,
     anilist_anime_flow,

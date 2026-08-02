@@ -740,7 +740,7 @@ def get_episode_url_and_source(
         # Fast path: try URL pattern derivation when we have an existing player URL
         if current_player_url:
             try:
-                from services.anime.episode_url_pattern import (
+                from services.anime.episode_service import (
                     derive_episode_url,
                     detect_episode_pattern,
                     validate_episode_url,
@@ -779,7 +779,7 @@ def get_episode_url_and_source(
                 logger.debug("Episode URL pattern error for %s ep %d: %s", anime_title, episode, e)
 
         # Check if this is an awaiting episode with a direct URL from homepage search
-        from services.anime.awaiting_episodes import registry as awaiting_registry
+        from services.anime.episode_service import registry as awaiting_registry
 
         episode_url = awaiting_registry.get(anime_title, episode)
         if episode_url:

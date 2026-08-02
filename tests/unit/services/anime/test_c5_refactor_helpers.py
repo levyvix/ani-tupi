@@ -14,7 +14,7 @@ the helpers themselves run for real.
 
 from unittest.mock import Mock, patch
 
-from services.anime.awaiting_episodes import AwaitingEpisodeRegistry
+from services.anime.episode_service import AwaitingEpisodeRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ class TestAwaitingEpisodeRegistry:
         assert registry.get("B", 3) == "urlB"
 
     def test_module_level_singleton_exists(self):
-        from services.anime import awaiting_episodes
+        from services.anime import episode_service as awaiting_episodes
 
         assert isinstance(awaiting_episodes.registry, AwaitingEpisodeRegistry)
 
@@ -56,7 +56,7 @@ class TestGetEpisodeUrlUsesAwaitingRegistry:
 
     @patch("services.anime.playback_service.rep")
     def test_awaiting_url_extracts_via_repository(self, mock_rep):
-        from services.anime.awaiting_episodes import registry
+        from services.anime.episode_service import registry
         from services.anime.playback_service import get_episode_url_and_source
 
         registry.clear("Dandadan")
@@ -78,7 +78,7 @@ class TestGetEpisodeUrlUsesAwaitingRegistry:
 
     @patch("services.anime.playback_service.rep")
     def test_no_awaiting_url_falls_back_to_regular_search(self, mock_rep):
-        from services.anime.awaiting_episodes import registry
+        from services.anime.episode_service import registry
         from services.anime.playback_service import get_episode_url_and_source
 
         registry.clear("Dandadan")
