@@ -1041,7 +1041,7 @@ def _build_search_query_candidates(
 ) -> list[str]:
     """Build fallback search queries from the resolved title and its aliases.
 
-    The resolver already picks the highest-scoring Jikan candidate. If that
+    The resolver already picks the highest-scoring provider candidate. If that
     canonical title does not yield scraper results, try the provider aliases
     before falling back to the user's original query.
     """
@@ -1092,7 +1092,7 @@ def search_anime_flow(args):
     Supports decreasing word count if user wants to see more results.
     Example: "Spy Family Season 2" (4 words) → Try 4 → 3 → 2 words progressively.
 
-    Jikan-first: resolves the canonical title before cache and scraper search.
+    Resolution-first: resolves the canonical title before cache and scraper search.
     """
     # Clear previous search results to avoid accumulating data from previous calls
     # (Repository is singleton, so it keeps data between calls)
