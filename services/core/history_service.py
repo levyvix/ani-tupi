@@ -11,7 +11,7 @@ from utils.exceptions import PersistenceError
 from utils.logging import get_logger
 from services.anilist.anilist_service import get_anilist_id_with_interactive_fallback
 from models.models import HistoryEntry, Status
-from services.anime.mappings import load_anilist_urls
+from services.anime.anime_persistence import load_anilist_urls
 
 logger = get_logger(__name__)
 

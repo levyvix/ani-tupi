@@ -15,7 +15,7 @@ from models import EpisodeContext
 from models.config import get_data_path
 from scrapers.plugins.utils import http_head_with_fallback
 from services.anilist.anilist_service import get_scraper_cache, set_scraper_cache
-from services.anime.mappings import load_anilist_urls
+from services.anime.anime_persistence import load_anilist_urls
 from services.core import ui_bridge
 from services.core.history_service import reset_history
 from services.repository import rep

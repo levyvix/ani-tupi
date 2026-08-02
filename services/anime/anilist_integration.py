@@ -16,7 +16,7 @@ from services.core.history_service import save_history
 from utils.video_player import VideoPlayer
 from services.anime.source_management import switch_anime_source
 from utils.logging import get_logger
-from services.anime.mappings import (
+from services.anime.anime_persistence import (
     load_anilist_mapping,
     load_language_preference,
     save_language_preference,
@@ -31,7 +31,7 @@ from utils.video_player import _format_episode_progress
 # Import extracted functions
 from services.anime.episode_service import _resolve_start_episode_idx, SWITCH_SOURCE
 from services.anime.episode_service import _load_episode_list, _read_local_progress
-from services.anime.anime_choice_persistence import _persist_anime_choice
+from services.anime.anime_persistence import persist_anime_choice
 from services.anilist.anilist_service import sync_anilist_progress
 from services.anilist.anilist_service import offer_sequel_and_continue
 
@@ -771,7 +771,7 @@ def anilist_anime_flow(
 
     # 2. Persist the resolved choice for next time.
     if anilist_id:
-        _persist_anime_choice(anilist_id, selected_anime, anime_title, source)
+        persist_anime_choice(anilist_id, selected_anime, anime_title, source)
 
     # 3. Load the episode list (cache-first).
     episode_list, scraper_episode_count = _load_episode_list(

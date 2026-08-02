@@ -36,7 +36,7 @@ def _mod_episode_loader():
 
 
 def _mod_anime_choice_persistence():
-    return importlib.import_module("services.anime.anime_choice_persistence")
+    return importlib.import_module("services.anime.anime_persistence")
 
 
 def _mod_episode_selection():
@@ -1161,7 +1161,7 @@ class TestSearchAndSelectAnime:
 
 
 # ---------------------------------------------------------------------------
-# _persist_anime_choice  (lives in services.anime.anime_choice_persistence)
+# persist_anime_choice  (lives in services.anime.anime_persistence)
 # ---------------------------------------------------------------------------
 
 
@@ -1173,7 +1173,7 @@ class TestPersistAnimeChoice:
         monkeypatch.setattr(mod, "rep", rep)
         save_calls = []
         monkeypatch.setattr(mod, "save_anilist_mapping", lambda *a, **kw: save_calls.append(kw))
-        mod._persist_anime_choice(1, "Selected Anime", "Selected Anime", "src")
+        mod.persist_anime_choice(1, "Selected Anime", "Selected Anime", "src")
         assert save_calls
         assert save_calls[0]["anime_url"] == "http://url"
 
@@ -1184,7 +1184,7 @@ class TestPersistAnimeChoice:
         monkeypatch.setattr(mod, "rep", rep)
         save_calls = []
         monkeypatch.setattr(mod, "save_anilist_mapping", lambda *a, **kw: save_calls.append(kw))
-        mod._persist_anime_choice(1, "Selected Anime", "Selected Anime", "src")
+        mod.persist_anime_choice(1, "Selected Anime", "Selected Anime", "src")
         # Should fall through to fuzzy and find the close match
         assert save_calls
 
@@ -1195,7 +1195,7 @@ class TestPersistAnimeChoice:
         monkeypatch.setattr(mod, "rep", rep_mock)
         save_calls = []
         monkeypatch.setattr(mod, "save_anilist_mapping", lambda *a, **kw: save_calls.append(kw))
-        mod._persist_anime_choice(1, "Unknown Anime", "Unknown Anime", None)
+        mod.persist_anime_choice(1, "Unknown Anime", "Unknown Anime", None)
         assert save_calls
         assert save_calls[0]["anime_url"] is None
 
@@ -1246,7 +1246,7 @@ class TestAnilistAnimeFlow:
 
         # These are imported into anilist_integration from sub-modules; patch the local binding.
         monkeypatch.setattr(mod, "_read_local_progress", lambda a: 0)
-        monkeypatch.setattr(mod, "_persist_anime_choice", lambda *a, **kw: None)
+        monkeypatch.setattr(mod, "persist_anime_choice", lambda *a, **kw: None)
         monkeypatch.setattr(mod, "_load_episode_list", lambda *a: (ep_list, len(ep_list)))
         monkeypatch.setattr(mod, "_resolve_start_episode_idx", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *a, **kw: 0)

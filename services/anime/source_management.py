@@ -14,7 +14,7 @@ from services.anime.title_normalization import (
     normalize_title_for_dedup,
 )
 from utils.logging import get_logger
-from services.anime.mappings import (
+from services.anime.anime_persistence import (
     load_anilist_search_title,
 )
 from services.anime.search_service import incremental_search_anime

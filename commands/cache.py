@@ -15,7 +15,7 @@ def handle_clear_cache(target) -> None:
             cache (resolving its AniList id when possible for a precise prefix).
     """
     from services.anilist.anilist_service import auto_discover_anilist_id
-    from services.anime.mappings import clear_anilist_mapping
+    from services.anime.anime_persistence import clear_anilist_mapping
     from utils.cache import clear_cache_all_with_mappings, clear_cache_by_prefix
 
     if target is True:
