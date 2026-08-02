@@ -1,20 +1,32 @@
-"""Online manga reading orchestration (UI-injected).
+"""Manga reading service - flow logic, preferences, source choice and orchestration.
 
-Extracted from the ``manga_tupi.py`` monolith. These functions drive the
-interactive online-reading flow (search -> pick manga -> pick source ->
-resume/select chapter -> read/download), but they never import the
-presentation layer. UI callables (``menu``, ``progress``, ``prompt``,
-``show_*``) are injected, defaulting to lazy ``ui_bridge`` proxies — the same
-dependency-injection pattern used by ``services/history_service.py``.
+Holds the pure logic that decides *what* to read (resume point, chapter
+sorting/lookup, per-source URLs), the persisted user preferences, the
+source-switching helpers, and the interactive orchestration that wires them
+together. UI callables (``menu``, ``progress``, ``prompt``, ``show_*``) are
+injected, defaulting to lazy ``ui_bridge`` proxies.
 
-Business decisions (resume point, chapter sorting/lookup, source switching,
-batch download) live in the sibling service modules; this module wires them
-together and interleaves the menus.
+Seções:
+- Lógica de leitura
+- Preferências persistidas
+- Seleção de fonte
+- Orquestração da leitura
 """
 
-from models.models import Status
-from services.core import ui_bridge
+import json
+from dataclasses import dataclass
+
+from models.config import get_data_path
+from models.models import ChapterData, Status
 from services.anilist.client import anilist_client
+from services.core import ui_bridge
+from services.manga.download_service import (
+    download_chapters_batch,
+    download_images,
+    prompt_download_range,
+    resolve_parallelism,
+    split_new_and_downloaded,
+)
 from services.manga.manga_service import (
     DownloadedChaptersTracker,
     MangaDexError,
@@ -22,34 +34,491 @@ from services.manga.manga_service import (
     MangaNotFoundError,
     UnifiedMangaService,
 )
-from services.manga.download import (
-    _download_images,
-    download_chapters_batch,
-    prompt_download_range,
-    resolve_parallelism,
-    split_new_and_downloaded,
-)
-from services.manga.reading_flow import (
-    build_manga_url,
-    compute_resume_point,
-    find_chapter_by_number,
-    chapter_number_value,
-    find_next_chapter_index,
-    match_anilist_progress,
-    promote_resume_chapter,
-    sort_chapters_ascending,
-)
-from services.manga.source_selection import (
-    research_manga_in_new_source,
-    resume_from_other_source,
-)
-from services.manga.selection_preferences import manga_selection_preferences
-from services.manga.source_preferences import manga_source_preferences
 from utils.logging import get_logger
 from utils.manga_reader import is_zathura_running, open_pdf_reader
 from utils.pdf_converter import create_pdf_from_images
 
+__all__ = [
+    # Lógica de leitura
+    "ResumePoint",
+    "build_manga_url",
+    "chapter_number_value",
+    "compute_resume_point",
+    "find_chapter_by_number",
+    "find_next_chapter_index",
+    "match_anilist_progress",
+    "promote_resume_chapter",
+    "sort_chapters_ascending",
+    # Preferências persistidas
+    "MangaSelectionPreferences",
+    "MangaSourcePreferences",
+    "manga_selection_preferences",
+    "manga_source_preferences",
+    # Seleção de fonte
+    "research_manga_in_new_source",
+    "resume_from_other_source",
+    # Orquestração da leitura
+    "continue_manga_flow",
+    "handle_download_for_later",
+    "start_manga_search",
+]
+
 logger = get_logger(__name__)
+
+
+# === Lógica de leitura ===
+
+
+# Canonical source of manga URL templates. Any module needing to build a
+# base manga URL (reading flow, unified service, source selection) reads from
+# this single dict via ``build_manga_url``.
+_MANGA_URL_TEMPLATES = {
+    "mugiwaras": "https://mugiwarasoficial.com/manga/{}/",
+    "mangadex": "https://mangadex.org/title/{}",
+    "mangalivre": "https://mangalivre.blog/manga/{}/",
+}
+
+
+def build_manga_url(source: str, manga_id: str) -> str | None:
+    """Construct the base manga URL for sources that need it."""
+    template = _MANGA_URL_TEMPLATES.get(source)
+    return template.format(manga_id) if template else None
+
+
+def chapter_number_value(value) -> float | None:
+    """Parse a chapter number (str/int/float) to float, tolerant of commas and junk.
+
+    Single source of truth for chapter-number parsing (previously scattered as
+    ``float(...)`` / ``int(float(...))`` across the manga flow). Returns None when
+    the value is not a usable number so callers can distinguish junk from 0.
+    """
+    if value is None:
+        return None
+    try:
+        return float(str(value).replace(",", "."))
+    except (ValueError, TypeError):
+        return None
+
+
+def _chapter_sort_value(chapter: ChapterData) -> float:
+    """Numeric sort key for a chapter, tolerant of commas and junk."""
+    value = chapter_number_value(chapter.number)
+    return value if value is not None else 0.0
+
+
+def sort_chapters_ascending(chapters: list[ChapterData]) -> list[ChapterData]:
+    """Return chapters sorted ascending by number (1 -> 2 -> 3 -> ...).
+
+    Sorts in place (matching prior behavior) and also returns the list for
+    convenience/chaining.
+    """
+    chapters.sort(key=_chapter_sort_value)
+    return chapters
+
+
+def find_chapter_by_number(chapters: list[ChapterData], number: int) -> ChapterData | None:
+    """Return the chapter whose integer number matches, or None."""
+    for chapter in chapters:
+        value = chapter_number_value(chapter.number)
+        if value is not None and int(value) == number:
+            return chapter
+    return None
+
+
+@dataclass(frozen=True)
+class ResumePoint:
+    """Recommended chapter to resume reading, computed before scraping."""
+
+    chapter_number: int
+    source: str  # "AniList" or "local"
+
+
+def compute_resume_point(
+    anilist_progress: int | None,
+    last_local_chapter: str | None,
+) -> ResumePoint | None:
+    """Decide which chapter to recommend resuming, preferring AniList progress.
+
+    Args:
+        anilist_progress: AniList chapter progress (chapters read) or None.
+        last_local_chapter: Last read chapter from local history (e.g. "42") or None.
+
+    Returns:
+        A ResumePoint for the *next* chapter to read, or None if unknown.
+    """
+    if anilist_progress is not None:
+        return ResumePoint(chapter_number=anilist_progress + 1, source="AniList")
+
+    if last_local_chapter:
+        value = chapter_number_value(last_local_chapter)
+        if value is not None:
+            return ResumePoint(chapter_number=int(value) + 1, source="local")
+        return None
+
+    return None
+
+
+def promote_resume_chapter(
+    chapters: list[ChapterData],
+    chapter_labels: list[str],
+    resume_point: ResumePoint,
+) -> None:
+    """Move the recommended chapter to the top of the display list with a hint.
+
+    Mutates ``chapters`` and ``chapter_labels`` in place (kept in sync), matching
+    the prior monolith behavior. If no exact match is found, the first chapter is
+    labeled as the resume target as a fallback.
+    """
+    if any("Retomar" in label for label in chapter_labels):
+        return
+
+    recommended_index = None
+    for i, chapter in enumerate(chapters):
+        value = chapter_number_value(chapter.number)
+        if value is not None and int(value) == resume_point.chapter_number:
+            recommended_index = i
+            break
+
+    index = recommended_index if recommended_index is not None else 0
+    if index >= len(chapters):
+        return
+
+    resume_label = f"⮕ Retomar ({resume_point.source}) - {chapter_labels[index]}"
+    chapter = chapters.pop(index)
+    chapter_labels.pop(index)
+    chapters.insert(0, chapter)
+    chapter_labels.insert(0, resume_label)
+
+
+def find_next_chapter_index(chapters: list[ChapterData], current_number: str) -> int | None:
+    """Return the index of the first chapter numbered greater than current_number."""
+    current_value = chapter_number_value(current_number)
+    if current_value is None:
+        return None
+    for i, chapter in enumerate(chapters):
+        value = chapter_number_value(chapter.number)
+        if value is not None and value > current_value:
+            return i
+    return None
+
+
+def match_anilist_progress(manga_list, manga_title: str, format_title) -> int | None:
+    """Find AniList reading progress for a manga by fuzzy title match.
+
+    Args:
+        manga_list: List of AniList media list entries (may be None/empty).
+        manga_title: Local manga title to match against.
+        format_title: Unused placeholder kept for signature stability.
+
+    Returns:
+        Progress (chapters read) for the first matching entry, or None.
+    """
+    if not manga_list:
+        return None
+
+    target = manga_title.lower()
+    for entry in manga_list:
+        if not entry.media:
+            continue
+        entry_title = ""
+        if entry.media.title.romaji:
+            entry_title = entry.media.title.romaji.lower()
+        elif entry.media.title.english:
+            entry_title = entry.media.title.english.lower()
+
+        if not entry_title:
+            continue
+
+        if target == entry_title or target in entry_title or entry_title in target:
+            if entry.progress:
+                return entry.progress
+
+    return None
+
+
+# === Preferências persistidas ===
+
+
+class MangaSelectionPreferences:
+    """Manages manga selection preferences with JSON persistence."""
+
+    def __init__(self):
+        """Initialize preferences manager."""
+        self.preferences_file = get_data_path() / "manga_selection_preferences.json"
+        self._preferences: dict[str, str] = {}  # search_query -> manga_id
+        self._load_preferences()
+
+    def _load_preferences(self) -> None:
+        """Load preferences from JSON file."""
+        try:
+            if self.preferences_file.exists():
+                with self.preferences_file.open("r", encoding="utf-8") as f:
+                    self._preferences = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            self._preferences = {}
+
+    def _save_preferences(self) -> None:
+        """Save preferences to JSON file."""
+        try:
+            # Ensure directory exists
+            self.preferences_file.parent.mkdir(parents=True, exist_ok=True)
+
+            with self.preferences_file.open("w", encoding="utf-8") as f:
+                json.dump(self._preferences, f, indent=2, ensure_ascii=False)
+        except OSError:
+            # Silently fail if unable to save (graceful degradation)
+            pass
+
+    def get_preferred_manga_id(self, search_query: str) -> str | None:
+        """Get preferred manga ID for a search query.
+
+        Args:
+            search_query: The original search query
+
+        Returns:
+            Preferred manga ID or None if not set
+        """
+        # Normalize query for consistent matching
+        normalized_query = search_query.strip().lower()
+        return self._preferences.get(normalized_query)
+
+    def set_preferred_manga_id(self, search_query: str, manga_id: str) -> None:
+        """Set preferred manga ID for a search query.
+
+        Args:
+            search_query: The original search query
+            manga_id: The manga ID to prefer
+        """
+        # Normalize query for consistent matching
+        normalized_query = search_query.strip().lower()
+        self._preferences[normalized_query] = manga_id
+        self._save_preferences()
+
+    def remove_preference(self, search_query: str) -> bool:
+        """Remove preference for a search query.
+
+        Args:
+            search_query: The search query
+
+        Returns:
+            True if preference was removed, False if not found
+        """
+        normalized_query = search_query.strip().lower()
+        if normalized_query in self._preferences:
+            del self._preferences[normalized_query]
+            self._save_preferences()
+            return True
+        return False
+
+    def get_all_preferences(self) -> dict[str, str]:
+        """Get all manga selection preferences.
+
+        Returns:
+            Dictionary mapping search queries to manga IDs
+        """
+        return self._preferences.copy()
+
+
+# Global instance for use throughout the app
+manga_selection_preferences = MangaSelectionPreferences()
+
+
+class MangaSourcePreferences:
+    """Manages manga source preferences with JSON persistence."""
+
+    def __init__(self):
+        """Initialize preferences manager."""
+        self.preferences_file = get_data_path() / "manga_source_preferences.json"
+        self._preferences: dict[str, str] = {}
+        self._load_preferences()
+
+    def _load_preferences(self) -> None:
+        """Load preferences from JSON file."""
+        try:
+            if self.preferences_file.exists():
+                with self.preferences_file.open("r", encoding="utf-8") as f:
+                    self._preferences = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            self._preferences = {}
+
+    def _save_preferences(self) -> None:
+        """Save preferences to JSON file."""
+        try:
+            # Ensure directory exists
+            self.preferences_file.parent.mkdir(parents=True, exist_ok=True)
+
+            with self.preferences_file.open("w", encoding="utf-8") as f:
+                json.dump(self._preferences, f, indent=2, ensure_ascii=False)
+        except OSError:
+            # Silently fail if unable to save (graceful degradation)
+            pass
+
+    def get_preferred_source(self, manga_title: str) -> str | None:
+        """Get preferred source for a manga.
+
+        Args:
+            manga_title: The manga title
+
+        Returns:
+            Preferred source name or None if not set
+        """
+        # Normalize title for consistent matching
+        normalized_title = manga_title.strip().lower()
+        return self._preferences.get(normalized_title)
+
+    def set_preferred_source(self, manga_title: str, source: str) -> None:
+        """Set preferred source for a manga.
+
+        Args:
+            manga_title: The manga title
+            source: The source name (e.g., "mugiwaras", "mangadex")
+        """
+        # Normalize title for consistent matching
+        normalized_title = manga_title.strip().lower()
+        self._preferences[normalized_title] = source
+        self._save_preferences()
+
+    def remove_preference(self, manga_title: str) -> bool:
+        """Remove preference for a manga.
+
+        Args:
+            manga_title: The manga title
+
+        Returns:
+            True if preference was removed, False if not found
+        """
+        normalized_title = manga_title.strip().lower()
+        if normalized_title in self._preferences:
+            del self._preferences[normalized_title]
+            self._save_preferences()
+            return True
+        return False
+
+    def get_all_preferences(self) -> dict[str, str]:
+        """Get all manga source preferences.
+
+        Returns:
+            Dictionary mapping manga titles to source names
+        """
+        return self._preferences.copy()
+
+
+# Global instance for use throughout the app
+manga_source_preferences = MangaSourcePreferences()
+
+
+# === Seleção de fonte ===
+
+
+def research_manga_in_new_source(
+    service,
+    selected_manga,
+    new_source: str,
+    progress=ui_bridge.loading,
+):
+    """Re-search a manga in a new source and return an updated copy.
+
+    When switching sources, the manga id may differ. This verifies the manga
+    exists in ``new_source`` and returns a copy of ``selected_manga`` with the
+    corrected id/metadata so subsequent chapter fetches target the right
+    source. The input ``selected_manga`` is never mutated; if no update is
+    needed (or the manga is not found), the original object is returned
+    unchanged.
+    """
+    try:
+        # If the merged search already knows this manga's id in the new source,
+        # use it directly — no re-search needed.
+        known_id = (getattr(selected_manga, "sources", {}) or {}).get(new_source)
+        if known_id:
+            return selected_manga.model_copy(update={"id": known_id})
+
+        # First try with the current id (ids may be shared across sources).
+        try:
+            chapters = service.get_chapters(selected_manga.id, source=new_source)
+            if chapters:
+                return selected_manga
+        except (ConnectionError, TimeoutError) as e:
+            logger.debug(f"Fonte indisponível: {e}")
+        except Exception as e:
+            logger.warning(f"Erro inesperado ao carregar capítulos: {e}")
+
+        with progress(f"Buscando '{selected_manga.title}' em {new_source}..."):
+            results = service.search_manga(selected_manga.title, source=new_source)
+
+        if not results:
+            logger.info(f"⚠️  Manga não encontrado em {new_source}")
+            return selected_manga
+
+        best_match = None
+
+        # Exact title match first.
+        for result in results:
+            if result.title.lower() == selected_manga.title.lower():
+                best_match = result
+                break
+
+        # Match by id (ids can be shared).
+        if not best_match:
+            for result in results:
+                if result.id == selected_manga.id:
+                    best_match = result
+                    break
+
+        # Otherwise prefer the shortest title (likely the main series).
+        if not best_match:
+            best_match = min(results, key=lambda x: len(x.title))
+
+        logger.info(f"✓ Encontrado em {new_source}: {best_match.title}")
+        return selected_manga.model_copy(
+            update={
+                "id": best_match.id,
+                "title": best_match.title,
+                "description": best_match.description,
+                "status": best_match.status,
+            }
+        )
+    except Exception as e:
+        logger.info(f"⚠️  Erro ao buscar em {new_source}: {e}")
+        return selected_manga
+
+
+def resume_from_other_source(
+    service,
+    selected_manga,
+    chapter_num: int,
+    current_source: str,
+    progress=ui_bridge.loading,
+):
+    """Find a chapter in the manga's other known sources.
+
+    Returns ``(source, manga_url, sorted_chapters, chapter, updated_manga)``
+    for the first source that has ``chapter_num`` with a usable URL, or None.
+    On success sets the service source and returns ``updated_manga``, a copy of
+    ``selected_manga`` with its id set to that source's id. The input
+    ``selected_manga`` is never mutated.
+    """
+    other_sources = [s for s in (selected_manga.sources or {}) if s != current_source]
+    for src in other_sources:
+        src_id = selected_manga.sources[src]
+        manga_url = build_manga_url(src, src_id)
+        try:
+            with progress(f"Procurando capítulo {chapter_num} em {src}..."):
+                chapters = service.get_chapters(src_id, manga_url=manga_url, source=src)
+        except Exception as exc:
+            logger.debug("Failed to get chapters from source '%s': %s", src, exc)
+            continue
+        if not chapters:
+            continue
+        sort_chapters_ascending(chapters)
+        chapter = find_chapter_by_number(chapters, chapter_num)
+        if chapter and chapter.url:
+            service.set_source(src)
+            updated_manga = selected_manga.model_copy(update={"id": src_id})
+            return src, manga_url, chapters, chapter, updated_manga
+    return None
+
+
+# === Orquestração da leitura ===
 
 
 def start_manga_search(
@@ -581,7 +1050,7 @@ def _prepare_chapter_pdf(selected_manga, selected_chapter, selected_source, serv
 
     logger.info(f"Baixando {len(pages)} páginas...")
     try:
-        _download_images(pages, output_path, config)
+        download_images(pages, output_path, config)
         if not config.auto_create_pdf:
             ui_bridge.show_info(f"✓ Capítulo salvo em: {output_path}")
             return None

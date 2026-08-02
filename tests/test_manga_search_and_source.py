@@ -13,8 +13,8 @@ from types import SimpleNamespace
 from models.config import MangaSettings
 from models.models import MangaMetadata, MangaStatus
 from services.manga.manga_service import UnifiedMangaService
-from services.manga.reading_flow import find_chapter_by_number
-from services.manga.source_selection import (
+from services.manga.reading_service import find_chapter_by_number
+from services.manga.reading_service import (
     research_manga_in_new_source,
     resume_from_other_source,
 )

@@ -18,7 +18,7 @@ from types import SimpleNamespace
 
 
 from models.models import ChapterData
-from services.manga.reading_flow import (
+from services.manga.reading_service import (
     ResumePoint,
     build_manga_url,
     compute_resume_point,

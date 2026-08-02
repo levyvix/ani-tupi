@@ -1,7 +1,7 @@
 """Tests for the manga batch-download orchestration.
 
 Exercises the real batching/ordering logic in
-``services.manga.download.download_chapters_batch`` and the split/parallelism
+``services.manga.download_service.download_chapters_batch`` and the split/parallelism
 helpers, mocking only the per-chapter download unit (which performs the actual
 network + filesystem writes).
 """
@@ -9,8 +9,8 @@ network + filesystem writes).
 from types import SimpleNamespace
 
 
-import services.manga.download as dl
-from services.manga.download import (
+import services.manga.download_service as dl
+from services.manga.download_service import (
     BatchDownloadResult,
     download_chapters_batch,
     resolve_parallelism,

@@ -371,7 +371,7 @@ class TestUnifiedMangaServiceSources:
 
 class TestUnifiedMangaServiceChapters:
     def test_get_chapters_from_current_source(self, service_ab):
-        with patch("services.manga.reading_flow.build_manga_url", return_value="http://manga/"):
+        with patch("services.manga.reading_service.build_manga_url", return_value="http://manga/"):
             chapters = service_ab.get_chapters("m1")
         assert len(chapters) == 1
         assert chapters[0].number == "1"
@@ -397,7 +397,7 @@ class TestUnifiedMangaServiceChapters:
             from services.manga.manga_service import UnifiedMangaService
 
             svc = UnifiedMangaService(manga_config)
-        with patch("services.manga.reading_flow.build_manga_url", return_value="http://x/"):
+        with patch("services.manga.reading_service.build_manga_url", return_value="http://x/"):
             chapters = svc.get_chapters("m1")
         assert len(chapters) == 1
 
