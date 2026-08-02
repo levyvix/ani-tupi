@@ -6,7 +6,7 @@ Strategy:
 - IncrementalSearchState navigation branches covered as unit tests.
 - AnimeTitleResolver cache / provider-fallback branches covered with
   lightweight fakes (no httpx or real AniList).
-- AniListTitleResolver / JikanTitleResolver timeout/exception/empty branches
+- AniListTitleResolver / MetadataProviderTitleResolver timeout/exception/empty branches
   exercised by monkeypatching the external call boundaries.
 """
 
@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import pytest
 from unittest.mock import patch
 
-from models.models import AnimeTitleResolution, AniListAnime, AniListTitle, JikanAnimeEntry
+from models.models import AnimeTitleResolution, AniListAnime, AniListTitle, AnimeMetadataEntry
 
 if TYPE_CHECKING:
     from services.anime.search import IncrementalSearchState
@@ -579,33 +579,33 @@ class TestAniListTitleResolver:
 
 
 # ============================================================================
-# JikanTitleResolver — exception and empty-results branches (lines 133-173)
+# MetadataProviderTitleResolver — exception and empty-results branches
 # ============================================================================
 
 
-class TestJikanTitleResolver:
+class TestMetadataProviderTitleResolver:
     def test_exception_returns_none(self):
-        from services.anime.title_resolution import JikanTitleResolver
+        from services.anime.title_resolution import MetadataProviderTitleResolver
 
-        resolver = JikanTitleResolver()
+        resolver = MetadataProviderTitleResolver()
         with patch(
-            "services.anime.title_resolution.jikan_client.search_anime",
+            "services.anime.metadata_provider._provider.search_anime",
             side_effect=ConnectionError("fail"),
         ):
             result = resolver.resolve("naruto")
         assert result is None
 
     def test_empty_results_returns_none(self):
-        from services.anime.title_resolution import JikanTitleResolver
+        from services.anime.title_resolution import MetadataProviderTitleResolver
 
-        with patch("services.anime.title_resolution.jikan_client.search_anime", return_value=[]):
-            result = JikanTitleResolver().resolve("naruto")
+        with patch("services.anime.metadata_provider._provider.search_anime", return_value=[]):
+            result = MetadataProviderTitleResolver().resolve("naruto")
         assert result is None
 
     def test_returns_resolution_for_valid_results(self):
-        from services.anime.title_resolution import JikanTitleResolver
+        from services.anime.title_resolution import MetadataProviderTitleResolver
 
-        entry = JikanAnimeEntry(
+        entry = AnimeMetadataEntry(
             mal_id=1,
             title="Naruto",
             title_english="Naruto",
@@ -613,19 +613,17 @@ class TestJikanTitleResolver:
             synonyms=[],
             titles=[{"type": "Default", "title": "Naruto"}],
         )
-        with patch(
-            "services.anime.title_resolution.jikan_client.search_anime", return_value=[entry]
-        ):
-            result = JikanTitleResolver().resolve("naruto")
+        with patch("services.anime.metadata_provider._provider.search_anime", return_value=[entry]):
+            result = MetadataProviderTitleResolver().resolve("naruto")
         assert result is not None
         assert result.resolved_title == "Naruto"
         assert result.provider == "jikan"
 
     def test_multiple_results_picks_highest_confidence(self):
         """When multiple results are returned, the one with best alias match wins."""
-        from services.anime.title_resolution import JikanTitleResolver
+        from services.anime.title_resolution import MetadataProviderTitleResolver
 
-        low = JikanAnimeEntry(
+        low = AnimeMetadataEntry(
             mal_id=1,
             title="Completely Different XYZ",
             title_english=None,
@@ -633,7 +631,7 @@ class TestJikanTitleResolver:
             synonyms=[],
             titles=[],
         )
-        high = JikanAnimeEntry(
+        high = AnimeMetadataEntry(
             mal_id=2,
             title="Naruto Shippuden",
             title_english="Naruto Shippuden",
@@ -642,9 +640,9 @@ class TestJikanTitleResolver:
             titles=[],
         )
         with patch(
-            "services.anime.title_resolution.jikan_client.search_anime", return_value=[low, high]
+            "services.anime.metadata_provider._provider.search_anime", return_value=[low, high]
         ):
-            result = JikanTitleResolver().resolve("Naruto Shippuden")
+            result = MetadataProviderTitleResolver().resolve("Naruto Shippuden")
         assert result is not None
         assert result.resolved_title == "Naruto Shippuden"
 

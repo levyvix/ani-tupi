@@ -6,6 +6,8 @@ Handles conversion of AniList title objects to display and search strings.
 from models.models import AniListTitle
 from utils.title_utils import normalize_title_for_filter
 
+__all__ = ["format_title", "get_search_title"]
+
 
 def format_title(title_obj: AniListTitle | dict) -> str:
     """Format title object to single string.

@@ -1,5 +1,5 @@
 from models.models import AniListTitle
-from services.anilist.formatters import format_title
+from utils.anilist_titles import format_title
 
 
 def test_format_title_joins_different_romaji_and_english():

@@ -8,7 +8,7 @@ Do NOT overwrite tests/unit/services/anilist/test_formatters.py — this file ad
 """
 
 from models.models import AniListTitle
-from services.anilist.formatters import format_title, get_search_title
+from utils.anilist_titles import format_title, get_search_title
 
 
 # ---------------------------------------------------------------------------

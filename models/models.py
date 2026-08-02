@@ -27,7 +27,7 @@ from models.anilist import (
     AniListStatistics,
     AniListTitle,
     AniListViewerInfo,
-    JikanAnimeEntry,
+    AnimeMetadataEntry,
 )
 from models.anime import (
     AnimeMetadata,
@@ -89,7 +89,7 @@ __all__ = [
     "AniListViewerInfo",
     "AiringAnimeEntry",
     "AniListAnime",
-    "JikanAnimeEntry",
+    "AnimeMetadataEntry",
     "AniListManga",
     "AniListMediaListEntry",
     "AniListActivity",

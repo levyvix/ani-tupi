@@ -4,11 +4,9 @@ This package consolidates the AniList domain into clear roles:
 - client: GraphQL transport (auth + operations) via ``AniListClient``
 - discovery: fuzzy matching of scraped titles to AniList IDs
 - scraper_cache: AniList-aware episode cache adapters
-- formatters: title formatting utilities
 """
 
 from .client import AniListClient
-from .formatters import format_title, get_search_title
 
 # Global singleton instance used across the codebase.
 anilist_client = AniListClient()
@@ -30,8 +28,6 @@ from .scraper_cache import get_scraper_cache, set_scraper_cache  # noqa: E402
 __all__ = [
     "AniListClient",
     "anilist_client",
-    "format_title",
-    "get_search_title",
     "AniListDiscoveryResult",
     "auto_discover_anilist_id",
     "clear_discovery_cache",

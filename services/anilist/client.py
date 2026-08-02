@@ -10,7 +10,7 @@ import httpx
 
 from models.config import settings
 from models.models import AniListViewerInfo, AniListTitle
-from services.anilist.formatters import (
+from utils.anilist_titles import (
     format_title as _format_title,
     get_search_title as _get_search_title,
 )
