@@ -23,7 +23,7 @@ from manga_scrapers.loader import load_manga_plugins
 from models.config import MangaSettings, get_data_path
 from models.models import ChapterData, MangaHistoryEntry, MangaMetadata, MangaStatus
 from services.anilist.client import anilist_client
-from services.anime.title_normalization import normalize_title_for_dedup
+from utils.title_normalization import normalize_title_for_dedup
 from services.core import ui_bridge
 from utils.logging import get_logger
 

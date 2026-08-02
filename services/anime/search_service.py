@@ -21,7 +21,7 @@ from thefuzz import fuzz
 from models.config import settings
 from models.models import AnimeTitleResolution
 from services.anilist.anilist_service import get_scraper_cache
-from services.anime.title_normalization import normalize_anime_title
+from utils.title_normalization import normalize_anime_title
 from services.anime.title_resolution import AnimeTitleResolver
 from services.core import ui_bridge
 from services.repository import rep
@@ -257,7 +257,7 @@ def _filter_anime_results(titles: list[str], query: str) -> list[str]:
         normalized title, or the compact normalized query appears in the
         compact normalized title
     """
-    from services.anime.title_normalization import get_compact_normalized_title_key
+    from utils.title_normalization import get_compact_normalized_title_key
     from utils.title_utils import normalize_title_for_filter as normalize_fn
 
     query_normalized = normalize_fn(query)

@@ -9,7 +9,7 @@ One module per service:
 - plus AniList integration, source management and progress calculation
 """
 
-from .title_normalization import normalize_anime_title
+from utils.title_normalization import normalize_anime_title
 from .anime_persistence import (
     load_anilist_mapping,
     save_anilist_mapping,

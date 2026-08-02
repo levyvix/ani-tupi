@@ -15,7 +15,7 @@ PRESERVES (does NOT remove):
 - All meaningful content words
 """
 
-from services.anime.title_normalization import (
+from utils.title_normalization import (
     are_language_version_markers_compatible,
     are_season_markers_compatible,
     dedup_signature,

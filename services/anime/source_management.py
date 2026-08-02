@@ -9,7 +9,7 @@ import json
 from models.config import get_data_path
 from services.core import ui_bridge
 from services.repository import rep
-from services.anime.title_normalization import (
+from utils.title_normalization import (
     normalize_anime_title,
     normalize_title_for_dedup,
 )

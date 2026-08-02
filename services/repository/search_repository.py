@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 
 from models.config import settings
 from models.models import SearchResults, SearchMetadata, AnimeSearchResult
-from services.anime.title_normalization import (
+from utils.title_normalization import (
     dedup_signature,
     get_compact_normalized_title_key,
     normalize_search_cache_key,

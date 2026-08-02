@@ -4,7 +4,7 @@ Verifies that Repository uses normalized cache keys for search results,
 using real plugins and real cache behavior instead of mocks.
 """
 
-from services.anime.title_normalization import normalize_search_cache_key
+from utils.title_normalization import normalize_search_cache_key
 
 
 class TestRepositoryCacheIntegration:

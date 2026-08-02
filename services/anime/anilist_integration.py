@@ -23,7 +23,7 @@ from services.anime.anime_persistence import (
 )
 from services.anime.search_service import incremental_search_anime
 from services.anime.search_service import rank_anime_results_by_reference
-from services.anime.title_normalization import normalize_title_for_dedup
+from utils.title_normalization import normalize_title_for_dedup
 from services.anime.playback_service import play_episode_with_fallback, probe_url_playable
 from services.anime.episode_service import registry as awaiting_registry
 from utils.video_player import _format_episode_progress

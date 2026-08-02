@@ -11,6 +11,21 @@ from thefuzz import fuzz
 
 
 # Normalize typographic apostrophe variants to straight apostrophe before any processing
+__all__ = [
+    "are_language_version_markers_compatible",
+    "are_season_markers_compatible",
+    "dedup_signature",
+    "get_compact_normalized_title_key",
+    "get_language_version_markers",
+    "get_season_markers",
+    "normalize_anime_title",
+    "normalize_search_cache_key",
+    "normalize_title_for_dedup",
+    "roman_to_int",
+    "signatures_merge",
+]
+
+
 def _normalize_apostrophes(text: str) -> str:
     return text.replace("’", "'").replace("‘", "'").replace("ʼ", "'")
 
