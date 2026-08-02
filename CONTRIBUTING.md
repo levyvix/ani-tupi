@@ -53,10 +53,10 @@ priority_order = [
 ```
 
 Primeiro = maior prioridade. Fontes melhores ficam no topo. Ordenação aplicada
-via `services/priority_utils.py::sort_by_priority`. Configurável por ambiente —
+via `services/repository/episode_repository.py::sort_by_priority`. Configurável por ambiente —
 o usuário pode reordenar sem tocar em código.
 
-**2. Fallback rank-major** — `services/anime/playback_fallback.py`:
+**2. Fallback rank-major** — `services/anime/playback_service.py`:
 
 Ao reproduzir, tentamos o candidato de **melhor qualidade (rank 0) de TODAS as
 fontes** antes de descer para o próximo rank. Ou seja: HD de todas as fontes

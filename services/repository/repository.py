@@ -3,12 +3,12 @@
 Coordinates between specialized repositories:
 - SearchRepository: anime search and deduplication
 - EpisodeRepository: episode management and source selection
-- PlaybackCoordinator: video extraction from sources
+- PlaybackCoordinator: video extraction from sources (imported lazily to
+  avoid a cycle, since playback_service imports this package)
 """
 
 from services.repository.search_repository import SearchRepository
 from services.repository.episode_repository import EpisodeRepository
-from services.anime.playback_coordinator import PlaybackCoordinator
 from utils.logging import get_logger
 
 __all__ = ["Repository", "rep"]
@@ -51,14 +51,25 @@ class Repository:
         SearchRepository.reset_singleton()
         EpisodeRepository.reset_singleton()
 
+    def _ensure_coordinator(self):
+        """Return the playback coordinator, creating it on first use.
+
+        Imported here rather than at module level: ``playback_service`` imports
+        this package, so a top-level import would close an import cycle.
+        """
+        if self._playback_coordinator is None:
+            from services.anime.playback_service import PlaybackCoordinator
+
+            self._playback_coordinator = PlaybackCoordinator(self._search_repo.sources)
+        return self._playback_coordinator
+
     # Registration & Sources
     def register(self, plugin) -> None:
         """Register a scraper plugin."""
         self._search_repo.register(plugin)
         self._episode_repo.set_sources(self._search_repo.sources)
         self.sources = self._search_repo.sources
-        if self._playback_coordinator is None:
-            self._playback_coordinator = PlaybackCoordinator(self.sources)
+        self._ensure_coordinator()
 
     def get_active_sources(self) -> list[str]:
         """Get list of currently registered plugin names."""
@@ -244,27 +255,22 @@ class Repository:
     # Playback Methods
     def _detect_source_from_url(self, url: str) -> str | None:
         """Detect source from URL."""
-        if self._playback_coordinator is None:
-            self._playback_coordinator = PlaybackCoordinator(self._search_repo.sources)
-        return self._playback_coordinator._detect_source_from_url(url)
+        return self._ensure_coordinator()._detect_source_from_url(url)
 
     def search_player(self, anime: str, episode_num: int) -> str | None:
         """Search for video URL."""
-        if self._playback_coordinator is None:
-            self._playback_coordinator = PlaybackCoordinator(self._search_repo.sources)
+        coordinator = self._ensure_coordinator()
 
         selected_urls = []
         for urls, source in self._episode_repo.anime_episodes_urls[anime]:
             if len(urls) >= episode_num and source != "cache":
                 selected_urls.append((urls[episode_num - 1], source))
 
-        return self._playback_coordinator.search_player(selected_urls, anime, episode_num)
+        return coordinator.search_player(selected_urls, anime, episode_num)
 
     def search_player_from_page(self, page_url: str, source_name: str) -> list[str]:
         """Extract candidate video URLs from an episode page."""
-        if self._playback_coordinator is None:
-            self._playback_coordinator = PlaybackCoordinator(self._search_repo.sources)
-        return self._playback_coordinator.search_player_from_page(page_url, source_name)
+        return self._ensure_coordinator().search_player_from_page(page_url, source_name)
 
     def search_homepage_incremental(self, source_name: str, title: str) -> list[dict]:
         """Find freshly-released episodes for ``title`` on a source's homepage.
@@ -315,8 +321,8 @@ class Repository:
     @property
     def anime_to_anilist_id(self):
         """Anime to AniList ID mapping."""
-        if self._playback_coordinator is None and self._search_repo.sources:
-            self._playback_coordinator = PlaybackCoordinator(self._search_repo.sources)
+        if self._search_repo.sources:
+            self._ensure_coordinator()
         if self._playback_coordinator:
             return self._playback_coordinator.anime_to_anilist_id
         return {}
@@ -324,8 +330,8 @@ class Repository:
     @anime_to_anilist_id.setter
     def anime_to_anilist_id(self, value):
         """Set anime to AniList ID mapping."""
-        if self._playback_coordinator is None and self._search_repo.sources:
-            self._playback_coordinator = PlaybackCoordinator(self._search_repo.sources)
+        if self._search_repo.sources:
+            self._ensure_coordinator()
         if self._playback_coordinator:
             self._playback_coordinator.anime_to_anilist_id = value
 

@@ -30,7 +30,7 @@ from services.anime.playback_service import (
 )
 from utils.logging import get_logger
 from services.anime.download_service import AnimeDownloadService
-from services.anime.playback_fallback import play_episode_with_fallback, probe_url_playable
+from services.anime.playback_service import play_episode_with_fallback, probe_url_playable
 from ui.components import (
     loading,
     menu_navigate,

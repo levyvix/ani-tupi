@@ -1,7 +1,7 @@
 """Tests for PlaybackCoordinator."""
 
 from unittest.mock import Mock
-from services.anime.playback_coordinator import PlaybackCoordinator, safe_plugin_call
+from services.anime.playback_service import PlaybackCoordinator, safe_plugin_call
 from threading import Event
 
 

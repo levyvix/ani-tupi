@@ -1350,11 +1350,11 @@ class TestAnilistAnimeFlow:
 
 
 class TestRunPlaybackLoopBranches:
-    from services.anime.playback_fallback import PlaybackFallbackResult
+    from services.anime.playback_service import PlaybackFallbackResult
     from utils.video_player import VideoPlaybackResult
 
     def _make_fallback(self, action, episode, exit_code=0):
-        from services.anime.playback_fallback import PlaybackFallbackResult
+        from services.anime.playback_service import PlaybackFallbackResult
         from utils.video_player import VideoPlaybackResult
 
         return PlaybackFallbackResult(
@@ -1424,7 +1424,7 @@ class TestRunPlaybackLoopBranches:
 
         def play_fallback(**kw):
             call_count[0] += 1
-            from services.anime.playback_fallback import PlaybackFallbackResult
+            from services.anime.playback_service import PlaybackFallbackResult
             from utils.video_player import VideoPlaybackResult
 
             if call_count[0] == 1:
@@ -1460,7 +1460,7 @@ class TestRunPlaybackLoopBranches:
 
         def play_fallback(**kw):
             call_count[0] += 1
-            from services.anime.playback_fallback import PlaybackFallbackResult
+            from services.anime.playback_service import PlaybackFallbackResult
             from utils.video_player import VideoPlaybackResult
 
             if call_count[0] == 1:
@@ -1492,7 +1492,7 @@ class TestRunPlaybackLoopBranches:
         mod, ep_list, rep, ui = self._setup(monkeypatch)
 
         def play_fallback(**kw):
-            from services.anime.playback_fallback import PlaybackFallbackResult
+            from services.anime.playback_service import PlaybackFallbackResult
             from utils.video_player import VideoPlaybackResult
 
             return PlaybackFallbackResult(
@@ -1515,7 +1515,7 @@ class TestRunPlaybackLoopBranches:
 
         def play_fallback(**kw):
             call_count[0] += 1
-            from services.anime.playback_fallback import PlaybackFallbackResult
+            from services.anime.playback_service import PlaybackFallbackResult
             from utils.video_player import VideoPlaybackResult
 
             if call_count[0] == 1:
@@ -1550,7 +1550,7 @@ class TestRunPlaybackLoopBranches:
         mod, ep_list, rep, ui = self._setup(monkeypatch)
 
         def play_fallback(**kw):
-            from services.anime.playback_fallback import PlaybackFallbackResult
+            from services.anime.playback_service import PlaybackFallbackResult
             from utils.video_player import VideoPlaybackResult
 
             return PlaybackFallbackResult(

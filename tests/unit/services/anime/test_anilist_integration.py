@@ -3,7 +3,7 @@
 import importlib
 from types import SimpleNamespace
 
-from services.anime.playback_fallback import PlaybackFallbackResult
+from services.anime.playback_service import PlaybackFallbackResult
 from utils.video_player import VideoPlaybackResult
 
 
