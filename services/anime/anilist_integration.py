@@ -29,8 +29,8 @@ from services.anime.episode_service import registry as awaiting_registry
 from utils.video_player import _format_episode_progress
 
 # Import extracted functions
-from services.anime.episode_service import _resolve_start_episode_idx, SWITCH_SOURCE
-from services.anime.episode_service import _load_episode_list, _read_local_progress
+from services.anime.episode_service import resolve_start_episode_idx, SWITCH_SOURCE
+from services.anime.episode_service import load_episode_list, read_local_progress
 from services.anime.anime_persistence import persist_anime_choice
 from services.anilist.anilist_service import sync_anilist_progress
 from services.anilist.anilist_service import offer_sequel_and_continue
@@ -774,16 +774,16 @@ def anilist_anime_flow(
         persist_anime_choice(anilist_id, selected_anime, anime_title, source)
 
     # 3. Load the episode list (cache-first).
-    episode_list, scraper_episode_count = _load_episode_list(
+    episode_list, scraper_episode_count = load_episode_list(
         selected_anime, saved_title, saved_source, saved_url, anilist_id
     )
     if episode_list is None:
         return
 
     # 4. Decide which episode to start from.
-    local_progress = _read_local_progress(selected_anime)
+    local_progress = read_local_progress(selected_anime)
     while True:
-        start_episode_idx = _resolve_start_episode_idx(
+        start_episode_idx = resolve_start_episode_idx(
             selected_anime,
             episode_list,
             anilist_progress,

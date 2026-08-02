@@ -33,8 +33,11 @@ __all__ = [
     "get_next_episode_context",
     # Seleção de episódio
     "SWITCH_SOURCE",
+    "resolve_start_episode_idx",
     # Carregamento da lista de episódios
     "HISTORY_PATH",
+    "load_episode_list",
+    "read_local_progress",
 ]
 
 logger = get_logger(__name__)
@@ -201,7 +204,7 @@ def get_next_episode_context(
 # === Seleção de episódio ===
 
 
-# Sentinel returned by ``_resolve_start_episode_idx`` when the user asks to
+# Sentinel returned by ``resolve_start_episode_idx`` when the user asks to
 # switch sources. The caller owns the switch flow (it has args/anilist_id/etc.).
 SWITCH_SOURCE = object()
 
@@ -313,7 +316,7 @@ def _find_awaiting_episode_idx(
         return None
 
 
-def _resolve_start_episode_idx(
+def resolve_start_episode_idx(
     selected_anime: str,
     episode_list: list,
     anilist_progress: int,
@@ -376,7 +379,7 @@ def _resolve_start_episode_idx(
 HISTORY_PATH = get_data_path()
 
 
-def _read_local_progress(selected_anime: str) -> int:
+def read_local_progress(selected_anime: str) -> int:
     """Return the next episode to watch based on local history (0 if none)."""
     try:
         history_file = HISTORY_PATH / "history.json"
@@ -389,7 +392,7 @@ def _read_local_progress(selected_anime: str) -> int:
     return 0
 
 
-def _load_episode_list(
+def load_episode_list(
     selected_anime: str,
     saved_title: str | None,
     saved_source: str | None,
