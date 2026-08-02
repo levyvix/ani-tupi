@@ -21,7 +21,7 @@ from .anilist_integration import (
     anilist_anime_flow,
 )
 from .source_management import switch_anime_source
-from .search import search_anime_flow
+from .search_service import search_anime_flow
 from services.anilist.anilist_service import AniListDiscoveryResult, discover_anilist_info
 from .progress_service import (
     EpisodeProgressInfo,

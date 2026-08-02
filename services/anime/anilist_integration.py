@@ -21,8 +21,8 @@ from services.anime.mappings import (
     load_language_preference,
     save_language_preference,
 )
-from services.anime.search import incremental_search_anime
-from services.anime.search import _rank_anime_results_by_reference
+from services.anime.search_service import incremental_search_anime
+from services.anime.search_service import rank_anime_results_by_reference
 from services.anime.title_normalization import normalize_title_for_dedup
 from services.anime.playback_service import play_episode_with_fallback, probe_url_playable
 from services.anime.episode_service import registry as awaiting_registry
@@ -148,7 +148,7 @@ def load_episodes_from_cache_or_search(
     )
 
     if titles_with_sources and romaji_title:
-        titles_with_sources = _rank_anime_results_by_reference(titles_with_sources, romaji_title)
+        titles_with_sources = rank_anime_results_by_reference(titles_with_sources, romaji_title)
 
     return search_state, titles_with_sources
 

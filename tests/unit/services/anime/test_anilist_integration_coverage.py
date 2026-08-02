@@ -750,7 +750,7 @@ class TestLoadEpisodesFromCacheOrSearch:
         monkeypatch.setattr(
             mod, "incremental_search_anime", lambda q, **kw: (fake_state, ["Result [src]"])
         )
-        monkeypatch.setattr(mod, "_rank_anime_results_by_reference", lambda t, r: t)
+        monkeypatch.setattr(mod, "rank_anime_results_by_reference", lambda t, r: t)
         state, titles = mod.load_episodes_from_cache_or_search("Test", 1, "English", "Romaji")
         assert state is fake_state
         assert "Result [src]" in titles
@@ -762,7 +762,7 @@ class TestLoadEpisodesFromCacheOrSearch:
         rank_called = []
         monkeypatch.setattr(mod, "incremental_search_anime", lambda q, **kw: (fake_state, ["R"]))
         monkeypatch.setattr(
-            mod, "_rank_anime_results_by_reference", lambda t, r: rank_called.append(True) or t
+            mod, "rank_anime_results_by_reference", lambda t, r: rank_called.append(True) or t
         )
         state, titles = mod.load_episodes_from_cache_or_search("Test", 1, None, None)
         assert not rank_called
@@ -1234,7 +1234,7 @@ class TestAnilistAnimeFlow:
         monkeypatch.setattr(
             mod, "incremental_search_anime", lambda q, **kw: (None, ["Test Anime [src]"])
         )
-        monkeypatch.setattr(mod, "_rank_anime_results_by_reference", lambda t, r: t)
+        monkeypatch.setattr(mod, "rank_anime_results_by_reference", lambda t, r: t)
 
         ui = _make_ui_bridge_mock()
         if menu_side_effect is not None:

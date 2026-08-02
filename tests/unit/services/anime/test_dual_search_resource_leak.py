@@ -10,7 +10,7 @@ from concurrent.futures import Future
 
 import pytest
 
-import services.anime.search.core as search_mod
+import services.anime.search_service as search_mod
 
 
 class _InlineExecutor:

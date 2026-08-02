@@ -17,7 +17,7 @@ from utils.logging import get_logger
 from services.anime.mappings import (
     load_anilist_search_title,
 )
-from services.anime.search import incremental_search_anime
+from services.anime.search_service import incremental_search_anime
 
 logger = get_logger(__name__)
 
