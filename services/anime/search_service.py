@@ -395,8 +395,6 @@ def _perform_scraper_search(partial_query: str) -> _ScraperSearchOutcome:
     ranking, and returns the ranked titles-with-sources plus the query actually
     used and any AniList reference title discovered.
     """
-    from services.anime.search_service import rank_anime_results_by_reference
-
     rep.clear_search_results()
     rep.search_anime(partial_query, verbose=True)
 

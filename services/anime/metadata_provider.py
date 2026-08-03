@@ -57,18 +57,18 @@ class JikanMetadataProvider:
             response = http_get_with_retry(full_url, timeout=self.timeout)
             data = response.json()
         except httpx.HTTPStatusError as e:
-            logger.warning(f"Metadata provider error: {e.response.status_code} for '{query}'")
+            logger.warning(f"Jikan API error: {e.response.status_code} for '{query}'")
             return []
         except httpx.TimeoutException:
-            logger.warning(f"Metadata provider timeout for '{query}'")
+            logger.warning(f"Jikan API timeout for '{query}'")
             return []
         except Exception as e:
-            logger.warning(f"Metadata provider request failed for '{query}': {e}")
+            logger.warning(f"Jikan API request failed for '{query}': {e}")
             return []
 
         raw_items = data.get("data")
         if raw_items is None:
-            logger.warning(f"Metadata provider unexpected response. Keys: {list(data.keys())}")
+            logger.warning(f"Jikan API resposta inesperada. Keys: {list(data.keys())}")
             return []
         results: list[AnimeMetadataEntry] = []
         for item in raw_items:

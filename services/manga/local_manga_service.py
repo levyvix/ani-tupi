@@ -15,6 +15,8 @@ from models.models import LocalChapter
 from models.config import settings
 from utils.pdf_converter import create_pdf_from_images
 
+__all__ = ["LocalMangaService"]
+
 if TYPE_CHECKING:
     from services.anilist.client import AniListClient
 

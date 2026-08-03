@@ -29,6 +29,11 @@ from models.models import (
 )
 from utils.range_parser import parse_episode_range, RangeParseError
 
+__all__ = [
+    "AnimeDownloadService",
+    "DownloadTask",
+]
+
 logger = get_logger(__name__)
 
 

@@ -19,6 +19,8 @@ from utils.title_normalization import (
 from utils.logging import get_logger
 from utils.title_utils import normalize_title_for_filter
 
+__all__ = ["SearchRepository"]
+
 logger = get_logger(__name__)
 
 

@@ -35,6 +35,14 @@ from services.anime.anime_persistence import persist_anime_choice
 from services.anilist.anilist_service import sync_anilist_progress
 from services.anilist.anilist_service import offer_sequel_and_continue
 
+__all__ = [
+    "anilist_anime_flow",
+    "build_anilist_post_playback_options",
+    "load_episodes_from_cache_or_search",
+    "resolve_preferred_title",
+    "select_anime_from_results",
+]
+
 logger = get_logger(__name__)
 
 

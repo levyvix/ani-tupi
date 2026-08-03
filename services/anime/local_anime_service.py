@@ -13,6 +13,8 @@ from models.models import (
     AnimeDownloadDatabase,
 )
 
+__all__ = ["LocalAnimeService"]
+
 logger = get_logger(__name__)
 
 

@@ -6,6 +6,14 @@ and validating season data for multi-season anime.
 
 from models.models import EpisodeData
 
+__all__ = [
+    "count_episodes_in_season",
+    "filter_episodes_by_season",
+    "get_available_seasons",
+    "organize_episodes_by_season",
+    "validate_season_exists",
+]
+
 
 def organize_episodes_by_season(episodes: list[EpisodeData]) -> dict[int, list[EpisodeData]]:
     """Organize episodes into a dictionary keyed by season number.

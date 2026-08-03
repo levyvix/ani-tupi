@@ -35,7 +35,6 @@ __all__ = [
     "SWITCH_SOURCE",
     "resolve_start_episode_idx",
     # Carregamento da lista de episódios
-    "HISTORY_PATH",
     "load_episode_list",
     "read_local_progress",
 ]
@@ -272,7 +271,6 @@ def _find_awaiting_episode_idx(
     ``None`` when the episode could not be found.
     """
     from services.repository import rep
-    from services.anime.episode_service import registry as awaiting_registry
 
     logger.info(f"🔍 Buscando episódio {target_ep_num} no AnimesDigital...")
 
@@ -298,7 +296,7 @@ def _find_awaiting_episode_idx(
         logger.info(f"✅ Episódio {target_ep_num} encontrado no AnimesDigital!")
         logger.info(f"   URL: {episode['episode_url'][:80]}...")
 
-        awaiting_registry.set(selected_anime, target_ep_num, episode["episode_url"])
+        registry.set(selected_anime, target_ep_num, episode["episode_url"])
         return target_ep_num - 1
 
     except (OSError, ConnectionError, TimeoutError) as e:

@@ -16,6 +16,13 @@ from utils.title_normalization import normalize_search_cache_key
 from utils.cache import get_cache
 from utils.logging import get_logger
 
+__all__ = [
+    "AniListTitleResolver",
+    "AnimeTitleResolver",
+    "MetadataProviderTitleResolver",
+    "TitleResolverProvider",
+]
+
 logger = get_logger(__name__)
 
 

@@ -26,6 +26,12 @@ from utils.video_player import VideoPlayer
 from services.core import ui_bridge
 from services.core.history_service import save_history
 
+__all__ = [
+    "RandomAnimeResult",
+    "RandomAnimeService",
+    "handle_random_anime",
+]
+
 logger = get_logger(__name__)
 
 

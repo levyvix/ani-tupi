@@ -13,6 +13,13 @@ from services.anilist.anilist_service import get_anilist_id_with_interactive_fal
 from models.models import HistoryEntry, Status
 from services.anime.anime_persistence import load_anilist_urls
 
+__all__ = [
+    "load_history",
+    "reset_history",
+    "save_history",
+    "save_history_from_event",
+]
+
 logger = get_logger(__name__)
 
 HISTORY_PATH = get_data_path()

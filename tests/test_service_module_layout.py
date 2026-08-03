@@ -1,13 +1,14 @@
 """Architectural guard for the ``services/`` layer (spec: service-module-layout).
 
-Two rules, checked by walking the AST of every module under ``services/``:
+Three rules, checked by walking the AST of every module under ``services/``:
 
-1. No module imports a ``_``-prefixed symbol from another ``services/`` module.
+1. Every service module declares its public API through ``__all__``.
+2. No module imports a ``_``-prefixed symbol from another ``services/`` module.
    A helper needed outside its own module must be promoted to a public name.
-2. No ``__init__.py`` under ``services/`` defines a function or a class at the
+3. No ``__init__.py`` under ``services/`` defines a function or a class at the
    top level. Package inits hold a docstring and re-exports, nothing else.
 
-Without this guard both rules are conventions that erode on the next feature.
+Without this guard all three rules are conventions that erode on the next feature.
 """
 
 import ast
@@ -59,6 +60,27 @@ def _private_cross_module_imports(path: Path) -> list[str]:
                 violations.append(f"{module_name} imports {alias.name!r} from {target}")
 
     return violations
+
+
+def _declares_all(tree: ast.Module) -> bool:
+    return any(
+        isinstance(node, ast.Assign)
+        and any(getattr(target, "id", "") == "__all__" for target in node.targets)
+        for node in tree.body
+    )
+
+
+def test_every_service_module_declares_its_public_surface():
+    violations = [
+        str(path.relative_to(SERVICES_ROOT.parent))
+        for path in _service_modules()
+        if path.name != "__init__.py" and not _declares_all(_parse(path))
+    ]
+
+    assert not violations, (
+        "Every module under services/ must declare its public API through "
+        "__all__; symbols left out of it are internal to the module:\n  " + "\n  ".join(violations)
+    )
 
 
 def test_no_private_symbol_crosses_a_service_module_boundary():

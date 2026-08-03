@@ -19,6 +19,8 @@ from services.anime.anime_persistence import (
 )
 from services.anime.search_service import incremental_search_anime
 
+__all__ = ["switch_anime_source"]
+
 logger = get_logger(__name__)
 
 HISTORY_PATH = get_data_path()
