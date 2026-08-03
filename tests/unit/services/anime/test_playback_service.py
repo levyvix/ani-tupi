@@ -16,7 +16,7 @@ from dataclasses import FrozenInstanceError
 from unittest.mock import MagicMock, patch
 import pytest
 
-from services.anilist.discovery import AniListDiscoveryResult
+from services.anilist.anilist_service import AniListDiscoveryResult
 
 
 # =============================================================================
@@ -404,7 +404,7 @@ class TestEpisodeUrlPatternFallback:
 
         current_url = "https://cdn.example.net/stream/y/anime/11.mp4/index.m3u8"
 
-        with _patch("services.anime.episode_url_pattern.validate_episode_url", return_value=False):
+        with _patch("services.anime.episode_service.validate_episode_url", return_value=False):
             result = get_episode_url_and_source("My Anime", 12, current_player_url=current_url)
 
         assert result.success is True
@@ -420,7 +420,7 @@ class TestEpisodeUrlPatternFallback:
         current_url = "https://cdn.example.net/stream/y/anime/11.mp4/index.m3u8"
         expected_derived = "https://cdn.example.net/stream/y/anime/12.mp4/index.m3u8"
 
-        with _patch("services.anime.episode_url_pattern.validate_episode_url", return_value=True):
+        with _patch("services.anime.episode_service.validate_episode_url", return_value=True):
             result = get_episode_url_and_source("My Anime", 12, current_player_url=current_url)
 
         assert result.success is True

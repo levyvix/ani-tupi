@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 
 from models.config import settings
 from models.models import SearchResults, SearchMetadata, AnimeSearchResult
-from services.anime.title_normalization import (
+from utils.title_normalization import (
     dedup_signature,
     get_compact_normalized_title_key,
     normalize_search_cache_key,
@@ -18,6 +18,8 @@ from services.anime.title_normalization import (
 )
 from utils.logging import get_logger
 from utils.title_utils import normalize_title_for_filter
+
+__all__ = ["SearchRepository"]
 
 logger = get_logger(__name__)
 

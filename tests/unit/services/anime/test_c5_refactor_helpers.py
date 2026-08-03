@@ -14,7 +14,7 @@ the helpers themselves run for real.
 
 from unittest.mock import Mock, patch
 
-from services.anime.awaiting_episodes import AwaitingEpisodeRegistry
+from services.anime.episode_service import AwaitingEpisodeRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ class TestAwaitingEpisodeRegistry:
         assert registry.get("B", 3) == "urlB"
 
     def test_module_level_singleton_exists(self):
-        from services.anime import awaiting_episodes
+        from services.anime import episode_service as awaiting_episodes
 
         assert isinstance(awaiting_episodes.registry, AwaitingEpisodeRegistry)
 
@@ -56,7 +56,7 @@ class TestGetEpisodeUrlUsesAwaitingRegistry:
 
     @patch("services.anime.playback_service.rep")
     def test_awaiting_url_extracts_via_repository(self, mock_rep):
-        from services.anime.awaiting_episodes import registry
+        from services.anime.episode_service import registry
         from services.anime.playback_service import get_episode_url_and_source
 
         registry.clear("Dandadan")
@@ -78,7 +78,7 @@ class TestGetEpisodeUrlUsesAwaitingRegistry:
 
     @patch("services.anime.playback_service.rep")
     def test_no_awaiting_url_falls_back_to_regular_search(self, mock_rep):
-        from services.anime.awaiting_episodes import registry
+        from services.anime.episode_service import registry
         from services.anime.playback_service import get_episode_url_and_source
 
         registry.clear("Dandadan")
@@ -102,7 +102,7 @@ class TestGetEpisodeUrlUsesAwaitingRegistry:
 
 class TestTryCacheHit:
     def test_returns_true_and_populates_repo_on_cache_hit(self):
-        from services.anime.search import core
+        from services.anime import search_service as core
 
         cache_data = Mock(episode_count=12)
         mock_rep = Mock()
@@ -118,7 +118,7 @@ class TestTryCacheHit:
         mock_rep.search_anime.assert_called_once_with("dandadan", verbose=False)
 
     def test_returns_false_and_touches_nothing_on_miss(self):
-        from services.anime.search import core
+        from services.anime import search_service as core
 
         mock_rep = Mock()
 
@@ -140,7 +140,7 @@ class TestTryCacheHit:
 
 class TestCountSources:
     def test_counts_sources_from_display_format(self):
-        from services.anime.search.core import _count_sources
+        from services.anime.search_service import _count_sources
 
         counts = _count_sources(
             [
@@ -153,14 +153,14 @@ class TestCountSources:
         assert counts == {"animefire": 2, "animesdigital": 1}
 
     def test_ignores_entries_without_source(self):
-        from services.anime.search.core import _count_sources
+        from services.anime.search_service import _count_sources
 
         assert _count_sources(["Plain Title"]) == {}
 
 
 class TestPerformScraperSearch:
     def test_clears_searches_and_ranks(self):
-        from services.anime.search import scraper_search
+        from services.anime import search_service as scraper_search
 
         mock_rep = Mock()
         mock_rep.get_search_metadata.return_value = Mock(used_query="naruto")
@@ -169,7 +169,7 @@ class TestPerformScraperSearch:
         with (
             patch.object(scraper_search, "rep", mock_rep),
             patch(
-                "services.anilist.discovery.auto_discover_anilist_id",
+                "services.anilist.anilist_service.auto_discover_anilist_id",
                 return_value=None,
             ),
         ):
@@ -182,7 +182,7 @@ class TestPerformScraperSearch:
         assert outcome.anilist_reference_title is None
 
     def test_uses_anilist_title_as_reference(self):
-        from services.anime.search import scraper_search
+        from services.anime import search_service as scraper_search
 
         mock_rep = Mock()
         mock_rep.get_search_metadata.return_value = Mock(used_query="naruto")
@@ -193,7 +193,7 @@ class TestPerformScraperSearch:
         with (
             patch.object(scraper_search, "rep", mock_rep),
             patch(
-                "services.anilist.discovery.auto_discover_anilist_id",
+                "services.anilist.anilist_service.auto_discover_anilist_id",
                 return_value=[anilist_match],
             ),
         ):

@@ -1,17 +1,33 @@
-"""AniList ID to scraper title mapping persistence.
+"""Anime persistence - AniList mappings and the user's source/language choice.
 
-Handles saving and loading of mappings between AniList anime IDs
-and scraper-specific titles for improved search accuracy.
+Seções:
+- Mapeamentos AniList
+- Escolha de fonte do usuário
 """
 
 from models.config import get_data_path
+from services.repository import rep
 from utils.exceptions import PersistenceError
 from utils.logging import get_logger
 from utils.persistence import JSONStore
 
+__all__ = [
+    "clear_anilist_mapping",
+    "load_anilist_mapping",
+    "load_anilist_search_title",
+    "load_anilist_urls",
+    "load_language_preference",
+    "persist_anime_choice",
+    "save_anilist_mapping",
+    "save_language_preference",
+]
+
 logger = get_logger(__name__)
 
-# Use centralized path function from config
+
+# === Mapeamentos AniList ===
+
+
 HISTORY_PATH = get_data_path()
 
 # AniList to scraper title mappings cache
@@ -169,3 +185,45 @@ def clear_anilist_mapping(anilist_id: int | None = None) -> None:
             store.delete(str(anilist_id))
     except PersistenceError as e:
         logger.error(f"Failed to clear AniList mappings: {e}")
+
+
+# === Escolha de fonte do usuário ===
+
+
+def persist_anime_choice(
+    anilist_id: int,
+    selected_anime: str,
+    search_title: str,
+    source: str | None,
+) -> None:
+    """Save the resolved anime choice (title, source, URLs) for next time."""
+    anime_url = None
+    anime_urls: dict[str, str] = {}
+
+    repo_title = selected_anime
+    if selected_anime not in rep.anime_to_urls:
+        from thefuzz import fuzz
+
+        repo_titles = list(rep.anime_to_urls.keys())
+        if repo_titles:
+            best_match = max(
+                repo_titles,
+                key=lambda t: fuzz.token_sort_ratio(selected_anime.lower(), t.lower()),
+            )
+            if fuzz.token_sort_ratio(selected_anime.lower(), best_match.lower()) >= 50:
+                repo_title = best_match
+
+    if repo_title in rep.anime_to_urls:
+        for url, src, _params in rep.anime_to_urls[repo_title]:
+            anime_urls[src] = url
+            if anime_url is None and (source is None or src in source.split(",")):
+                anime_url = url
+
+    save_anilist_mapping(
+        anilist_id,
+        selected_anime,
+        search_title=search_title,
+        source=source,
+        anime_url=anime_url,
+        anime_urls=anime_urls,
+    )

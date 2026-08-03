@@ -17,6 +17,16 @@ from utils.logging import get_logger
 from utils.range_parser import parse_range_input
 from scrapers.plugins.utils import http_get_with_retry
 
+__all__ = [
+    "BatchDownloadResult",
+    "download_chapter",
+    "download_chapters_batch",
+    "download_images",
+    "prompt_download_range",
+    "resolve_parallelism",
+    "split_new_and_downloaded",
+]
+
 logger = get_logger(__name__)
 
 # Minimum fraction of a chapter's pages that must download successfully for the
@@ -131,7 +141,7 @@ def download_chapter(
         output_path.mkdir(parents=True, exist_ok=True)
 
         # Download images
-        _download_images(pages, output_path, config)
+        download_images(pages, output_path, config)
 
         # Check if download was successful (at least 50% of pages)
         image_files = _get_image_files(output_path)
@@ -388,7 +398,7 @@ def _construct_chapter_url(
     return None
 
 
-def _download_images(pages: list, output_path: Path, config) -> int:
+def download_images(pages: list, output_path: Path, config) -> int:
     """Download chapter images and return count of valid downloads.
 
     Args:

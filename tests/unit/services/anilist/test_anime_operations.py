@@ -1,4 +1,4 @@
-"""Tests for AnimeOperationsMixin (services/anilist/anime_operations.py).
+"""Tests for AnimeOperationsMixin (services/anilist/client.py).
 
 Uses real AniListClient + mixin; only the external httpx.post boundary is mocked.
 """

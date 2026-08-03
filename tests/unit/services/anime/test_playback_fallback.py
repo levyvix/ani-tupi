@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import httpx
 
-from services.anime.playback_fallback import (
+from services.anime.playback_service import (
     MPV_USER_ABORT_CODE,
     PlaybackFallbackResult,
     play_episode_with_fallback,

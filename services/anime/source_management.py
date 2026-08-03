@@ -9,15 +9,17 @@ import json
 from models.config import get_data_path
 from services.core import ui_bridge
 from services.repository import rep
-from services.anime.title_normalization import (
+from utils.title_normalization import (
     normalize_anime_title,
     normalize_title_for_dedup,
 )
 from utils.logging import get_logger
-from services.anime.mappings import (
+from services.anime.anime_persistence import (
     load_anilist_search_title,
 )
-from services.anime.search import incremental_search_anime
+from services.anime.search_service import incremental_search_anime
+
+__all__ = ["switch_anime_source"]
 
 logger = get_logger(__name__)
 
@@ -190,7 +192,7 @@ def switch_anime_source(
     # 8. If have anilist_id, always check AniList (source of truth)
     # Use AniList as primary when available (you might have watched via web/mobile)
     if anilist_id:
-        from services.anilist import anilist_client
+        from services.anilist.client import anilist_client
 
         if anilist_client.is_authenticated():
             # Get media list entry for this anime
@@ -258,4 +260,4 @@ def switch_anime_source(
     return selected_anime, episode_idx
 
 
-# get_next_episode_context is now imported from services.anime.episode_context
+# get_next_episode_context is now imported from services.anime.episode_service

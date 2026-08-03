@@ -1,22 +1,10 @@
-"""AniList service package - transport, discovery, and progress sync.
+"""AniList package - GraphQL transport plus the service layer built on it.
 
-This package consolidates the AniList domain into clear roles:
-- client: GraphQL transport (auth + operations) via ``AniListClient``
-- discovery: fuzzy matching of scraped titles to AniList IDs
-- scraper_cache: AniList-aware episode cache adapters
-- formatters: title formatting utilities
+- ``client``: GraphQL transport, auth and anime/manga operations
+- ``anilist_service``: discovery, scraper cache, progress sync and sequels
 """
 
-from .client import AniListClient
-from .formatters import format_title, get_search_title
-
-# Global singleton instance used across the codebase.
-anilist_client = AniListClient()
-
-# Discovery + scraper cache import ``anilist_client`` from this package, so
-# they are imported after the singleton is defined to avoid a circular import
-# at package init time. They are re-exported for the package surface.
-from .discovery import (  # noqa: E402
+from services.anilist.anilist_service import (
     AniListDiscoveryResult,
     auto_discover_anilist_id,
     clear_discovery_cache,
@@ -24,21 +12,25 @@ from .discovery import (  # noqa: E402
     get_anilist_id_from_title,
     get_anilist_id_with_interactive_fallback,
     get_anilist_metadata,
+    get_scraper_cache,
+    offer_sequel_and_continue,
+    set_scraper_cache,
+    sync_anilist_progress,
 )
-from .scraper_cache import get_scraper_cache, set_scraper_cache  # noqa: E402
+from services.anilist.client import AniListClient, get_anilist_client
 
 __all__ = [
     "AniListClient",
-    "anilist_client",
-    "format_title",
-    "get_search_title",
     "AniListDiscoveryResult",
     "auto_discover_anilist_id",
     "clear_discovery_cache",
     "discover_anilist_info",
+    "get_anilist_client",
     "get_anilist_id_from_title",
     "get_anilist_id_with_interactive_fallback",
     "get_anilist_metadata",
     "get_scraper_cache",
+    "offer_sequel_and_continue",
     "set_scraper_cache",
+    "sync_anilist_progress",
 ]

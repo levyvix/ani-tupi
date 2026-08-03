@@ -12,7 +12,7 @@ import random
 from dataclasses import dataclass
 
 from models.models import AniListMediaListEntry
-from services.anilist import anilist_client
+from services.anilist.client import anilist_client
 from services.repository import rep
 from services.anime.playback_service import (
     prepare_playback_from_search,
@@ -25,6 +25,12 @@ from utils.logging import get_logger
 from utils.video_player import VideoPlayer
 from services.core import ui_bridge
 from services.core.history_service import save_history
+
+__all__ = [
+    "RandomAnimeResult",
+    "RandomAnimeService",
+    "handle_random_anime",
+]
 
 logger = get_logger(__name__)
 

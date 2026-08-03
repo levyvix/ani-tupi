@@ -11,7 +11,7 @@ and provides immutable data types for episode progress information.
 
 import pytest
 
-from services.anilist.discovery import AniListDiscoveryResult
+from services.anilist.anilist_service import AniListDiscoveryResult
 
 
 class TestEpisodeProgressInfoDataclass:

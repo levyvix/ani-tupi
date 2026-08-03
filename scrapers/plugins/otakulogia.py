@@ -29,7 +29,7 @@ from scrapers.plugins.utils import (
     load_plugin,
     store_player_source,
 )
-from services.anime.title_normalization import roman_to_int
+from utils.title_normalization import roman_to_int
 from utils.logging import get_logger
 
 logger = get_logger(__name__)

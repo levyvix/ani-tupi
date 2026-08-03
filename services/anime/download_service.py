@@ -29,6 +29,11 @@ from models.models import (
 )
 from utils.range_parser import parse_episode_range, RangeParseError
 
+__all__ = [
+    "AnimeDownloadService",
+    "DownloadTask",
+]
+
 logger = get_logger(__name__)
 
 
@@ -196,7 +201,7 @@ class AnimeDownloadService:
         Returns:
             Dict mapping episode number to (url, source) or None
         """
-        from services.anime.episode_url_pattern import (
+        from services.anime.episode_service import (
             derive_episode_url,
             detect_episode_pattern,
             validate_episode_url,

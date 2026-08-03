@@ -30,7 +30,7 @@ from services.anime.playback_service import (
 )
 from utils.logging import get_logger
 from services.anime.download_service import AnimeDownloadService
-from services.anime.playback_fallback import play_episode_with_fallback, probe_url_playable
+from services.anime.playback_service import play_episode_with_fallback, probe_url_playable
 from ui.components import (
     loading,
     menu_navigate,
@@ -374,7 +374,7 @@ def anime(args) -> None:
 
         # Format progress string
         from services.anime.progress_service import get_episode_progress_info
-        from services.anilist.discovery import AniListDiscoveryResult
+        from services.anilist.anilist_service import AniListDiscoveryResult
 
         anilist_result = None
         if ctx.anilist_id:

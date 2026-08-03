@@ -16,6 +16,11 @@ from models.config import get_data_path, settings
 from models.models import OfflineSyncQueue, OfflineSyncQueueEntry
 from services.anime.playback_service import sync_progress_to_anilist
 
+__all__ = [
+    "add_to_queue",
+    "retry_offline_syncs",
+]
+
 logger = get_logger(__name__)
 
 

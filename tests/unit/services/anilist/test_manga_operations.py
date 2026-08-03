@@ -1,4 +1,4 @@
-"""Tests for MangaOperationsMixin in services/anilist/manga_operations.py."""
+"""Tests for MangaOperationsMixin in services/anilist/client.py."""
 
 import pytest
 

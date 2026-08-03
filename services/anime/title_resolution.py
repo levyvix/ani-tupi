@@ -9,12 +9,19 @@ from typing import Protocol
 from thefuzz import fuzz
 
 from models.config import settings
-from models.models import AniListAnime, AnimeTitleResolution, JikanAnimeEntry
-from services.anilist import anilist_client
-from services.anime.jikan_client import jikan_client
-from services.anime.title_normalization import normalize_search_cache_key
+from models.models import AniListAnime, AnimeTitleResolution, AnimeMetadataEntry
+from services.anilist.client import anilist_client
+from services.anime.metadata_provider import get_metadata_provider
+from utils.title_normalization import normalize_search_cache_key
 from utils.cache import get_cache
 from utils.logging import get_logger
+
+__all__ = [
+    "AniListTitleResolver",
+    "AnimeTitleResolver",
+    "MetadataProviderTitleResolver",
+    "TitleResolverProvider",
+]
 
 logger = get_logger(__name__)
 
@@ -124,22 +131,22 @@ class AniListTitleResolver:
 
 
 @dataclass(frozen=True)
-class JikanTitleResolver:
-    """Resolve titles using Jikan/MAL as fallback."""
+class MetadataProviderTitleResolver:
+    """Resolve titles using the external anime metadata provider as fallback."""
 
     name: str = "jikan"
 
     def resolve(self, query: str) -> AnimeTitleResolution | None:
         try:
-            results = jikan_client.search_anime(query, limit=5)
+            results = get_metadata_provider().search_anime(query, limit=5)
         except Exception as e:
-            logger.warning("Jikan title resolution failed for '%s': %s", query, e)
+            logger.warning("Metadata title resolution failed for '%s': %s", query, e)
             return None
 
         if not results:
             return None
 
-        best_match: JikanAnimeEntry | None = None
+        best_match: AnimeMetadataEntry | None = None
         best_aliases: tuple[str, ...] = ()
         best_confidence = -1
 
@@ -187,7 +194,7 @@ class AnimeTitleResolver:
         providers: list[TitleResolverProvider] | None = None,
         cache=None,
     ) -> None:
-        self.providers = providers or [JikanTitleResolver()]
+        self.providers = providers or [MetadataProviderTitleResolver()]
         self.cache = cache or get_cache()
 
     def resolve(self, query: str) -> AnimeTitleResolution | None:

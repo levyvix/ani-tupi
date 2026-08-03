@@ -7,33 +7,41 @@ sequel detection, and synchronization with AniList API.
 from collections.abc import Callable
 from typing import Any
 
-from services.anilist import anilist_client
+from services.anilist.client import anilist_client
 from services.repository import rep
 from services.core import ui_bridge
-from services.anilist.scraper_cache import get_scraper_cache
+from services.anilist.anilist_service import get_scraper_cache
 from scrapers import loader
 from services.core.history_service import save_history
 from utils.video_player import VideoPlayer
 from services.anime.source_management import switch_anime_source
 from utils.logging import get_logger
-from services.anime.mappings import (
+from services.anime.anime_persistence import (
     load_anilist_mapping,
     load_language_preference,
     save_language_preference,
 )
-from services.anime.search import incremental_search_anime
-from services.anime.search import _rank_anime_results_by_reference
-from services.anime.title_normalization import normalize_title_for_dedup
-from services.anime.playback_fallback import play_episode_with_fallback, probe_url_playable
-from services.anime.awaiting_episodes import registry as awaiting_registry
+from services.anime.search_service import incremental_search_anime
+from services.anime.search_service import rank_anime_results_by_reference
+from utils.title_normalization import normalize_title_for_dedup
+from services.anime.playback_service import play_episode_with_fallback, probe_url_playable
+from services.anime.episode_service import registry as awaiting_registry
 from utils.video_player import _format_episode_progress
 
 # Import extracted functions
-from services.anime.episode_selection import _resolve_start_episode_idx, SWITCH_SOURCE
-from services.anime.episode_loader import _load_episode_list, _read_local_progress
-from services.anime.anime_choice_persistence import _persist_anime_choice
-from services.anilist.progress_sync import _sync_anilist_progress
-from services.anilist.sequel_service import offer_sequel_and_continue
+from services.anime.episode_service import resolve_start_episode_idx, SWITCH_SOURCE
+from services.anime.episode_service import load_episode_list, read_local_progress
+from services.anime.anime_persistence import persist_anime_choice
+from services.anilist.anilist_service import sync_anilist_progress
+from services.anilist.anilist_service import offer_sequel_and_continue
+
+__all__ = [
+    "anilist_anime_flow",
+    "build_anilist_post_playback_options",
+    "load_episodes_from_cache_or_search",
+    "resolve_preferred_title",
+    "select_anime_from_results",
+]
 
 logger = get_logger(__name__)
 
@@ -148,7 +156,7 @@ def load_episodes_from_cache_or_search(
     )
 
     if titles_with_sources and romaji_title:
-        titles_with_sources = _rank_anime_results_by_reference(titles_with_sources, romaji_title)
+        titles_with_sources = rank_anime_results_by_reference(titles_with_sources, romaji_title)
 
     return search_state, titles_with_sources
 
@@ -615,7 +623,7 @@ def _run_playback_loop(
         elif result.action == "auto-next":
             current_episode = result.data.get("episode", episode) if result.data else episode
 
-            _sync_anilist_progress(anilist_id, current_episode, num_episodes)
+            sync_anilist_progress(anilist_id, current_episode, num_episodes)
 
             episode_idx = current_episode - 1
             current_episode_idx = current_episode - 1
@@ -659,7 +667,7 @@ def _run_playback_loop(
                 episode = current_episode_idx + 1
                 save_history(selected_anime, episode_idx, anilist_id, source)
 
-                _sync_anilist_progress(anilist_id, episode, num_episodes)
+                sync_anilist_progress(anilist_id, episode, num_episodes)
 
                 if episode == num_episodes and _maybe_offer_sequel_on_finish(
                     anilist_id, args, episode
@@ -771,19 +779,19 @@ def anilist_anime_flow(
 
     # 2. Persist the resolved choice for next time.
     if anilist_id:
-        _persist_anime_choice(anilist_id, selected_anime, anime_title, source)
+        persist_anime_choice(anilist_id, selected_anime, anime_title, source)
 
     # 3. Load the episode list (cache-first).
-    episode_list, scraper_episode_count = _load_episode_list(
+    episode_list, scraper_episode_count = load_episode_list(
         selected_anime, saved_title, saved_source, saved_url, anilist_id
     )
     if episode_list is None:
         return
 
     # 4. Decide which episode to start from.
-    local_progress = _read_local_progress(selected_anime)
+    local_progress = read_local_progress(selected_anime)
     while True:
-        start_episode_idx = _resolve_start_episode_idx(
+        start_episode_idx = resolve_start_episode_idx(
             selected_anime,
             episode_list,
             anilist_progress,

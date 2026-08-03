@@ -15,7 +15,7 @@ from unittest.mock import patch
 from utils import cache as cache_module
 from utils.cache import DiskCache
 from models.models import AniListAnime, AniListTitle, AniListSearchResult
-from services.anilist import discovery
+from services.anilist import anilist_service as discovery
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +168,9 @@ class TestClearDiscoveryCache:
         monkeypatch.setattr(cache_module, "_global_cache", disk_cache)
         # clear_cache_by_prefix uses get_cache() internally which bypasses our monkeypatch;
         # patch the utility function directly so it doesn't touch real disk cache internals.
-        monkeypatch.setattr("services.anilist.discovery.clear_cache_by_prefix", lambda prefix: None)
+        monkeypatch.setattr(
+            "services.anilist.anilist_service.clear_cache_by_prefix", lambda prefix: None
+        )
 
         n = discovery.clear_discovery_cache()
         assert n == 1  # sentinel value defined in implementation
@@ -275,7 +277,9 @@ class TestDiscoverAnilistInfo:
         monkeypatch.setattr(cache_module, "_global_cache", disk_cache)
 
         with patch.object(discovery.anilist_client, "is_authenticated", return_value=True):
-            with patch("services.anilist.discovery.normalize_title_for_search", return_value=""):
+            with patch(
+                "services.anilist.anilist_service.normalize_title_for_search", return_value=""
+            ):
                 result = discovery.discover_anilist_info("   ")
 
         assert result.authenticated is True
@@ -305,7 +309,7 @@ class TestDiscoverAnilistInfo:
                 # Patch get_anilist_metadata directly so the exception propagates up
                 # to discover_anilist_info's except block (lines 345-354)
                 with patch(
-                    "services.anilist.discovery.get_anilist_metadata",
+                    "services.anilist.anilist_service.get_anilist_metadata",
                     side_effect=TypeError("err"),
                 ):
                     result = discovery.discover_anilist_info("Naruto Shippuden")
@@ -362,7 +366,7 @@ class TestDiscoverAnilistInfo:
 
         with patch.object(discovery.anilist_client, "is_authenticated", return_value=True):
             with patch(
-                "services.anilist.discovery.auto_discover_anilist_id",
+                "services.anilist.anilist_service.auto_discover_anilist_id",
                 side_effect=TypeError("network error"),
             ):
                 result = discovery.discover_anilist_info("Naruto")

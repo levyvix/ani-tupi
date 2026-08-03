@@ -15,8 +15,13 @@ from datetime import datetime, UTC
 
 from models.config import settings
 from models.models import AiringAnimeEntry, AniListTitle
-from services.anilist import anilist_client
+from services.anilist.client import anilist_client
 from utils.cache import get_cache
+
+__all__ = [
+    "AiringEpisodesService",
+    "NINETY_DAYS_SECONDS",
+]
 
 
 logger = get_logger(__name__)

@@ -9,7 +9,7 @@ from InquirerPy import inquirer
 
 from models.config import settings
 from models.models import LocalChapter
-from services.anilist import anilist_client
+from services.anilist.client import anilist_client
 from services.manga.local_manga_service import LocalMangaService
 from services.manga.manga_service import (
     MangaDexError,
@@ -17,8 +17,8 @@ from services.manga.manga_service import (
     MangaNotFoundError,
     UnifiedMangaService,
 )
-from services.manga.anilist_lists import handle_anilist_list
-from services.manga.read_orchestrator import continue_manga_flow, start_manga_search
+from services.manga.manga_service import handle_anilist_list
+from services.manga.reading_service import continue_manga_flow, start_manga_search
 from ui.components import loading, menu_navigate, pause, show_error, show_info, show_warning
 from utils.logging import get_logger
 from utils.manga_reader import open_pdf_reader

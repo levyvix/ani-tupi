@@ -1,4 +1,4 @@
-"""Fuzzy discovery matching tests for services.anilist.discovery.
+"""Fuzzy discovery matching tests for services.anilist.anilist_service.
 
 Verifies that fuzzy title matching (auto_discover_anilist_id /
 get_anilist_id_from_title) works from the consolidated
@@ -12,7 +12,7 @@ from unittest.mock import patch
 from utils import cache as cache_module
 from utils.cache import DiskCache
 from models.models import AniListAnime, AniListTitle
-from services.anilist import discovery
+from services.anilist import anilist_service as discovery
 
 
 def _anime(anime_id: int, romaji: str, english: str | None = None) -> AniListAnime:

@@ -12,7 +12,14 @@ Key responsibilities:
 
 from dataclasses import dataclass
 
-from services.anilist.discovery import AniListDiscoveryResult
+from services.anilist.anilist_service import AniListDiscoveryResult
+
+__all__ = [
+    "EpisodeProgressInfo",
+    "ProgressContext",
+    "calculate_watch_context",
+    "get_episode_progress_info",
+]
 
 
 @dataclass(frozen=True)

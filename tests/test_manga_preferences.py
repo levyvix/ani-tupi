@@ -3,10 +3,10 @@
 Verifies set/get/persist/reload behavior using a temporary data directory.
 """
 
-import services.manga.selection_preferences as selection_module
-import services.manga.source_preferences as source_module
-from services.manga.selection_preferences import MangaSelectionPreferences
-from services.manga.source_preferences import MangaSourcePreferences
+import services.manga.reading_service as selection_module
+import services.manga.reading_service as source_module
+from services.manga.reading_service import MangaSelectionPreferences
+from services.manga.reading_service import MangaSourcePreferences
 
 
 def test_source_preferences_round_trip(tmp_path, monkeypatch):

@@ -110,8 +110,8 @@ class AniListAnime(BaseModel):
     )
 
 
-class JikanAnimeEntry(BaseModel):
-    """Jikan/MyAnimeList anime search result."""
+class AnimeMetadataEntry(BaseModel):
+    """External anime metadata search result (MyAnimeList-shaped)."""
 
     model_config = ConfigDict(populate_by_name=True)
 

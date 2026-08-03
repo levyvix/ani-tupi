@@ -5,6 +5,7 @@ Provides:
 - MangaHistory: Reading progress persistence
 - DownloadedChaptersTracker: Download tracking and metadata
 - Custom exceptions: MangaError, MangaNotFoundError, etc.
+- handle_anilist_list: unified AniList manga list handler
 
 This module consolidates both the legacy MangaDex-specific service
 and the new multi-source unified service into a single source of truth.
@@ -13,16 +14,28 @@ and the new multi-source unified service into a single source of truth.
 import itertools
 import json
 import threading
+from collections import OrderedDict
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
-from collections import OrderedDict
-
 
 from manga_scrapers.loader import load_manga_plugins
 from models.config import MangaSettings, get_data_path
-from services.anime.title_normalization import normalize_title_for_dedup
 from models.models import ChapterData, MangaHistoryEntry, MangaMetadata, MangaStatus
+from services.anilist.client import anilist_client
+from utils.title_normalization import normalize_title_for_dedup
+from services.core import ui_bridge
 from utils.logging import get_logger
+
+__all__ = [
+    "DownloadedChaptersTracker",
+    "MangaDexError",
+    "MangaError",
+    "MangaHistory",
+    "MangaNotFoundError",
+    "UnifiedMangaService",
+    "handle_anilist_list",
+]
 
 logger = get_logger(__name__)
 
@@ -499,7 +512,7 @@ class UnifiedMangaService:
         if manga_url is None:
             # Local import avoids a package-init import cycle
             # (services.manga.__init__ -> download -> manga_service).
-            from services.manga.reading_flow import build_manga_url
+            from services.manga.reading_service import build_manga_url
 
             manga_url = build_manga_url(source_name, manga_id) or ""
 
@@ -570,3 +583,110 @@ class UnifiedMangaService:
             if self.check_manga_available(manga_title, source):
                 available.append(source)
         return available
+
+
+# === Listas do AniList ===
+
+
+# Status configuration: (anilist_status, loading_message, empty_message, menu_title)
+LIST_CONFIG = {
+    "reading": (
+        "CURRENT",
+        "lista de leitura",
+        "Nenhum mangá na lista de leitura",
+        "Reading - Manga",
+    ),
+    "completed": (
+        "COMPLETED",
+        "lista completos",
+        "Nenhum mangá completado",
+        "Completed - Manga",
+    ),
+    "planning": (
+        "PLANNING",
+        "lista planejados",
+        "Nenhum mangá planejado",
+        "Planning - Manga",
+    ),
+}
+
+
+def handle_anilist_list(
+    service: UnifiedMangaService,
+    list_type: str,
+    on_manga_selected: Callable[[UnifiedMangaService, str], None],
+    menu=ui_bridge.menu_navigate,
+    progress=ui_bridge.loading,
+    pause=ui_bridge.pause,
+    show_info=ui_bridge.show_info,
+    show_warning=ui_bridge.show_warning,
+) -> None:
+    """Handle any AniList manga list (reading, completed, planning).
+
+    Replaces three nearly-identical functions (_handle_reading_list,
+    _handle_completed_list, _handle_planning_list) with a single
+    parameterized implementation.
+
+    Args:
+        service: UnifiedMangaService instance
+        list_type: One of "reading", "completed", "planning"
+        on_manga_selected: Callback when user selects a manga
+                          (receives service and title)
+
+    Raises:
+        ValueError: If list_type is not recognized
+    """
+    if list_type not in LIST_CONFIG:
+        raise ValueError(
+            f"Unknown list type: {list_type}. Must be one of {list(LIST_CONFIG.keys())}"
+        )
+
+    anilist_status, loading_msg, empty_msg, menu_title = LIST_CONFIG[list_type]
+
+    # Check authentication
+    if not anilist_client.is_authenticated():
+        show_warning("Faça login primeiro: uv run python main.py anilist auth", title="AniList")
+        pause()
+        return
+
+    # Load list
+    with progress(f"Carregando {loading_msg}..."):
+        manga_list = anilist_client.get_user_manga_list(anilist_status)
+
+    if not manga_list:
+        show_info(empty_msg, title=menu_title)
+        pause()
+        return
+
+    # Format options
+    options = []
+    manga_map = {}
+
+    for i, manga in enumerate(manga_list, 1):
+        if manga.media:
+            title = anilist_client.format_title(manga.media.title)
+
+            # Different display format for reading vs completed/planning
+            if list_type == "reading":
+                progress = manga.progress or 0
+                total_chapters = getattr(manga.media, "chapters", None) or "?"
+                display = f"{i:2d}. {title} - Cap. {progress}/{total_chapters}"
+            else:
+                chapters = getattr(manga.media, "chapters", None) or "?"
+                score = getattr(manga.media, "averageScore", None) or "N/A"
+                display = f"{i:2d}. {title} ({chapters} caps) ⭐{score}%"
+
+            options.append(display)
+            manga_map[display] = title
+
+    # Show menu
+    selection = menu(options, menu_title)
+
+    if selection and selection != "← Voltar":
+        try:
+            idx = int(selection.split(".")[0]) - 1
+            if 0 <= idx < len(manga_list):
+                manga_title = manga_map[selection]
+                on_manga_selected(service, manga_title)
+        except (ValueError, IndexError):
+            pass

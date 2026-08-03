@@ -4,7 +4,7 @@ Tests the normalize_search_cache_key() function to ensure consistent cache
 key generation across different query variations.
 """
 
-from services.anime.title_normalization import normalize_search_cache_key
+from utils.title_normalization import normalize_search_cache_key
 
 
 class TestCacheKeyNormalization:

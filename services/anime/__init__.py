@@ -1,28 +1,28 @@
 """Anime service modules - business logic for anime operations.
 
-This package provides:
-- Title normalization and search helpers
-- AniList integration flows
-- Source management
-- Episode navigation
-- Mapping persistence
-- Progress calculation
+One module per service:
+- ``search_service``: incremental search, filtering and ranking
+- ``episode_service``: episode loading, selection, context and URL patterns
+- ``playback_service``: extraction, source fallback and the playback flow
+- ``anime_persistence``: AniList mappings and the user's source choice
+- ``metadata_provider``: external anime metadata access
+- plus AniList integration, source management and progress calculation
 """
 
-from .title_normalization import normalize_anime_title
-from .mappings import (
+from utils.title_normalization import normalize_anime_title
+from .anime_persistence import (
     load_anilist_mapping,
     save_anilist_mapping,
     load_anilist_search_title,
 )
-from .episode_context import get_next_episode_context
+from .episode_service import get_next_episode_context
 from .anilist_integration import (
     offer_sequel_and_continue,
     anilist_anime_flow,
 )
 from .source_management import switch_anime_source
-from .search import search_anime_flow
-from services.anilist.discovery import AniListDiscoveryResult, discover_anilist_info
+from .search_service import search_anime_flow
+from services.anilist.anilist_service import AniListDiscoveryResult, discover_anilist_info
 from .progress_service import (
     EpisodeProgressInfo,
     ProgressContext,

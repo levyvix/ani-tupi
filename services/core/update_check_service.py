@@ -20,6 +20,8 @@ from models.config import UpdateCheckSettings, get_data_path, settings
 from models.models import UpdateCheckResult, UpdateCheckState
 from utils.logging import get_logger
 
+__all__ = ["UpdateCheckService"]
+
 logger = get_logger(__name__)
 
 

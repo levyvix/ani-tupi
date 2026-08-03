@@ -1,6 +1,6 @@
-"""Tests for priority_utils.sort_by_priority function."""
+"""Tests for episode_repository.sort_by_priority function."""
 
-from services.repository.priority_utils import sort_by_priority
+from services.repository.episode_repository import sort_by_priority
 
 
 class TestSortByPriority:

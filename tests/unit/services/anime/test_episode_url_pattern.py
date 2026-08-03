@@ -1,9 +1,9 @@
-"""Tests for services/anime/episode_url_pattern.py"""
+"""Tests for services/anime/episode_service.py (padrão de URL de episódio)"""
 
 from unittest.mock import MagicMock, patch
 
 
-from services.anime.episode_url_pattern import (
+from services.anime.episode_service import (
     derive_episode_url,
     detect_episode_pattern,
     validate_episode_url,
@@ -66,7 +66,7 @@ class TestDeriveEpisodeUrl:
         assert result == "https://cdn.example.net/stream/y/anime/6.mp4/index.m3u8"
 
 
-_PATCH_TARGET = "services.anime.episode_url_pattern.http_head_with_fallback"
+_PATCH_TARGET = "services.anime.episode_service.http_head_with_fallback"
 
 
 class TestValidateEpisodeUrl:

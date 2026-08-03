@@ -9,7 +9,7 @@ Tests cover:
 import pytest
 from unittest.mock import patch, MagicMock
 
-from services.anime.search import IncrementalSearchState, incremental_search_anime
+from services.anime.search_service import IncrementalSearchState, incremental_search_anime
 from ui.components import menu_navigate
 
 
@@ -108,8 +108,8 @@ class TestIncrementalSearchStateLanguageTracking:
 class TestIncrementalSearchAnimeLanguageTracking:
     """Tests for incremental_search_anime() language parameter handling."""
 
-    @patch("services.anime.search.core.rep")
-    @patch("services.anime.search.core.ui_bridge.loading")
+    @patch("services.anime.search_service.rep")
+    @patch("services.anime.search_service.ui_bridge.loading")
     def test_incremental_search_without_language_titles(self, mock_loading, mock_rep):
         """Search without language titles should not set alternative language."""
         mock_loading.return_value.__enter__ = MagicMock()
@@ -125,8 +125,8 @@ class TestIncrementalSearchAnimeLanguageTracking:
         assert state.alternative_language is None
         assert state.alternative_title is None
 
-    @patch("services.anime.search.core.rep")
-    @patch("services.anime.search.core.ui_bridge.loading")
+    @patch("services.anime.search_service.rep")
+    @patch("services.anime.search_service.ui_bridge.loading")
     def test_incremental_search_with_identical_titles(self, mock_loading, mock_rep):
         """Search with identical English and Romaji titles should not enable toggle."""
         mock_loading.return_value.__enter__ = MagicMock()
@@ -142,8 +142,8 @@ class TestIncrementalSearchAnimeLanguageTracking:
 
         assert state.alternative_language is None
 
-    @patch("services.anime.search.core.rep")
-    @patch("services.anime.search.core.ui_bridge.loading")
+    @patch("services.anime.search_service.rep")
+    @patch("services.anime.search_service.ui_bridge.loading")
     def test_incremental_search_with_different_titles_english_query(self, mock_loading, mock_rep):
         """Search with English query should set English as current language."""
         mock_loading.return_value.__enter__ = MagicMock()
@@ -165,8 +165,8 @@ class TestIncrementalSearchAnimeLanguageTracking:
         assert state.alternative_language == "romaji"
         assert state.alternative_title == "Hagane no Renkinjutsushi"
 
-    @patch("services.anime.search.core.rep")
-    @patch("services.anime.search.core.ui_bridge.loading")
+    @patch("services.anime.search_service.rep")
+    @patch("services.anime.search_service.ui_bridge.loading")
     def test_incremental_search_with_different_titles_romaji_query(self, mock_loading, mock_rep):
         """Search with Romaji query should set Romaji as current language."""
         mock_loading.return_value.__enter__ = MagicMock()

@@ -185,13 +185,13 @@ class TestRandomAnimeInjectedUI:
 
 
 # ---------------------------------------------------------------------------
-# manga/anilist_lists - injected pause/show_* and menu
+# manga_service AniList lists - injected pause/show_* and menu
 # ---------------------------------------------------------------------------
 
 
 class TestHandleAnilistListInjectedUI:
     def test_not_authenticated_shows_warning_and_pauses(self, monkeypatch):
-        from services.manga import anilist_lists
+        from services.manga import manga_service as anilist_lists
 
         monkeypatch.setattr(anilist_lists.anilist_client, "is_authenticated", lambda: False)
 
@@ -215,7 +215,7 @@ class TestHandleAnilistListInjectedUI:
         assert not selected, "callback must not fire when unauthenticated"
 
     def test_empty_list_shows_info_and_pauses(self, monkeypatch):
-        from services.manga import anilist_lists
+        from services.manga import manga_service as anilist_lists
 
         monkeypatch.setattr(anilist_lists.anilist_client, "is_authenticated", lambda: True)
         monkeypatch.setattr(anilist_lists.anilist_client, "get_user_manga_list", lambda status: [])

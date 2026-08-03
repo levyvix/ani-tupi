@@ -3,7 +3,7 @@
 Strategy:
 - Real implementations for all internal services (MangaHistory, sorting, etc.)
 - Mock ONLY external boundaries: httpx, open_pdf_reader, is_zathura_running,
-  anilist_client, create_pdf_from_images, _download_images.
+  anilist_client, create_pdf_from_images, download_images.
 - Menus are injected callables — pass fakes (UI boundary).
 - File operations use tmp_path.
 """
@@ -105,22 +105,22 @@ class _FakeService:
 
 class TestSourcesSuffix:
     def test_empty_sources_returns_empty_string(self):
-        from services.manga.read_orchestrator import _sources_suffix
+        from services.manga.reading_service import _sources_suffix
 
         assert _sources_suffix({}) == ""
 
     def test_none_sources_returns_empty_string(self):
-        from services.manga.read_orchestrator import _sources_suffix
+        from services.manga.reading_service import _sources_suffix
 
         assert _sources_suffix(None) == ""
 
     def test_single_source(self):
-        from services.manga.read_orchestrator import _sources_suffix
+        from services.manga.reading_service import _sources_suffix
 
         assert _sources_suffix({"mangadex": "id1"}) == " [mangadex]"
 
     def test_multiple_sources_sorted(self):
-        from services.manga.read_orchestrator import _sources_suffix
+        from services.manga.reading_service import _sources_suffix
 
         result = _sources_suffix({"srcB": "b", "srcA": "a"})
         assert result == " [srcA, srcB]"
@@ -133,7 +133,7 @@ class TestSourcesSuffix:
 
 class TestShowChapterActionMenu:
     def test_returns_read_for_book_icon(self):
-        from services.manga.read_orchestrator import _show_chapter_action_menu
+        from services.manga.reading_service import _show_chapter_action_menu
 
         def menu(opts, title):
             return "📖 Ler Agora (Read Now)"
@@ -141,7 +141,7 @@ class TestShowChapterActionMenu:
         assert _show_chapter_action_menu(menu) == "read"
 
     def test_returns_download_for_arrow_icon(self):
-        from services.manga.read_orchestrator import _show_chapter_action_menu
+        from services.manga.reading_service import _show_chapter_action_menu
 
         def menu(opts, title):
             return "⬇️  Baixar para Depois (Download for Later)"
@@ -149,7 +149,7 @@ class TestShowChapterActionMenu:
         assert _show_chapter_action_menu(menu) == "download"
 
     def test_returns_none_for_back(self):
-        from services.manga.read_orchestrator import _show_chapter_action_menu
+        from services.manga.reading_service import _show_chapter_action_menu
 
         def menu(opts, title):
             return "↩️  Voltar (Back)"
@@ -157,7 +157,7 @@ class TestShowChapterActionMenu:
         assert _show_chapter_action_menu(menu) is None
 
     def test_returns_none_for_none_selection(self):
-        from services.manga.read_orchestrator import _show_chapter_action_menu
+        from services.manga.reading_service import _show_chapter_action_menu
 
         def menu(opts, title):
             return None
@@ -172,15 +172,15 @@ class TestShowChapterActionMenu:
 
 class TestStartMangaSearch:
     def test_no_results_shows_warning(self, monkeypatch):
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
 
         service = _FakeService(search_results=[])
         warnings = []
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.ui_bridge.show_warning", lambda m: warnings.append(m)
+            "services.manga.reading_service.ui_bridge.show_warning", lambda m: warnings.append(m)
         )
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.manga_selection_preferences.get_preferred_manga_id",
+            "services.manga.reading_service.manga_selection_preferences.get_preferred_manga_id",
             lambda t: None,
         )
 
@@ -188,39 +188,39 @@ class TestStartMangaSearch:
         assert any("Nenhum" in w for w in warnings)
 
     def test_manga_not_found_error_shows_warning(self, monkeypatch):
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
         from services.manga.manga_service import MangaNotFoundError
 
         service = _FakeService(raise_on_search=MangaNotFoundError("not found"))
         warnings = []
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.ui_bridge.show_warning", lambda m: warnings.append(m)
+            "services.manga.reading_service.ui_bridge.show_warning", lambda m: warnings.append(m)
         )
 
         start_manga_search(service, "X", menu=lambda o, t: None, progress=_noop_progress)
         assert len(warnings) == 1
 
     def test_manga_dex_error_shows_user_message(self, monkeypatch):
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
         from services.manga.manga_service import MangaDexError
 
         err = MangaDexError("internal", user_message="serviço indisponível")
         service = _FakeService(raise_on_search=err)
         warnings = []
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.ui_bridge.show_warning", lambda m: warnings.append(m)
+            "services.manga.reading_service.ui_bridge.show_warning", lambda m: warnings.append(m)
         )
 
         start_manga_search(service, "X", menu=lambda o, t: None, progress=_noop_progress)
         assert any("serviço indisponível" in w for w in warnings)
 
     def test_unexpected_exception_shows_warning(self, monkeypatch):
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
 
         service = _FakeService(raise_on_search=RuntimeError("boom"))
         warnings = []
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.ui_bridge.show_warning", lambda m: warnings.append(m)
+            "services.manga.reading_service.ui_bridge.show_warning", lambda m: warnings.append(m)
         )
 
         start_manga_search(service, "X", menu=lambda o, t: None, progress=_noop_progress)
@@ -228,30 +228,30 @@ class TestStartMangaSearch:
 
     def test_single_result_no_preferred_auto_selects(self, monkeypatch, tmp_path):
         """With one result and no preferred id the manga is auto-selected."""
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
 
         manga = _manga("One Piece")
         service = _FakeService(search_results=[manga], chapters=[_chapter("1")])
 
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.manga_selection_preferences.get_preferred_manga_id",
+            "services.manga.reading_service.manga_selection_preferences.get_preferred_manga_id",
             lambda t: None,
         )
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.manga_selection_preferences.set_preferred_manga_id",
+            "services.manga.reading_service.manga_selection_preferences.set_preferred_manga_id",
             lambda t, i: None,
         )
 
         # Patch continue_manga_flow to record call without deep execution
         called_with = []
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.continue_manga_flow",
+            "services.manga.reading_service.continue_manga_flow",
             lambda svc, m, **kw: called_with.append(m),
         )
 
         infos = []
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.ui_bridge.show_info", lambda m: infos.append(m)
+            "services.manga.reading_service.ui_bridge.show_info", lambda m: infos.append(m)
         )
 
         start_manga_search(service, "One Piece", menu=lambda o, t: o[0], progress=_noop_progress)
@@ -260,13 +260,13 @@ class TestStartMangaSearch:
 
     def test_user_cancels_menu_returns_early(self, monkeypatch):
         """If menu raises KeyboardInterrupt the function returns silently."""
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
 
         manga = _manga("Bleach")
         service = _FakeService(search_results=[manga, _manga("Naruto")])
 
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.manga_selection_preferences.get_preferred_manga_id",
+            "services.manga.reading_service.manga_selection_preferences.get_preferred_manga_id",
             lambda t: None,
         )
 
@@ -278,27 +278,27 @@ class TestStartMangaSearch:
 
     def test_preferred_manga_shown_first_then_switch(self, monkeypatch):
         """When preferred id matches, user can opt to switch manga."""
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
 
         manga1 = _manga("One Piece", "m1")
         manga2 = _manga("Naruto", "m2")
         service = _FakeService(search_results=[manga1, manga2])
 
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.manga_selection_preferences.get_preferred_manga_id",
+            "services.manga.reading_service.manga_selection_preferences.get_preferred_manga_id",
             lambda t: "m1",
         )
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.manga_selection_preferences.set_preferred_manga_id",
+            "services.manga.reading_service.manga_selection_preferences.set_preferred_manga_id",
             lambda t, i: None,
         )
 
         called = []
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.continue_manga_flow",
+            "services.manga.reading_service.continue_manga_flow",
             lambda svc, m, **kw: called.append(m),
         )
-        monkeypatch.setattr("services.manga.read_orchestrator.ui_bridge.show_info", lambda m: None)
+        monkeypatch.setattr("services.manga.reading_service.ui_bridge.show_info", lambda m: None)
 
         # First menu returns "🔄 Trocar de mangá" → then second menu returns manga2
         call_count = [0]
@@ -336,7 +336,7 @@ def _fake_manga_settings(tmp_path, auto_create_pdf=True, delete_images=False, pd
 
 class TestPrepareChapterPdf:
     def test_existing_pdf_returned_immediately(self, tmp_path):
-        from services.manga.read_orchestrator import _prepare_chapter_pdf
+        from services.manga.reading_service import _prepare_chapter_pdf
 
         manga = _manga()
         chapter = _chapter("5")
@@ -355,7 +355,7 @@ class TestPrepareChapterPdf:
         assert result == pdf_path
 
     def test_no_pages_returns_none(self, tmp_path):
-        from services.manga.read_orchestrator import _prepare_chapter_pdf
+        from services.manga.reading_service import _prepare_chapter_pdf
 
         manga = _manga()
         chapter = _chapter("1")
@@ -365,7 +365,7 @@ class TestPrepareChapterPdf:
         with (
             patch("models.config.settings", _fake_manga_settings(tmp_path)),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_warning",
+                "services.manga.reading_service.ui_bridge.show_warning",
                 side_effect=lambda m: warnings.append(m),
             ),
         ):
@@ -375,7 +375,7 @@ class TestPrepareChapterPdf:
         assert any("Nenhuma página" in w for w in warnings)
 
     def test_get_chapter_pages_mangadex_error_returns_none(self, tmp_path):
-        from services.manga.read_orchestrator import _prepare_chapter_pdf
+        from services.manga.reading_service import _prepare_chapter_pdf
         from services.manga.manga_service import MangaDexError
 
         manga = _manga()
@@ -386,7 +386,7 @@ class TestPrepareChapterPdf:
         with (
             patch("models.config.settings", _fake_manga_settings(tmp_path)),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_warning",
+                "services.manga.reading_service.ui_bridge.show_warning",
                 side_effect=lambda m: warnings.append(m),
             ),
         ):
@@ -396,7 +396,7 @@ class TestPrepareChapterPdf:
         assert any("falhou" in w for w in warnings)
 
     def test_get_chapter_pages_generic_error_returns_none(self, tmp_path):
-        from services.manga.read_orchestrator import _prepare_chapter_pdf
+        from services.manga.reading_service import _prepare_chapter_pdf
 
         manga = _manga()
         chapter = _chapter("2")
@@ -406,7 +406,7 @@ class TestPrepareChapterPdf:
         with (
             patch("models.config.settings", _fake_manga_settings(tmp_path)),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_warning",
+                "services.manga.reading_service.ui_bridge.show_warning",
                 side_effect=lambda m: warnings.append(m),
             ),
         ):
@@ -417,7 +417,7 @@ class TestPrepareChapterPdf:
 
     def test_auto_create_pdf_false_returns_none(self, tmp_path):
         """When auto_create_pdf=False, images are saved but no PDF is returned."""
-        from services.manga.read_orchestrator import _prepare_chapter_pdf
+        from services.manga.reading_service import _prepare_chapter_pdf
 
         manga = _manga()
         chapter = _chapter("3", url="http://img/1.jpg")
@@ -425,8 +425,8 @@ class TestPrepareChapterPdf:
 
         with (
             patch("models.config.settings", _fake_manga_settings(tmp_path, auto_create_pdf=False)),
-            patch("services.manga.read_orchestrator._download_images"),
-            patch("services.manga.read_orchestrator.ui_bridge.show_info"),
+            patch("services.manga.reading_service.download_images"),
+            patch("services.manga.reading_service.ui_bridge.show_info"),
         ):
             result = _prepare_chapter_pdf(manga, chapter, "mangadex", service, _noop_progress)
 
@@ -434,7 +434,7 @@ class TestPrepareChapterPdf:
 
     def test_pdf_created_when_pages_available(self, tmp_path):
         """Happy path: pages available, pdf created and returned."""
-        from services.manga.read_orchestrator import _prepare_chapter_pdf
+        from services.manga.reading_service import _prepare_chapter_pdf
 
         manga = _manga()
         chapter = _chapter("4", url="http://img/page.jpg")
@@ -448,9 +448,9 @@ class TestPrepareChapterPdf:
 
         with (
             patch("models.config.settings", _fake_manga_settings(tmp_path)),
-            patch("services.manga.read_orchestrator._download_images"),
+            patch("services.manga.reading_service.download_images"),
             patch(
-                "services.manga.read_orchestrator.create_pdf_from_images",
+                "services.manga.reading_service.create_pdf_from_images",
                 side_effect=_create_fake_pdf,
             ),
         ):
@@ -459,8 +459,8 @@ class TestPrepareChapterPdf:
         assert result == expected_pdf
 
     def test_download_error_cleans_up_output_dir(self, tmp_path):
-        """When _download_images raises, output dir is cleaned and None returned."""
-        from services.manga.read_orchestrator import _prepare_chapter_pdf
+        """When download_images raises, output dir is cleaned and None returned."""
+        from services.manga.reading_service import _prepare_chapter_pdf
 
         manga = _manga()
         chapter = _chapter("6", url="http://img/1.jpg")
@@ -470,11 +470,11 @@ class TestPrepareChapterPdf:
         with (
             patch("models.config.settings", _fake_manga_settings(tmp_path)),
             patch(
-                "services.manga.read_orchestrator._download_images",
+                "services.manga.reading_service.download_images",
                 side_effect=RuntimeError("disk full"),
             ),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_warning",
+                "services.manga.reading_service.ui_bridge.show_warning",
                 side_effect=lambda m: warnings.append(m),
             ),
         ):
@@ -491,7 +491,7 @@ class TestPrepareChapterPdf:
 
 class TestLoadChaptersWithFallback:
     def test_success_returns_chapters(self, tmp_path):
-        from services.manga.read_orchestrator import _load_chapters_with_fallback
+        from services.manga.reading_service import _load_chapters_with_fallback
 
         chapters = [_chapter("1"), _chapter("2")]
         service = _FakeService(chapters=chapters)
@@ -504,7 +504,7 @@ class TestLoadChaptersWithFallback:
         assert src == "mangadex"
 
     def test_mangadex_error_with_no_fallback(self, monkeypatch):
-        from services.manga.read_orchestrator import _load_chapters_with_fallback
+        from services.manga.reading_service import _load_chapters_with_fallback
         from services.manga.manga_service import MangaDexError
 
         err = MangaDexError("err", user_message="falhou")
@@ -513,7 +513,7 @@ class TestLoadChaptersWithFallback:
 
         warnings = []
         with patch(
-            "services.manga.read_orchestrator.ui_bridge.show_warning",
+            "services.manga.reading_service.ui_bridge.show_warning",
             side_effect=lambda m: warnings.append(m),
         ):
             result_chapters, src, url, result_manga = _load_chapters_with_fallback(
@@ -523,14 +523,14 @@ class TestLoadChaptersWithFallback:
         assert result_chapters is None
 
     def test_generic_exception_returns_none(self, monkeypatch):
-        from services.manga.read_orchestrator import _load_chapters_with_fallback
+        from services.manga.reading_service import _load_chapters_with_fallback
 
         service = _FakeService(raise_on_chapters=RuntimeError("network failure"))
         manga = _manga()
 
         warnings = []
         with patch(
-            "services.manga.read_orchestrator.ui_bridge.show_warning",
+            "services.manga.reading_service.ui_bridge.show_warning",
             side_effect=lambda m: warnings.append(m),
         ):
             result_chapters, _, _, _ = _load_chapters_with_fallback(
@@ -541,7 +541,7 @@ class TestLoadChaptersWithFallback:
 
     def test_fallback_source_used_on_mangadex_error(self, monkeypatch):
         """When primary fails with MangaDexError and fallback succeeds, returns fallback chapters."""
-        from services.manga.read_orchestrator import _load_chapters_with_fallback
+        from services.manga.reading_service import _load_chapters_with_fallback
         from services.manga.manga_service import MangaDexError
 
         fallback_chapters = [_chapter("1")]
@@ -558,9 +558,9 @@ class TestLoadChaptersWithFallback:
         manga = _manga(sources={"mangadex": "m1", "mugiwaras": "m2"})
 
         with (
-            patch("services.manga.read_orchestrator.ui_bridge.show_warning"),
-            patch("services.manga.read_orchestrator.ui_bridge.show_info"),
-            patch("services.manga.read_orchestrator.manga_source_preferences.set_preferred_source"),
+            patch("services.manga.reading_service.ui_bridge.show_warning"),
+            patch("services.manga.reading_service.ui_bridge.show_info"),
+            patch("services.manga.reading_service.manga_source_preferences.set_preferred_source"),
         ):
             result_chapters, src, url, result_manga = _load_chapters_with_fallback(
                 service, manga, "mangadex", allow_source_change=True, progress=_noop_progress
@@ -577,10 +577,10 @@ class TestLoadChaptersWithFallback:
 
 class TestSyncReadToAnilist:
     def test_skipped_when_not_authenticated(self, monkeypatch):
-        from services.manga.read_orchestrator import _sync_read_to_anilist
+        from services.manga.reading_service import _sync_read_to_anilist
 
         with patch(
-            "services.manga.read_orchestrator.anilist_client.is_authenticated", return_value=False
+            "services.manga.reading_service.anilist_client.is_authenticated", return_value=False
         ):
             # Should return without calling menu
             menu_called = []
@@ -590,16 +590,16 @@ class TestSyncReadToAnilist:
         assert not menu_called
 
     def test_user_says_not_finished_no_update(self, monkeypatch):
-        from services.manga.read_orchestrator import _sync_read_to_anilist
+        from services.manga.reading_service import _sync_read_to_anilist
 
         infos = []
         with (
             patch(
-                "services.manga.read_orchestrator.anilist_client.is_authenticated",
+                "services.manga.reading_service.anilist_client.is_authenticated",
                 return_value=True,
             ),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
         ):
@@ -612,17 +612,17 @@ class TestSyncReadToAnilist:
         assert any("não atualizado" in i for i in infos)
 
     def test_anilist_not_found_shows_warning(self, monkeypatch):
-        from services.manga.read_orchestrator import _sync_read_to_anilist
+        from services.manga.reading_service import _sync_read_to_anilist
 
         warnings = []
         with (
             patch(
-                "services.manga.read_orchestrator.anilist_client.is_authenticated",
+                "services.manga.reading_service.anilist_client.is_authenticated",
                 return_value=True,
             ),
-            patch("services.manga.read_orchestrator.anilist_client.search_manga", return_value=[]),
+            patch("services.manga.reading_service.anilist_client.search_manga", return_value=[]),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_warning",
+                "services.manga.reading_service.ui_bridge.show_warning",
                 side_effect=lambda m: warnings.append(m),
             ),
         ):
@@ -635,29 +635,29 @@ class TestSyncReadToAnilist:
         assert any("não encontrado no AniList" in w for w in warnings)
 
     def test_successful_sync_updates_progress(self, monkeypatch):
-        from services.manga.read_orchestrator import _sync_read_to_anilist
+        from services.manga.reading_service import _sync_read_to_anilist
 
         anilist_manga = SimpleNamespace(id=42, status="CURRENT")
         infos = []
         with (
             patch(
-                "services.manga.read_orchestrator.anilist_client.is_authenticated",
+                "services.manga.reading_service.anilist_client.is_authenticated",
                 return_value=True,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.search_manga",
+                "services.manga.reading_service.anilist_client.search_manga",
                 return_value=[anilist_manga],
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.get_manga_list_entry",
+                "services.manga.reading_service.anilist_client.get_manga_list_entry",
                 return_value=anilist_manga,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.update_manga_progress",
+                "services.manga.reading_service.anilist_client.update_manga_progress",
                 return_value=True,
             ),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
         ):
@@ -670,29 +670,29 @@ class TestSyncReadToAnilist:
         assert any("AniList" in i for i in infos)
 
     def test_failed_update_shows_warning(self, monkeypatch):
-        from services.manga.read_orchestrator import _sync_read_to_anilist
+        from services.manga.reading_service import _sync_read_to_anilist
 
         anilist_manga = SimpleNamespace(id=42, status="CURRENT")
         warnings = []
         with (
             patch(
-                "services.manga.read_orchestrator.anilist_client.is_authenticated",
+                "services.manga.reading_service.anilist_client.is_authenticated",
                 return_value=True,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.search_manga",
+                "services.manga.reading_service.anilist_client.search_manga",
                 return_value=[anilist_manga],
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.get_manga_list_entry",
+                "services.manga.reading_service.anilist_client.get_manga_list_entry",
                 return_value=anilist_manga,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.update_manga_progress",
+                "services.manga.reading_service.anilist_client.update_manga_progress",
                 return_value=False,
             ),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_warning",
+                "services.manga.reading_service.ui_bridge.show_warning",
                 side_effect=lambda m: warnings.append(m),
             ),
         ):
@@ -712,13 +712,13 @@ class TestSyncReadToAnilist:
 
 class TestSelectSource:
     def test_single_source_returns_current(self, monkeypatch):
-        from services.manga.read_orchestrator import _select_source
+        from services.manga.reading_service import _select_source
 
         service = _FakeService(sources=["mangadex"])
         manga = _manga()
 
         with patch(
-            "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+            "services.manga.reading_service.manga_source_preferences.get_preferred_source",
             return_value=None,
         ):
             chosen, updated = _select_source(
@@ -728,13 +728,13 @@ class TestSelectSource:
         assert updated is manga
 
     def test_user_cancels_returns_none(self, monkeypatch):
-        from services.manga.read_orchestrator import _select_source
+        from services.manga.reading_service import _select_source
 
         service = _FakeService(sources=["mangadex", "mugiwaras"])
         manga = _manga()
 
         with patch(
-            "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+            "services.manga.reading_service.manga_source_preferences.get_preferred_source",
             return_value=None,
         ):
             chosen, _ = _select_source(
@@ -743,13 +743,13 @@ class TestSelectSource:
         assert chosen is None
 
     def test_keyboard_interrupt_returns_none(self, monkeypatch):
-        from services.manga.read_orchestrator import _select_source
+        from services.manga.reading_service import _select_source
 
         service = _FakeService(sources=["mangadex", "mugiwaras"])
         manga = _manga()
 
         with patch(
-            "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+            "services.manga.reading_service.manga_source_preferences.get_preferred_source",
             return_value=None,
         ):
             chosen, _ = _select_source(
@@ -762,7 +762,7 @@ class TestSelectSource:
         assert chosen is None
 
     def test_switch_source_updates_and_saves(self, monkeypatch):
-        from services.manga.read_orchestrator import _select_source
+        from services.manga.reading_service import _select_source
 
         service = _FakeService(
             sources=["mangadex", "mugiwaras"],
@@ -774,19 +774,19 @@ class TestSelectSource:
         prefs_set = []
         with (
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.get_preferred_source",
                 return_value=None,
             ),
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.set_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.set_preferred_source",
                 side_effect=lambda t, s: prefs_set.append(s),
             ),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
             patch(
-                "services.manga.read_orchestrator.research_manga_in_new_source", return_value=manga
+                "services.manga.reading_service.research_manga_in_new_source", return_value=manga
             ),
         ):
             chosen, _ = _select_source(
@@ -811,7 +811,7 @@ class TestHandleDownloadForLater:
         return [_chapter("1"), _chapter("2"), _chapter("3")]
 
     def test_empty_chapters_shows_warning(self, tmp_path, monkeypatch):
-        from services.manga.read_orchestrator import handle_download_for_later
+        from services.manga.reading_service import handle_download_for_later
 
         service = _FakeService(chapters=[])
         manga = _manga()
@@ -820,7 +820,7 @@ class TestHandleDownloadForLater:
 
         warnings = []
         with patch(
-            "services.manga.read_orchestrator.ui_bridge.show_warning",
+            "services.manga.reading_service.ui_bridge.show_warning",
             side_effect=lambda m: warnings.append(m),
         ):
             handle_download_for_later(
@@ -838,7 +838,7 @@ class TestHandleDownloadForLater:
 
     def test_no_chapters_arg_loads_from_service(self, tmp_path):
         """When chapters=None, service.get_chapters is called."""
-        from services.manga.read_orchestrator import handle_download_for_later
+        from services.manga.reading_service import handle_download_for_later
 
         service = _FakeService(chapters=self._make_chapters())
         manga = _manga()
@@ -847,9 +847,9 @@ class TestHandleDownloadForLater:
 
         with (
             patch(
-                "services.manga.read_orchestrator.prompt_download_range", return_value=[]
+                "services.manga.reading_service.prompt_download_range", return_value=[]
             ) as mock_range,
-            patch("services.manga.read_orchestrator.ui_bridge.show_warning"),
+            patch("services.manga.reading_service.ui_bridge.show_warning"),
             patch("models.config.settings", _fake_manga_settings(tmp_path)),
         ):
             handle_download_for_later(
@@ -868,8 +868,8 @@ class TestHandleDownloadForLater:
         mock_range.assert_called_once()
 
     def test_download_completes_successfully(self, tmp_path):
-        from services.manga.read_orchestrator import handle_download_for_later
-        from services.manga.download import BatchDownloadResult
+        from services.manga.reading_service import handle_download_for_later
+        from services.manga.download_service import BatchDownloadResult
 
         chapters = self._make_chapters()
         service = _FakeService(chapters=chapters)
@@ -881,15 +881,15 @@ class TestHandleDownloadForLater:
 
         infos = []
         with (
-            patch("services.manga.read_orchestrator.prompt_download_range", return_value=chapters),
+            patch("services.manga.reading_service.prompt_download_range", return_value=chapters),
             patch(
-                "services.manga.read_orchestrator.split_new_and_downloaded",
+                "services.manga.reading_service.split_new_and_downloaded",
                 return_value=(chapters, []),
             ),
-            patch("services.manga.read_orchestrator.download_chapters_batch", return_value=result),
-            patch("services.manga.read_orchestrator.resolve_parallelism", return_value=1),
+            patch("services.manga.reading_service.download_chapters_batch", return_value=result),
+            patch("services.manga.reading_service.resolve_parallelism", return_value=1),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
             patch("models.config.settings", _fake_manga_settings(tmp_path)),
@@ -910,7 +910,7 @@ class TestHandleDownloadForLater:
         assert any("3" in i for i in infos)
 
     def test_already_downloaded_cancel_aborts(self, tmp_path):
-        from services.manga.read_orchestrator import handle_download_for_later
+        from services.manga.reading_service import handle_download_for_later
 
         chapters = self._make_chapters()
         manga = _manga()
@@ -921,12 +921,12 @@ class TestHandleDownloadForLater:
         fake_settings.manga.skip_already_downloaded = True
 
         with (
-            patch("services.manga.read_orchestrator.prompt_download_range", return_value=chapters),
+            patch("services.manga.reading_service.prompt_download_range", return_value=chapters),
             patch(
-                "services.manga.read_orchestrator.split_new_and_downloaded",
+                "services.manga.reading_service.split_new_and_downloaded",
                 return_value=([], chapters),
             ),
-            patch("services.manga.read_orchestrator.download_chapters_batch") as mock_dl,
+            patch("services.manga.reading_service.download_chapters_batch") as mock_dl,
             patch("models.config.settings", fake_settings),
         ):
             handle_download_for_later(
@@ -951,7 +951,7 @@ class TestHandleDownloadForLater:
 
 class TestContinueMangaFlow:
     def test_no_chapters_shows_warning(self, monkeypatch):
-        from services.manga.read_orchestrator import continue_manga_flow
+        from services.manga.reading_service import continue_manga_flow
 
         service = _FakeService(chapters=[])
         manga = _manga()
@@ -959,19 +959,19 @@ class TestContinueMangaFlow:
         warnings = []
         with (
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_warning",
+                "services.manga.reading_service.ui_bridge.show_warning",
                 side_effect=lambda m: warnings.append(m),
             ),
             patch(
-                "services.manga.read_orchestrator._select_source", return_value=("mangadex", manga)
+                "services.manga.reading_service._select_source", return_value=("mangadex", manga)
             ),
-            patch("services.manga.read_orchestrator._get_anilist_progress", return_value=None),
-            patch("services.manga.read_orchestrator.MangaHistory") as mock_hist,
+            patch("services.manga.reading_service._get_anilist_progress", return_value=None),
+            patch("services.manga.reading_service.MangaHistory") as mock_hist,
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.get_preferred_source",
                 return_value="mangadex",
             ),
-            patch("services.manga.read_orchestrator.manga_source_preferences.set_preferred_source"),
+            patch("services.manga.reading_service.manga_source_preferences.set_preferred_source"),
         ):
             mock_hist.return_value.get_last_chapter.return_value = None
             continue_manga_flow(
@@ -985,16 +985,16 @@ class TestContinueMangaFlow:
         assert any("Nenhum capítulo" in w for w in warnings)
 
     def test_user_cancels_source_selection_returns_early(self, monkeypatch):
-        from services.manga.read_orchestrator import continue_manga_flow
+        from services.manga.reading_service import continue_manga_flow
 
         service = _FakeService(chapters=[_chapter("1")])
         manga = _manga()
 
         process_called = []
         with (
-            patch("services.manga.read_orchestrator._select_source", return_value=(None, manga)),
+            patch("services.manga.reading_service._select_source", return_value=(None, manga)),
             patch(
-                "services.manga.read_orchestrator._process_chapter",
+                "services.manga.reading_service._process_chapter",
                 side_effect=lambda *a, **kw: process_called.append(1),
             ),
         ):
@@ -1010,7 +1010,7 @@ class TestContinueMangaFlow:
 
     def test_chapter_list_shown_user_reads(self, monkeypatch, tmp_path):
         """Menu -> chapter -> 'read' action triggers _process_chapter."""
-        from services.manga.read_orchestrator import continue_manga_flow
+        from services.manga.reading_service import continue_manga_flow
 
         chapters = [_chapter("1", url="http://x")]
         service = _FakeService(chapters=chapters)
@@ -1020,17 +1020,17 @@ class TestContinueMangaFlow:
 
         with (
             patch(
-                "services.manga.read_orchestrator._select_source", return_value=("mangadex", manga)
+                "services.manga.reading_service._select_source", return_value=("mangadex", manga)
             ),
-            patch("services.manga.read_orchestrator._get_anilist_progress", return_value=None),
-            patch("services.manga.read_orchestrator.MangaHistory") as mock_hist,
+            patch("services.manga.reading_service._get_anilist_progress", return_value=None),
+            patch("services.manga.reading_service.MangaHistory") as mock_hist,
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.get_preferred_source",
                 return_value="mangadex",
             ),
-            patch("services.manga.read_orchestrator.manga_source_preferences.set_preferred_source"),
+            patch("services.manga.reading_service.manga_source_preferences.set_preferred_source"),
             patch(
-                "services.manga.read_orchestrator._process_chapter",
+                "services.manga.reading_service._process_chapter",
                 side_effect=lambda *a, **kw: process_calls.append(1),
             ),
         ):
@@ -1056,7 +1056,7 @@ class TestContinueMangaFlow:
 
     def test_resume_immediately_skips_chapter_list(self, monkeypatch, tmp_path):
         """When resume chosen and chapter found, goes straight to _process_chapter."""
-        from services.manga.read_orchestrator import continue_manga_flow
+        from services.manga.reading_service import continue_manga_flow
 
         chapters = [_chapter("5"), _chapter("6")]
         service = _FakeService(chapters=chapters)
@@ -1065,18 +1065,18 @@ class TestContinueMangaFlow:
         process_calls = []
         with (
             patch(
-                "services.manga.read_orchestrator._select_source", return_value=("mangadex", manga)
+                "services.manga.reading_service._select_source", return_value=("mangadex", manga)
             ),
-            patch("services.manga.read_orchestrator._get_anilist_progress", return_value=4),
-            patch("services.manga.read_orchestrator.MangaHistory") as mock_hist,
+            patch("services.manga.reading_service._get_anilist_progress", return_value=4),
+            patch("services.manga.reading_service.MangaHistory") as mock_hist,
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.get_preferred_source",
                 return_value="mangadex",
             ),
-            patch("services.manga.read_orchestrator.manga_source_preferences.set_preferred_source"),
-            patch("services.manga.read_orchestrator.ui_bridge.show_info"),
+            patch("services.manga.reading_service.manga_source_preferences.set_preferred_source"),
+            patch("services.manga.reading_service.ui_bridge.show_info"),
             patch(
-                "services.manga.read_orchestrator._process_chapter",
+                "services.manga.reading_service._process_chapter",
                 side_effect=lambda *a, **kw: process_calls.append(1),
             ),
         ):
@@ -1110,17 +1110,17 @@ class TestProcessChapter:
         return pdf_path
 
     def test_returns_when_pdf_none(self, monkeypatch):
-        from services.manga.read_orchestrator import _process_chapter
+        from services.manga.reading_service import _process_chapter
 
         manga = _manga()
         chapter = _chapter("1")
         history = MagicMock()
 
-        with patch("services.manga.read_orchestrator._prepare_chapter_pdf", return_value=None):
+        with patch("services.manga.reading_service._prepare_chapter_pdf", return_value=None):
             # Should return without calling open_pdf_reader
             open_calls = []
             with patch(
-                "services.manga.read_orchestrator.open_pdf_reader",
+                "services.manga.reading_service.open_pdf_reader",
                 side_effect=lambda p: open_calls.append(p),
             ):
                 _process_chapter(
@@ -1139,7 +1139,7 @@ class TestProcessChapter:
         assert not open_calls
 
     def test_selects_next_chapter(self, monkeypatch, tmp_path):
-        from services.manga.read_orchestrator import _process_chapter
+        from services.manga.reading_service import _process_chapter
 
         manga = _manga()
         ch1 = _chapter("1")
@@ -1167,12 +1167,10 @@ class TestProcessChapter:
             return "Selecionar outro capítulo"
 
         with (
-            patch(
-                "services.manga.read_orchestrator._prepare_chapter_pdf", side_effect=_fake_prepare
-            ),
-            patch("services.manga.read_orchestrator.open_pdf_reader"),
-            patch("services.manga.read_orchestrator.is_zathura_running", return_value=False),
-            patch("services.manga.read_orchestrator._sync_read_to_anilist"),
+            patch("services.manga.reading_service._prepare_chapter_pdf", side_effect=_fake_prepare),
+            patch("services.manga.reading_service.open_pdf_reader"),
+            patch("services.manga.reading_service.is_zathura_running", return_value=False),
+            patch("services.manga.reading_service._sync_read_to_anilist"),
         ):
             _process_chapter(
                 _FakeService(),
@@ -1192,7 +1190,7 @@ class TestProcessChapter:
         assert history.update.call_count == 2
 
     def test_previous_chapter_navigation(self, monkeypatch, tmp_path):
-        from services.manga.read_orchestrator import _process_chapter
+        from services.manga.reading_service import _process_chapter
 
         manga = _manga()
         ch1 = _chapter("1")
@@ -1215,12 +1213,10 @@ class TestProcessChapter:
             return pdf
 
         with (
-            patch(
-                "services.manga.read_orchestrator._prepare_chapter_pdf", side_effect=_fake_prepare
-            ),
-            patch("services.manga.read_orchestrator.open_pdf_reader"),
-            patch("services.manga.read_orchestrator.is_zathura_running", return_value=False),
-            patch("services.manga.read_orchestrator._sync_read_to_anilist"),
+            patch("services.manga.reading_service._prepare_chapter_pdf", side_effect=_fake_prepare),
+            patch("services.manga.reading_service.open_pdf_reader"),
+            patch("services.manga.reading_service.is_zathura_running", return_value=False),
+            patch("services.manga.reading_service._sync_read_to_anilist"),
         ):
             _process_chapter(
                 _FakeService(),
@@ -1240,7 +1236,7 @@ class TestProcessChapter:
         assert history.update.call_count == 2
 
     def test_at_first_chapter_previous_shows_info(self, monkeypatch, tmp_path):
-        from services.manga.read_orchestrator import _process_chapter
+        from services.manga.reading_service import _process_chapter
 
         manga = _manga()
         ch1 = _chapter("1")
@@ -1258,14 +1254,14 @@ class TestProcessChapter:
 
         with (
             patch(
-                "services.manga.read_orchestrator._prepare_chapter_pdf",
+                "services.manga.reading_service._prepare_chapter_pdf",
                 return_value=tmp_path / "1.pdf",
             ),
-            patch("services.manga.read_orchestrator.open_pdf_reader"),
-            patch("services.manga.read_orchestrator.is_zathura_running", return_value=False),
-            patch("services.manga.read_orchestrator._sync_read_to_anilist"),
+            patch("services.manga.reading_service.open_pdf_reader"),
+            patch("services.manga.reading_service.is_zathura_running", return_value=False),
+            patch("services.manga.reading_service._sync_read_to_anilist"),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
         ):
@@ -1288,7 +1284,7 @@ class TestProcessChapter:
         assert any("primeiro capítulo" in i for i in infos)
 
     def test_next_chapter_at_end_shows_info(self, monkeypatch, tmp_path):
-        from services.manga.read_orchestrator import _process_chapter
+        from services.manga.reading_service import _process_chapter
 
         manga = _manga()
         ch1 = _chapter("1")
@@ -1306,14 +1302,14 @@ class TestProcessChapter:
 
         with (
             patch(
-                "services.manga.read_orchestrator._prepare_chapter_pdf",
+                "services.manga.reading_service._prepare_chapter_pdf",
                 return_value=tmp_path / "1.pdf",
             ),
-            patch("services.manga.read_orchestrator.open_pdf_reader"),
-            patch("services.manga.read_orchestrator.is_zathura_running", return_value=False),
-            patch("services.manga.read_orchestrator._sync_read_to_anilist"),
+            patch("services.manga.reading_service.open_pdf_reader"),
+            patch("services.manga.reading_service.is_zathura_running", return_value=False),
+            patch("services.manga.reading_service._sync_read_to_anilist"),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
         ):
@@ -1335,7 +1331,7 @@ class TestProcessChapter:
         assert any("final dos capítulos" in i for i in infos)
 
     def test_keyboard_interrupt_exits_loop(self, monkeypatch, tmp_path):
-        from services.manga.read_orchestrator import _process_chapter
+        from services.manga.reading_service import _process_chapter
 
         manga = _manga()
         ch1 = _chapter("1")
@@ -1344,12 +1340,12 @@ class TestProcessChapter:
 
         with (
             patch(
-                "services.manga.read_orchestrator._prepare_chapter_pdf",
+                "services.manga.reading_service._prepare_chapter_pdf",
                 return_value=tmp_path / "1.pdf",
             ),
-            patch("services.manga.read_orchestrator.open_pdf_reader"),
-            patch("services.manga.read_orchestrator.is_zathura_running", return_value=False),
-            patch("services.manga.read_orchestrator._sync_read_to_anilist"),
+            patch("services.manga.reading_service.open_pdf_reader"),
+            patch("services.manga.reading_service.is_zathura_running", return_value=False),
+            patch("services.manga.reading_service._sync_read_to_anilist"),
         ):
             (tmp_path / "1.pdf").write_bytes(b"pdf")
             _process_chapter(
@@ -1378,12 +1374,12 @@ class TestStartMangaSearchEdgeCases:
 
     def test_preferred_manga_keyboard_interrupt_returns(self, monkeypatch):
         """KI on the preferred-manga confirmation menu returns silently (lines 96-97)."""
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
 
         manga = _manga("One Piece", "m1")
         service = _FakeService(search_results=[manga])
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.manga_selection_preferences.get_preferred_manga_id",
+            "services.manga.reading_service.manga_selection_preferences.get_preferred_manga_id",
             lambda t: "m1",
         )
 
@@ -1395,18 +1391,18 @@ class TestStartMangaSearchEdgeCases:
 
     def test_preferred_manga_choice_none_returns(self, monkeypatch):
         """None choice on preferred-manga confirmation returns silently (line 99)."""
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
 
         manga = _manga("One Piece", "m1")
         service = _FakeService(search_results=[manga])
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.manga_selection_preferences.get_preferred_manga_id",
+            "services.manga.reading_service.manga_selection_preferences.get_preferred_manga_id",
             lambda t: "m1",
         )
 
         continue_called = []
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.continue_manga_flow",
+            "services.manga.reading_service.continue_manga_flow",
             lambda *a, **kw: continue_called.append(1),
         )
 
@@ -1418,19 +1414,19 @@ class TestStartMangaSearchEdgeCases:
 
     def test_multi_result_menu_returns_none_exits(self, monkeypatch):
         """None selection from multi-result menu returns early (line 118)."""
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
 
         m1 = _manga("Bleach", "m1")
         m2 = _manga("Naruto", "m2")
         service = _FakeService(search_results=[m1, m2])
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.manga_selection_preferences.get_preferred_manga_id",
+            "services.manga.reading_service.manga_selection_preferences.get_preferred_manga_id",
             lambda t: None,
         )
 
         continue_called = []
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.continue_manga_flow",
+            "services.manga.reading_service.continue_manga_flow",
             lambda *a, **kw: continue_called.append(1),
         )
 
@@ -1439,19 +1435,19 @@ class TestStartMangaSearchEdgeCases:
 
     def test_multi_result_unknown_selection_logs_error(self, monkeypatch):
         """Menu returns unknown title -> logs error and returns (lines 121-122)."""
-        from services.manga.read_orchestrator import start_manga_search
+        from services.manga.reading_service import start_manga_search
 
         m1 = _manga("Bleach", "m1")
         m2 = _manga("Naruto", "m2")
         service = _FakeService(search_results=[m1, m2])
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.manga_selection_preferences.get_preferred_manga_id",
+            "services.manga.reading_service.manga_selection_preferences.get_preferred_manga_id",
             lambda t: None,
         )
 
         continue_called = []
         monkeypatch.setattr(
-            "services.manga.read_orchestrator.continue_manga_flow",
+            "services.manga.reading_service.continue_manga_flow",
             lambda *a, **kw: continue_called.append(1),
         )
 
@@ -1470,7 +1466,7 @@ class TestSelectSourceEdgeCases:
 
     def test_saved_source_not_in_available_removes_preference(self, monkeypatch):
         """Saved source not in sources_with_manga -> remove preference (lines 162-164)."""
-        from services.manga.read_orchestrator import _select_source
+        from services.manga.reading_service import _select_source
 
         service = _FakeService(sources=["mangadex", "mugiwaras"])
         manga = _manga("Test", sources={"mangadex": "m1", "mugiwaras": "m2"})
@@ -1478,11 +1474,11 @@ class TestSelectSourceEdgeCases:
         remove_calls = []
         with (
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.get_preferred_source",
                 return_value="old_source",
             ),
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.remove_preference",
+                "services.manga.reading_service.manga_source_preferences.remove_preference",
                 side_effect=lambda t: remove_calls.append(t),
             ),
         ):
@@ -1495,7 +1491,7 @@ class TestSelectSourceEdgeCases:
 
     def test_use_saved_source_option(self, monkeypatch):
         """'⭐ Usar fonte salva:' path sets source and returns it (lines 183-189)."""
-        from services.manga.read_orchestrator import _select_source
+        from services.manga.reading_service import _select_source
 
         service = _FakeService(sources=["mangadex", "mugiwaras"])
         manga = _manga("Test", sources={"mangadex": "m1", "mugiwaras": "m2"})
@@ -1504,15 +1500,15 @@ class TestSelectSourceEdgeCases:
         infos = []
         with (
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.get_preferred_source",
                 return_value="mugiwaras",
             ),
             patch(
-                "services.manga.read_orchestrator.research_manga_in_new_source",
+                "services.manga.reading_service.research_manga_in_new_source",
                 return_value=updated_manga,
             ),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
         ):
@@ -1529,7 +1525,7 @@ class TestSelectSourceEdgeCases:
 
     def test_switch_source_set_source_fails_shows_warning(self, monkeypatch):
         """When set_source returns False, warning shown and None returned (lines 199-201)."""
-        from services.manga.read_orchestrator import _select_source
+        from services.manga.reading_service import _select_source
 
         class _FailService(_FakeService):
             def set_source(self, source):
@@ -1541,11 +1537,11 @@ class TestSelectSourceEdgeCases:
         warnings = []
         with (
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.get_preferred_source",
                 return_value=None,
             ),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_warning",
+                "services.manga.reading_service.ui_bridge.show_warning",
                 side_effect=lambda m: warnings.append(m),
             ),
         ):
@@ -1565,37 +1561,37 @@ class TestGetAnilistProgress:
     """Cover lines 205-212."""
 
     def test_authenticated_returns_matched_progress(self, monkeypatch):
-        from services.manga.read_orchestrator import _get_anilist_progress
+        from services.manga.reading_service import _get_anilist_progress
 
         manga = _manga("One Piece")
         fake_list = [SimpleNamespace(title="One Piece", progress=1050)]
 
         with (
             patch(
-                "services.manga.read_orchestrator.anilist_client.is_authenticated",
+                "services.manga.reading_service.anilist_client.is_authenticated",
                 return_value=True,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.get_user_manga_list",
+                "services.manga.reading_service.anilist_client.get_user_manga_list",
                 return_value=fake_list,
             ),
-            patch("services.manga.read_orchestrator.match_anilist_progress", return_value=1050),
+            patch("services.manga.reading_service.match_anilist_progress", return_value=1050),
         ):
             result = _get_anilist_progress(manga)
 
         assert result == 1050
 
     def test_authenticated_exception_returns_none(self, monkeypatch):
-        from services.manga.read_orchestrator import _get_anilist_progress
+        from services.manga.reading_service import _get_anilist_progress
 
         manga = _manga()
         with (
             patch(
-                "services.manga.read_orchestrator.anilist_client.is_authenticated",
+                "services.manga.reading_service.anilist_client.is_authenticated",
                 return_value=True,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.get_user_manga_list",
+                "services.manga.reading_service.anilist_client.get_user_manga_list",
                 side_effect=RuntimeError("api down"),
             ),
         ):
@@ -1612,8 +1608,8 @@ class TestHandleDownloadEdgeCases:
 
     def test_redownload_all_option(self, tmp_path):
         """'🔄 Re-baixar todos' sets new_chapters = chapters_to_download (lines 490-491)."""
-        from services.manga.read_orchestrator import handle_download_for_later
-        from services.manga.download import BatchDownloadResult
+        from services.manga.reading_service import handle_download_for_later
+        from services.manga.download_service import BatchDownloadResult
 
         chapters = self._chapters()
         manga = _manga()
@@ -1626,17 +1622,17 @@ class TestHandleDownloadEdgeCases:
         fake_settings.manga.skip_already_downloaded = True
 
         with (
-            patch("services.manga.read_orchestrator.prompt_download_range", return_value=chapters),
+            patch("services.manga.reading_service.prompt_download_range", return_value=chapters),
             patch(
-                "services.manga.read_orchestrator.split_new_and_downloaded",
+                "services.manga.reading_service.split_new_and_downloaded",
                 return_value=([], chapters),
             ),
             patch(
-                "services.manga.read_orchestrator.download_chapters_batch",
+                "services.manga.reading_service.download_chapters_batch",
                 side_effect=lambda ch, *a, **kw: batch_calls.append(ch) or result,
             ),
-            patch("services.manga.read_orchestrator.resolve_parallelism", return_value=1),
-            patch("services.manga.read_orchestrator.ui_bridge.show_info"),
+            patch("services.manga.reading_service.resolve_parallelism", return_value=1),
+            patch("services.manga.reading_service.ui_bridge.show_info"),
             patch("models.config.settings", fake_settings),
         ):
             handle_download_for_later(
@@ -1658,7 +1654,7 @@ class TestHandleDownloadEdgeCases:
 
     def test_all_already_downloaded_shows_info(self, tmp_path):
         """All chapters downloaded and new_chapters empty shows info (lines 494-495)."""
-        from services.manga.read_orchestrator import handle_download_for_later
+        from services.manga.reading_service import handle_download_for_later
 
         chapters = self._chapters()
         manga = _manga()
@@ -1670,13 +1666,13 @@ class TestHandleDownloadEdgeCases:
         fake_settings.manga.skip_already_downloaded = False
 
         with (
-            patch("services.manga.read_orchestrator.prompt_download_range", return_value=chapters),
+            patch("services.manga.reading_service.prompt_download_range", return_value=chapters),
             patch(
-                "services.manga.read_orchestrator.split_new_and_downloaded",
+                "services.manga.reading_service.split_new_and_downloaded",
                 return_value=([], chapters),
             ),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
             patch("models.config.settings", fake_settings),
@@ -1701,7 +1697,7 @@ class TestSyncReadToAnilistEdgeCases:
 
     def test_planning_status_triggers_status_change(self, monkeypatch):
         """When list_entry status == 'PLANNING', change_manga_status is called (lines 635-636)."""
-        from services.manga.read_orchestrator import _sync_read_to_anilist
+        from services.manga.reading_service import _sync_read_to_anilist
 
         anilist_manga = SimpleNamespace(id=42)
         list_entry = SimpleNamespace(status="PLANNING")
@@ -1710,27 +1706,27 @@ class TestSyncReadToAnilistEdgeCases:
 
         with (
             patch(
-                "services.manga.read_orchestrator.anilist_client.is_authenticated",
+                "services.manga.reading_service.anilist_client.is_authenticated",
                 return_value=True,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.search_manga",
+                "services.manga.reading_service.anilist_client.search_manga",
                 return_value=[anilist_manga],
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.get_manga_list_entry",
+                "services.manga.reading_service.anilist_client.get_manga_list_entry",
                 return_value=list_entry,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.update_manga_progress",
+                "services.manga.reading_service.anilist_client.update_manga_progress",
                 return_value=True,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.change_manga_status",
+                "services.manga.reading_service.anilist_client.change_manga_status",
                 side_effect=lambda mid, s: status_changes.append(s),
             ),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
         ):
@@ -1745,7 +1741,7 @@ class TestSyncReadToAnilistEdgeCases:
 
     def test_auto_delete_chapter_on_completion(self, tmp_path):
         """When auto_delete_read_chapters=True and pdf exists, shutil.rmtree called (lines 641-648)."""
-        from services.manga.read_orchestrator import _sync_read_to_anilist
+        from services.manga.reading_service import _sync_read_to_anilist
 
         anilist_manga = SimpleNamespace(id=42)
         list_entry = SimpleNamespace(status="CURRENT")
@@ -1761,24 +1757,24 @@ class TestSyncReadToAnilistEdgeCases:
 
         with (
             patch(
-                "services.manga.read_orchestrator.anilist_client.is_authenticated",
+                "services.manga.reading_service.anilist_client.is_authenticated",
                 return_value=True,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.search_manga",
+                "services.manga.reading_service.anilist_client.search_manga",
                 return_value=[anilist_manga],
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.get_manga_list_entry",
+                "services.manga.reading_service.anilist_client.get_manga_list_entry",
                 return_value=list_entry,
             ),
             patch(
-                "services.manga.read_orchestrator.anilist_client.update_manga_progress",
+                "services.manga.reading_service.anilist_client.update_manga_progress",
                 return_value=True,
             ),
-            patch("services.manga.read_orchestrator.anilist_client.change_manga_status"),
+            patch("services.manga.reading_service.anilist_client.change_manga_status"),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
             patch("models.config.settings", fake_settings),
@@ -1799,7 +1795,7 @@ class TestProcessChapterZathura:
     """Cover lines 684-689 (Zathura wait loop)."""
 
     def test_waits_for_zathura_to_close(self, tmp_path):
-        from services.manga.read_orchestrator import _process_chapter
+        from services.manga.reading_service import _process_chapter
 
         manga = _manga()
         ch1 = _chapter("1")
@@ -1819,12 +1815,12 @@ class TestProcessChapterZathura:
         infos = []
 
         with (
-            patch("services.manga.read_orchestrator._prepare_chapter_pdf", return_value=pdf),
-            patch("services.manga.read_orchestrator.open_pdf_reader"),
-            patch("services.manga.read_orchestrator.is_zathura_running", side_effect=_fake_zathura),
-            patch("services.manga.read_orchestrator._sync_read_to_anilist"),
+            patch("services.manga.reading_service._prepare_chapter_pdf", return_value=pdf),
+            patch("services.manga.reading_service.open_pdf_reader"),
+            patch("services.manga.reading_service.is_zathura_running", side_effect=_fake_zathura),
+            patch("services.manga.reading_service._sync_read_to_anilist"),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_info",
+                "services.manga.reading_service.ui_bridge.show_info",
                 side_effect=lambda m: infos.append(m),
             ),
             patch("time.sleep"),
@@ -1851,7 +1847,7 @@ class TestContinueMangaFlowEdgeCases:
 
     def test_resume_keyboard_interrupt_returns_early(self, monkeypatch):
         """KI on resume menu returns silently (lines 304-305)."""
-        from services.manga.read_orchestrator import continue_manga_flow
+        from services.manga.reading_service import continue_manga_flow
 
         chapters = [_chapter("5")]
         service = _FakeService(chapters=chapters)
@@ -1860,17 +1856,17 @@ class TestContinueMangaFlowEdgeCases:
         process_calls = []
         with (
             patch(
-                "services.manga.read_orchestrator._select_source", return_value=("mangadex", manga)
+                "services.manga.reading_service._select_source", return_value=("mangadex", manga)
             ),
-            patch("services.manga.read_orchestrator._get_anilist_progress", return_value=4),
-            patch("services.manga.read_orchestrator.MangaHistory") as mock_hist,
+            patch("services.manga.reading_service._get_anilist_progress", return_value=4),
+            patch("services.manga.reading_service.MangaHistory") as mock_hist,
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.get_preferred_source",
                 return_value="mangadex",
             ),
-            patch("services.manga.read_orchestrator.manga_source_preferences.set_preferred_source"),
+            patch("services.manga.reading_service.manga_source_preferences.set_preferred_source"),
             patch(
-                "services.manga.read_orchestrator._process_chapter",
+                "services.manga.reading_service._process_chapter",
                 side_effect=lambda *a, **kw: process_calls.append(1),
             ),
         ):
@@ -1889,7 +1885,7 @@ class TestContinueMangaFlowEdgeCases:
 
     def test_resume_chapter_not_found_shows_fallback_warning(self, monkeypatch):
         """When resume chapter not found and fallback returns None, warning shown (line 356)."""
-        from services.manga.read_orchestrator import continue_manga_flow
+        from services.manga.reading_service import continue_manga_flow
 
         # Chapter 5 in list but no url (so not found properly)
         chapters = [_chapter("5", url=None)]
@@ -1899,21 +1895,21 @@ class TestContinueMangaFlowEdgeCases:
         warnings = []
         with (
             patch(
-                "services.manga.read_orchestrator._select_source", return_value=("mangadex", manga)
+                "services.manga.reading_service._select_source", return_value=("mangadex", manga)
             ),
-            patch("services.manga.read_orchestrator._get_anilist_progress", return_value=4),
-            patch("services.manga.read_orchestrator.MangaHistory") as mock_hist,
+            patch("services.manga.reading_service._get_anilist_progress", return_value=4),
+            patch("services.manga.reading_service.MangaHistory") as mock_hist,
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.get_preferred_source",
                 return_value="mangadex",
             ),
-            patch("services.manga.read_orchestrator.manga_source_preferences.set_preferred_source"),
+            patch("services.manga.reading_service.manga_source_preferences.set_preferred_source"),
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_warning",
+                "services.manga.reading_service.ui_bridge.show_warning",
                 side_effect=lambda m: warnings.append(m),
             ),
-            patch("services.manga.read_orchestrator.ui_bridge.show_info"),
-            patch("services.manga.read_orchestrator.resume_from_other_source", return_value=None),
+            patch("services.manga.reading_service.ui_bridge.show_info"),
+            patch("services.manga.reading_service.resume_from_other_source", return_value=None),
         ):
             mock_hist.return_value.get_last_chapter.return_value = None
 
@@ -1931,7 +1927,7 @@ class TestContinueMangaFlowEdgeCases:
 
     def test_prefer_source_set_when_differs(self, monkeypatch):
         """If get_preferred_source != selected_source, set_preferred_source called (line 285)."""
-        from services.manga.read_orchestrator import continue_manga_flow
+        from services.manga.reading_service import continue_manga_flow
 
         chapters = [_chapter("1")]
         service = _FakeService(chapters=chapters)
@@ -1940,16 +1936,16 @@ class TestContinueMangaFlowEdgeCases:
         pref_set_calls = []
         with (
             patch(
-                "services.manga.read_orchestrator._select_source", return_value=("mangadex", manga)
+                "services.manga.reading_service._select_source", return_value=("mangadex", manga)
             ),
-            patch("services.manga.read_orchestrator._get_anilist_progress", return_value=None),
-            patch("services.manga.read_orchestrator.MangaHistory") as mock_hist,
+            patch("services.manga.reading_service._get_anilist_progress", return_value=None),
+            patch("services.manga.reading_service.MangaHistory") as mock_hist,
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.get_preferred_source",
                 return_value="mugiwaras",
             ),
             patch(
-                "services.manga.read_orchestrator.manga_source_preferences.set_preferred_source",
+                "services.manga.reading_service.manga_source_preferences.set_preferred_source",
                 side_effect=lambda t, s: pref_set_calls.append(s),
             ),
         ):
@@ -1972,7 +1968,7 @@ class TestHandleDownloadErrorAndParallel:
 
     def test_error_loading_chapters_when_none_shows_warning(self, tmp_path):
         """When chapters=None and get_chapters raises, show warning (lines 459-461)."""
-        from services.manga.read_orchestrator import handle_download_for_later
+        from services.manga.reading_service import handle_download_for_later
 
         service = _FakeService(raise_on_chapters=RuntimeError("network error"))
         manga = _manga()
@@ -1983,7 +1979,7 @@ class TestHandleDownloadErrorAndParallel:
 
         with (
             patch(
-                "services.manga.read_orchestrator.ui_bridge.show_warning",
+                "services.manga.reading_service.ui_bridge.show_warning",
                 side_effect=lambda m: warnings.append(m),
             ),
             patch("models.config.settings", fake_settings),
@@ -2004,8 +2000,8 @@ class TestHandleDownloadErrorAndParallel:
 
     def test_on_failure_callback_returns_true(self, tmp_path):
         """_on_failure callback when menu returns '✅ Continuar' returns True (lines 503-509)."""
-        from services.manga.read_orchestrator import handle_download_for_later
-        from services.manga.download import BatchDownloadResult
+        from services.manga.reading_service import handle_download_for_later
+        from services.manga.download_service import BatchDownloadResult
 
         chapters = [_chapter("1")]
         manga = _manga()
@@ -2033,17 +2029,17 @@ class TestHandleDownloadErrorAndParallel:
         fake_settings = _fake_manga_settings(tmp_path)
 
         with (
-            patch("services.manga.read_orchestrator.prompt_download_range", return_value=chapters),
+            patch("services.manga.reading_service.prompt_download_range", return_value=chapters),
             patch(
-                "services.manga.read_orchestrator.split_new_and_downloaded",
+                "services.manga.reading_service.split_new_and_downloaded",
                 return_value=(chapters, []),
             ),
             patch(
-                "services.manga.read_orchestrator.download_chapters_batch",
+                "services.manga.reading_service.download_chapters_batch",
                 side_effect=_capture_batch,
             ),
-            patch("services.manga.read_orchestrator.resolve_parallelism", return_value=1),
-            patch("services.manga.read_orchestrator.ui_bridge.show_info"),
+            patch("services.manga.reading_service.resolve_parallelism", return_value=1),
+            patch("services.manga.reading_service.ui_bridge.show_info"),
             patch("models.config.settings", fake_settings),
         ):
             handle_download_for_later(
@@ -2065,8 +2061,8 @@ class TestHandleDownloadErrorAndParallel:
 
     def test_on_failure_callback_returns_false_on_exception(self, tmp_path):
         """_on_failure raises Exception in menu -> returns False (line 508-509)."""
-        from services.manga.read_orchestrator import handle_download_for_later
-        from services.manga.download import BatchDownloadResult
+        from services.manga.reading_service import handle_download_for_later
+        from services.manga.download_service import BatchDownloadResult
 
         chapters = [_chapter("1")]
         manga = _manga()
@@ -2094,17 +2090,17 @@ class TestHandleDownloadErrorAndParallel:
         fake_settings = _fake_manga_settings(tmp_path)
 
         with (
-            patch("services.manga.read_orchestrator.prompt_download_range", return_value=chapters),
+            patch("services.manga.reading_service.prompt_download_range", return_value=chapters),
             patch(
-                "services.manga.read_orchestrator.split_new_and_downloaded",
+                "services.manga.reading_service.split_new_and_downloaded",
                 return_value=(chapters, []),
             ),
             patch(
-                "services.manga.read_orchestrator.download_chapters_batch",
+                "services.manga.reading_service.download_chapters_batch",
                 side_effect=_capture_batch,
             ),
-            patch("services.manga.read_orchestrator.resolve_parallelism", return_value=1),
-            patch("services.manga.read_orchestrator.ui_bridge.show_info"),
+            patch("services.manga.reading_service.resolve_parallelism", return_value=1),
+            patch("services.manga.reading_service.ui_bridge.show_info"),
             patch("models.config.settings", fake_settings),
         ):
             handle_download_for_later(
@@ -2125,7 +2121,7 @@ class TestHandleDownloadErrorAndParallel:
 
     def test_delete_images_after_pdf_created(self, tmp_path):
         """When delete_images_after_pdf=True, image files removed (lines 591-594)."""
-        from services.manga.read_orchestrator import _prepare_chapter_pdf
+        from services.manga.reading_service import _prepare_chapter_pdf
 
         manga = _manga()
         chapter = _chapter("7", url="http://img/1.jpg")
@@ -2142,10 +2138,8 @@ class TestHandleDownloadErrorAndParallel:
 
         with (
             patch("models.config.settings", _fake_manga_settings(tmp_path, delete_images=True)),
-            patch("services.manga.read_orchestrator._download_images"),
-            patch(
-                "services.manga.read_orchestrator.create_pdf_from_images", side_effect=_create_pdf
-            ),
+            patch("services.manga.reading_service.download_images"),
+            patch("services.manga.reading_service.create_pdf_from_images", side_effect=_create_pdf),
         ):
             result = _prepare_chapter_pdf(manga, chapter, "mangadex", service, _noop_progress)
 
@@ -2155,13 +2149,13 @@ class TestHandleDownloadErrorAndParallel:
 
     def test_select_source_returns_current_when_read_selected(self, monkeypatch):
         """'📖 Ler com <source>' action returns current_source unchanged (line 201)."""
-        from services.manga.read_orchestrator import _select_source
+        from services.manga.reading_service import _select_source
 
         service = _FakeService(sources=["mangadex", "mugiwaras"])
         manga = _manga("Test", sources={"mangadex": "m1", "mugiwaras": "m2"})
 
         with patch(
-            "services.manga.read_orchestrator.manga_source_preferences.get_preferred_source",
+            "services.manga.reading_service.manga_source_preferences.get_preferred_source",
             return_value=None,
         ):
             chosen, updated = _select_source(

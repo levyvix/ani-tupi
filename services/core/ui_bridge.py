@@ -18,6 +18,16 @@ directly (``progress=fake``) in tests rather than monkeypatching this module.
 
 from contextlib import contextmanager
 
+__all__ = [
+    "loading",
+    "menu_navigate",
+    "menu_navigate_episodes",
+    "pause",
+    "prompt",
+    "show_info",
+    "show_warning",
+]
+
 
 def menu_navigate(opts, msg="", **kwargs):
     """Proxy to ``ui.components.menu_navigate``."""

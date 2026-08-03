@@ -2,7 +2,7 @@
 
 import pytest
 
-from services.manga.reading_flow import chapter_number_value
+from services.manga.reading_service import chapter_number_value
 
 
 @pytest.mark.parametrize(

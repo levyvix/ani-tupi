@@ -24,23 +24,23 @@ def _mod():
 
 
 def _mod_progress_sync():
-    return importlib.import_module("services.anilist.progress_sync")
+    return importlib.import_module("services.anilist.anilist_service")
 
 
 def _mod_sequel_service():
-    return importlib.import_module("services.anilist.sequel_service")
+    return importlib.import_module("services.anilist.anilist_service")
 
 
 def _mod_episode_loader():
-    return importlib.import_module("services.anime.episode_loader")
+    return importlib.import_module("services.anime.episode_service")
 
 
 def _mod_anime_choice_persistence():
-    return importlib.import_module("services.anime.anime_choice_persistence")
+    return importlib.import_module("services.anime.anime_persistence")
 
 
 def _mod_episode_selection():
-    return importlib.import_module("services.anime.episode_selection")
+    return importlib.import_module("services.anime.episode_service")
 
 
 def _make_args(**kwargs):
@@ -103,7 +103,7 @@ class TestBuildAnilistPostPlaybackOptions:
 
 
 # ---------------------------------------------------------------------------
-# _is_anime_released  (lives in services.anilist.sequel_service)
+# _is_anime_released  (lives in services.anilist.anilist_service)
 # ---------------------------------------------------------------------------
 
 
@@ -235,7 +235,7 @@ class TestCurrentUsedQuery:
 
 
 # ---------------------------------------------------------------------------
-# _read_local_progress  (lives in services.anime.episode_loader)
+# read_local_progress  (lives in services.anime.episode_service)
 # ---------------------------------------------------------------------------
 
 
@@ -243,7 +243,7 @@ class TestReadLocalProgress:
     def test_no_history_file_returns_zero(self, tmp_path, monkeypatch):
         mod = _mod_episode_loader()
         monkeypatch.setattr(mod, "HISTORY_PATH", tmp_path)
-        result = mod._read_local_progress("Some Anime")
+        result = mod.read_local_progress("Some Anime")
         assert result == 0
 
     def test_anime_in_history_returns_next_ep(self, tmp_path, monkeypatch):
@@ -251,7 +251,7 @@ class TestReadLocalProgress:
         monkeypatch.setattr(mod, "HISTORY_PATH", tmp_path)
         history = {"Some Anime": [0, 4, 42]}  # index 1 = episode idx
         (tmp_path / "history.json").write_text(json.dumps(history))
-        result = mod._read_local_progress("Some Anime")
+        result = mod.read_local_progress("Some Anime")
         assert result == 5  # 4 + 1
 
     def test_anime_not_in_history_returns_zero(self, tmp_path, monkeypatch):
@@ -259,7 +259,7 @@ class TestReadLocalProgress:
         monkeypatch.setattr(mod, "HISTORY_PATH", tmp_path)
         history = {"Other Anime": [0, 3, 42]}
         (tmp_path / "history.json").write_text(json.dumps(history))
-        result = mod._read_local_progress("Some Anime")
+        result = mod.read_local_progress("Some Anime")
         assert result == 0
 
     def test_invalid_json_returns_zero(self, tmp_path, monkeypatch):
@@ -267,12 +267,12 @@ class TestReadLocalProgress:
         monkeypatch.setattr(mod, "HISTORY_PATH", tmp_path)
         # history.json exists but is missing the key -> KeyError branch
         (tmp_path / "history.json").write_text('{"Other": [0, 1, 2]}')
-        result = mod._read_local_progress("Missing Anime")
+        result = mod.read_local_progress("Missing Anime")
         assert result == 0
 
 
 # ---------------------------------------------------------------------------
-# _build_continue_menu  (lives in services.anime.episode_selection)
+# _build_continue_menu  (lives in services.anime.episode_service)
 # ---------------------------------------------------------------------------
 
 
@@ -331,13 +331,13 @@ class TestBuildContinueMenu:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_start_episode_idx - simple branches (lives in services.anime.episode_selection)
+# resolve_start_episode_idx - simple branches (lives in services.anime.episode_service)
 # ---------------------------------------------------------------------------
 
 
 class TestResolveStartEpisodeIdx:
     def _call(self, mod, episode_list, anilist_progress, local_progress, ui, **kwargs):
-        return mod._resolve_start_episode_idx(
+        return mod.resolve_start_episode_idx(
             selected_anime="Anime",
             episode_list=episode_list,
             anilist_progress=anilist_progress,
@@ -362,7 +362,7 @@ class TestResolveStartEpisodeIdx:
         ep_list = [object()] * 5
         # max_progress = 2
         ui.menu_navigate.return_value = "⏭️  Episódio 3 (próximo)"
-        result = mod._resolve_start_episode_idx("Anime", ep_list, 2, 2, None, None)
+        result = mod.resolve_start_episode_idx("Anime", ep_list, 2, 2, None, None)
         assert result == 2
 
     def test_user_chooses_choose_episode(self, monkeypatch):
@@ -372,7 +372,7 @@ class TestResolveStartEpisodeIdx:
         ui.menu_navigate_episodes.return_value = 3
         monkeypatch.setattr(mod, "ui_bridge", ui)
         ep_list = [object()] * 5
-        result = mod._resolve_start_episode_idx("Anime", ep_list, 2, 2, None, None)
+        result = mod.resolve_start_episode_idx("Anime", ep_list, 2, 2, None, None)
         assert result == 3
 
     def test_user_cancels(self, monkeypatch):
@@ -381,7 +381,7 @@ class TestResolveStartEpisodeIdx:
         ui.menu_navigate.return_value = None
         monkeypatch.setattr(mod, "ui_bridge", ui)
         ep_list = [object()] * 5
-        result = mod._resolve_start_episode_idx("Anime", ep_list, 2, 2, None, None)
+        result = mod.resolve_start_episode_idx("Anime", ep_list, 2, 2, None, None)
         assert result is None
 
     def test_user_resets_history(self, monkeypatch):
@@ -394,7 +394,7 @@ class TestResolveStartEpisodeIdx:
         # Second: confirm reset
         ui.menu_navigate.side_effect = ["🔄 Começar do zero", "✅ Sim, resetar"]
         ep_list = [object()] * 5
-        result = mod._resolve_start_episode_idx("Anime", ep_list, 2, 2, None, None)
+        result = mod.resolve_start_episode_idx("Anime", ep_list, 2, 2, None, None)
         assert result == 0
         assert reset_called == ["Anime"]
 
@@ -405,7 +405,7 @@ class TestResolveStartEpisodeIdx:
         monkeypatch.setattr(mod, "reset_history", lambda a: None)
         ui.menu_navigate.side_effect = ["🔄 Começar do zero", "❌ Cancelar"]
         ep_list = [object()] * 5
-        result = mod._resolve_start_episode_idx("Anime", ep_list, 2, 2, None, None)
+        result = mod.resolve_start_episode_idx("Anime", ep_list, 2, 2, None, None)
         assert result is None
 
 
@@ -449,7 +449,7 @@ class TestPromptSavedTitleChoice:
 
 
 # ---------------------------------------------------------------------------
-# _sync_anilist_progress  (lives in services.anilist.progress_sync)
+# sync_anilist_progress  (lives in services.anilist.anilist_service)
 # ---------------------------------------------------------------------------
 
 
@@ -469,14 +469,14 @@ class TestSyncAnilistProgress:
         mod = _mod_progress_sync()
         client = self._make_client(authenticated=False)
         monkeypatch.setattr(mod, "anilist_client", client)
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
         client.update_progress.assert_not_called()
 
     def test_not_in_list_adds_current(self, monkeypatch):
         mod = _mod_progress_sync()
         client = self._make_client(authenticated=True, in_list=False, update_success=True)
         monkeypatch.setattr(mod, "anilist_client", client)
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
         client.add_to_list.assert_called()
         client.update_progress.assert_called_with(1, 5)
 
@@ -489,7 +489,7 @@ class TestSyncAnilistProgress:
         monkeypatch.setattr(mod, "anilist_client", client)
         from models.models import Status
 
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
         client.add_to_list.assert_called_with(1, Status.CURRENT)
 
     def test_current_status_last_ep_completes(self, monkeypatch):
@@ -501,7 +501,7 @@ class TestSyncAnilistProgress:
         monkeypatch.setattr(mod, "anilist_client", client)
         from models.models import Status
 
-        mod._sync_anilist_progress(1, 12, 12)
+        mod.sync_anilist_progress(1, 12, 12)
         client.change_status.assert_called_with(1, Status.COMPLETED)
 
     def test_current_status_not_last_ep_no_complete(self, monkeypatch):
@@ -511,7 +511,7 @@ class TestSyncAnilistProgress:
             authenticated=True, in_list=True, entry=entry, update_success=True
         )
         monkeypatch.setattr(mod, "anilist_client", client)
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
         client.change_status.assert_not_called()
 
     def test_update_fails_gets_viewer(self, monkeypatch):
@@ -520,7 +520,7 @@ class TestSyncAnilistProgress:
             authenticated=True, in_list=True, entry=None, update_success=False, viewer=None
         )
         monkeypatch.setattr(mod, "anilist_client", client)
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
         client.get_viewer_info.assert_called()
 
     def test_update_fails_viewer_exists_logs_warning(self, monkeypatch):
@@ -531,7 +531,7 @@ class TestSyncAnilistProgress:
         )
         monkeypatch.setattr(mod, "anilist_client", client)
         # Should not raise
-        mod._sync_anilist_progress(1, 5, 12)
+        mod.sync_anilist_progress(1, 5, 12)
 
 
 # ---------------------------------------------------------------------------
@@ -563,7 +563,7 @@ class TestGetAnilistTitles:
 
 
 # ---------------------------------------------------------------------------
-# offer_sequel_and_continue  (lives in services.anilist.sequel_service)
+# offer_sequel_and_continue  (lives in services.anilist.anilist_service)
 # ---------------------------------------------------------------------------
 
 
@@ -750,7 +750,7 @@ class TestLoadEpisodesFromCacheOrSearch:
         monkeypatch.setattr(
             mod, "incremental_search_anime", lambda q, **kw: (fake_state, ["Result [src]"])
         )
-        monkeypatch.setattr(mod, "_rank_anime_results_by_reference", lambda t, r: t)
+        monkeypatch.setattr(mod, "rank_anime_results_by_reference", lambda t, r: t)
         state, titles = mod.load_episodes_from_cache_or_search("Test", 1, "English", "Romaji")
         assert state is fake_state
         assert "Result [src]" in titles
@@ -762,7 +762,7 @@ class TestLoadEpisodesFromCacheOrSearch:
         rank_called = []
         monkeypatch.setattr(mod, "incremental_search_anime", lambda q, **kw: (fake_state, ["R"]))
         monkeypatch.setattr(
-            mod, "_rank_anime_results_by_reference", lambda t, r: rank_called.append(True) or t
+            mod, "rank_anime_results_by_reference", lambda t, r: rank_called.append(True) or t
         )
         state, titles = mod.load_episodes_from_cache_or_search("Test", 1, None, None)
         assert not rank_called
@@ -823,7 +823,7 @@ class TestConfirmWatchOrDownload:
 
 
 # ---------------------------------------------------------------------------
-# _load_episode_list  (lives in services.anime.episode_loader)
+# load_episode_list  (lives in services.anime.episode_service)
 # ---------------------------------------------------------------------------
 
 
@@ -835,7 +835,7 @@ class TestLoadEpisodeList:
         monkeypatch.setattr(mod, "get_scraper_cache", lambda q: cache_data)
         rep = MagicMock()
         monkeypatch.setattr(mod, "rep", rep)
-        episode_list, count = mod._load_episode_list("Anime", None, None, None, 1)
+        episode_list, count = mod.load_episode_list("Anime", None, None, None, 1)
         assert episode_list == eps
         assert count == 5
 
@@ -849,7 +849,7 @@ class TestLoadEpisodeList:
         ui = _make_ui_bridge_mock()
         monkeypatch.setattr(mod, "ui_bridge", ui)
         monkeypatch.setattr(mod, "set_scraper_cache", lambda *a: None)
-        episode_list, count = mod._load_episode_list("Anime", None, None, None, 0)
+        episode_list, count = mod.load_episode_list("Anime", None, None, None, 0)
         assert episode_list == eps
         assert count == 2
 
@@ -861,7 +861,7 @@ class TestLoadEpisodeList:
         monkeypatch.setattr(mod, "rep", rep)
         ui = _make_ui_bridge_mock()
         monkeypatch.setattr(mod, "ui_bridge", ui)
-        episode_list, count = mod._load_episode_list("Anime", None, None, None, 0)
+        episode_list, count = mod.load_episode_list("Anime", None, None, None, 0)
         assert episode_list is None
         assert count == 0
 
@@ -876,7 +876,7 @@ class TestLoadEpisodeList:
         ui = _make_ui_bridge_mock()
         monkeypatch.setattr(mod, "ui_bridge", ui)
         monkeypatch.setattr(mod, "set_scraper_cache", lambda *a: None)
-        episode_list, count = mod._load_episode_list("Anime", "Anime", "src1", "http://url1", 1)
+        episode_list, count = mod.load_episode_list("Anime", "Anime", "src1", "http://url1", 1)
         rep.add_anime.assert_called()
 
     def test_saved_title_with_fallback_url(self, monkeypatch):
@@ -890,12 +890,12 @@ class TestLoadEpisodeList:
         ui = _make_ui_bridge_mock()
         monkeypatch.setattr(mod, "ui_bridge", ui)
         monkeypatch.setattr(mod, "set_scraper_cache", lambda *a: None)
-        episode_list, count = mod._load_episode_list("Anime", "Anime", "src1", "http://url1", 1)
+        episode_list, count = mod.load_episode_list("Anime", "Anime", "src1", "http://url1", 1)
         rep.add_anime.assert_called_with("Anime", "http://url1", "src1")
 
 
 # ---------------------------------------------------------------------------
-# _find_awaiting_episode_idx  (lives in services.anime.episode_selection)
+# _find_awaiting_episode_idx  (lives in services.anime.episode_service)
 # Note: rep and awaiting_registry are imported inside the function, so we
 # must patch their source modules directly.
 # ---------------------------------------------------------------------------
@@ -928,7 +928,7 @@ class TestFindAwaitingEpisodeIdx:
 
         monkeypatch.setattr(repo_mod, "rep", rep)
         registry = MagicMock()
-        import services.anime.awaiting_episodes as awaiting_mod
+        import services.anime.episode_service as awaiting_mod
 
         monkeypatch.setattr(awaiting_mod, "registry", registry)
         ui = _make_ui_bridge_mock()
@@ -1161,7 +1161,7 @@ class TestSearchAndSelectAnime:
 
 
 # ---------------------------------------------------------------------------
-# _persist_anime_choice  (lives in services.anime.anime_choice_persistence)
+# persist_anime_choice  (lives in services.anime.anime_persistence)
 # ---------------------------------------------------------------------------
 
 
@@ -1173,7 +1173,7 @@ class TestPersistAnimeChoice:
         monkeypatch.setattr(mod, "rep", rep)
         save_calls = []
         monkeypatch.setattr(mod, "save_anilist_mapping", lambda *a, **kw: save_calls.append(kw))
-        mod._persist_anime_choice(1, "Selected Anime", "Selected Anime", "src")
+        mod.persist_anime_choice(1, "Selected Anime", "Selected Anime", "src")
         assert save_calls
         assert save_calls[0]["anime_url"] == "http://url"
 
@@ -1184,7 +1184,7 @@ class TestPersistAnimeChoice:
         monkeypatch.setattr(mod, "rep", rep)
         save_calls = []
         monkeypatch.setattr(mod, "save_anilist_mapping", lambda *a, **kw: save_calls.append(kw))
-        mod._persist_anime_choice(1, "Selected Anime", "Selected Anime", "src")
+        mod.persist_anime_choice(1, "Selected Anime", "Selected Anime", "src")
         # Should fall through to fuzzy and find the close match
         assert save_calls
 
@@ -1195,7 +1195,7 @@ class TestPersistAnimeChoice:
         monkeypatch.setattr(mod, "rep", rep_mock)
         save_calls = []
         monkeypatch.setattr(mod, "save_anilist_mapping", lambda *a, **kw: save_calls.append(kw))
-        mod._persist_anime_choice(1, "Unknown Anime", "Unknown Anime", None)
+        mod.persist_anime_choice(1, "Unknown Anime", "Unknown Anime", None)
         assert save_calls
         assert save_calls[0]["anime_url"] is None
 
@@ -1234,7 +1234,7 @@ class TestAnilistAnimeFlow:
         monkeypatch.setattr(
             mod, "incremental_search_anime", lambda q, **kw: (None, ["Test Anime [src]"])
         )
-        monkeypatch.setattr(mod, "_rank_anime_results_by_reference", lambda t, r: t)
+        monkeypatch.setattr(mod, "rank_anime_results_by_reference", lambda t, r: t)
 
         ui = _make_ui_bridge_mock()
         if menu_side_effect is not None:
@@ -1245,10 +1245,10 @@ class TestAnilistAnimeFlow:
         monkeypatch.setattr(mod, "awaiting_registry", registry_mock)
 
         # These are imported into anilist_integration from sub-modules; patch the local binding.
-        monkeypatch.setattr(mod, "_read_local_progress", lambda a: 0)
-        monkeypatch.setattr(mod, "_persist_anime_choice", lambda *a, **kw: None)
-        monkeypatch.setattr(mod, "_load_episode_list", lambda *a: (ep_list, len(ep_list)))
-        monkeypatch.setattr(mod, "_resolve_start_episode_idx", lambda *a, **kw: 0)
+        monkeypatch.setattr(mod, "read_local_progress", lambda a: 0)
+        monkeypatch.setattr(mod, "persist_anime_choice", lambda *a, **kw: None)
+        monkeypatch.setattr(mod, "load_episode_list", lambda *a: (ep_list, len(ep_list)))
+        monkeypatch.setattr(mod, "resolve_start_episode_idx", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_run_playback_loop", lambda *a, **kw: None)
 
@@ -1268,8 +1268,8 @@ class TestAnilistAnimeFlow:
         monkeypatch.setattr(mod, "_prompt_saved_title_choice", lambda a, b: (None, None, False))
         # select_anime_from_results returns an anime
         ui.menu_navigate.return_value = "test anime [src]"
-        # _resolve_start_episode_idx returns 0 (no progress)
-        monkeypatch.setattr(mod, "_resolve_start_episode_idx", lambda *a, **kw: 0)
+        # resolve_start_episode_idx returns 0 (no progress)
+        monkeypatch.setattr(mod, "resolve_start_episode_idx", lambda *a, **kw: 0)
         # _confirm_watch_or_download returns 0
         monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *a, **kw: 0)
         play_calls = []
@@ -1290,8 +1290,8 @@ class TestAnilistAnimeFlow:
             "_search_and_select_anime",
             lambda *a, **kw: search_called.append(True) or (None, None, None),
         )
-        monkeypatch.setattr(mod, "_load_episode_list", lambda *a: (["ep1"], 1))
-        monkeypatch.setattr(mod, "_resolve_start_episode_idx", lambda *a, **kw: 0)
+        monkeypatch.setattr(mod, "load_episode_list", lambda *a: (["ep1"], 1))
+        monkeypatch.setattr(mod, "resolve_start_episode_idx", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_run_playback_loop", lambda *a, **kw: None)
         mod.anilist_anime_flow("Test Anime", 1, _make_args())
@@ -1303,7 +1303,7 @@ class TestAnilistAnimeFlow:
         monkeypatch.setattr(
             mod, "_prompt_saved_title_choice", lambda a, b: ("Saved Anime", "src1", False)
         )
-        monkeypatch.setattr(mod, "_load_episode_list", lambda *a: (None, 0))
+        monkeypatch.setattr(mod, "load_episode_list", lambda *a: (None, 0))
         play_calls = []
         monkeypatch.setattr(mod, "_run_playback_loop", lambda *a, **kw: play_calls.append(True))
         mod.anilist_anime_flow("Test Anime", 1, _make_args())
@@ -1315,8 +1315,8 @@ class TestAnilistAnimeFlow:
         monkeypatch.setattr(
             mod, "_prompt_saved_title_choice", lambda a, b: ("Saved Anime", "src1", False)
         )
-        monkeypatch.setattr(mod, "_load_episode_list", lambda *a: (["ep1", "ep2"], 2))
-        monkeypatch.setattr(mod, "_resolve_start_episode_idx", lambda *a, **kw: None)
+        monkeypatch.setattr(mod, "load_episode_list", lambda *a: (["ep1", "ep2"], 2))
+        monkeypatch.setattr(mod, "resolve_start_episode_idx", lambda *a, **kw: None)
         play_calls = []
         monkeypatch.setattr(mod, "_run_playback_loop", lambda *a, **kw: play_calls.append(True))
         mod.anilist_anime_flow("Test Anime", 1, _make_args())
@@ -1328,8 +1328,8 @@ class TestAnilistAnimeFlow:
         monkeypatch.setattr(
             mod, "_prompt_saved_title_choice", lambda a, b: ("Saved Anime", "src1", False)
         )
-        monkeypatch.setattr(mod, "_load_episode_list", lambda *a: (["ep1"], 1))
-        monkeypatch.setattr(mod, "_resolve_start_episode_idx", lambda *a, **kw: 0)
+        monkeypatch.setattr(mod, "load_episode_list", lambda *a: (["ep1"], 1))
+        monkeypatch.setattr(mod, "resolve_start_episode_idx", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *a, **kw: None)
         play_calls = []
         monkeypatch.setattr(mod, "_run_playback_loop", lambda *a, **kw: play_calls.append(True))
@@ -1350,11 +1350,11 @@ class TestAnilistAnimeFlow:
 
 
 class TestRunPlaybackLoopBranches:
-    from services.anime.playback_fallback import PlaybackFallbackResult
+    from services.anime.playback_service import PlaybackFallbackResult
     from utils.video_player import VideoPlaybackResult
 
     def _make_fallback(self, action, episode, exit_code=0):
-        from services.anime.playback_fallback import PlaybackFallbackResult
+        from services.anime.playback_service import PlaybackFallbackResult
         from utils.video_player import VideoPlaybackResult
 
         return PlaybackFallbackResult(
@@ -1380,7 +1380,7 @@ class TestRunPlaybackLoopBranches:
         rep.get_episode_list.return_value = ep_list
         monkeypatch.setattr(mod, "rep", rep)
 
-        monkeypatch.setattr(mod, "_sync_anilist_progress", lambda *a, **kw: None)
+        monkeypatch.setattr(mod, "sync_anilist_progress", lambda *a, **kw: None)
         monkeypatch.setattr(mod, "_maybe_offer_sequel_on_finish", lambda *a, **kw: False)
         monkeypatch.setattr(mod, "save_history", lambda *a, **kw: None)
 
@@ -1398,7 +1398,7 @@ class TestRunPlaybackLoopBranches:
         rep = MagicMock()
         rep.get_all_episode_sources.return_value = []
         monkeypatch.setattr(mod, "rep", rep)
-        monkeypatch.setattr(mod, "_sync_anilist_progress", lambda *a: None)
+        monkeypatch.setattr(mod, "sync_anilist_progress", lambda *a: None)
         monkeypatch.setattr(mod, "_maybe_offer_sequel_on_finish", lambda *a, **kw: False)
         monkeypatch.setattr(mod, "save_history", lambda *a, **kw: None)
         monkeypatch.setattr(mod, "ui_bridge", _make_ui_bridge_mock())
@@ -1424,7 +1424,7 @@ class TestRunPlaybackLoopBranches:
 
         def play_fallback(**kw):
             call_count[0] += 1
-            from services.anime.playback_fallback import PlaybackFallbackResult
+            from services.anime.playback_service import PlaybackFallbackResult
             from utils.video_player import VideoPlaybackResult
 
             if call_count[0] == 1:
@@ -1460,7 +1460,7 @@ class TestRunPlaybackLoopBranches:
 
         def play_fallback(**kw):
             call_count[0] += 1
-            from services.anime.playback_fallback import PlaybackFallbackResult
+            from services.anime.playback_service import PlaybackFallbackResult
             from utils.video_player import VideoPlaybackResult
 
             if call_count[0] == 1:
@@ -1492,7 +1492,7 @@ class TestRunPlaybackLoopBranches:
         mod, ep_list, rep, ui = self._setup(monkeypatch)
 
         def play_fallback(**kw):
-            from services.anime.playback_fallback import PlaybackFallbackResult
+            from services.anime.playback_service import PlaybackFallbackResult
             from utils.video_player import VideoPlaybackResult
 
             return PlaybackFallbackResult(
@@ -1515,7 +1515,7 @@ class TestRunPlaybackLoopBranches:
 
         def play_fallback(**kw):
             call_count[0] += 1
-            from services.anime.playback_fallback import PlaybackFallbackResult
+            from services.anime.playback_service import PlaybackFallbackResult
             from utils.video_player import VideoPlaybackResult
 
             if call_count[0] == 1:
@@ -1550,7 +1550,7 @@ class TestRunPlaybackLoopBranches:
         mod, ep_list, rep, ui = self._setup(monkeypatch)
 
         def play_fallback(**kw):
-            from services.anime.playback_fallback import PlaybackFallbackResult
+            from services.anime.playback_service import PlaybackFallbackResult
             from utils.video_player import VideoPlaybackResult
 
             return PlaybackFallbackResult(
