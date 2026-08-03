@@ -229,13 +229,16 @@ class PluginSettings(BaseModel):
     )
     priority_order: list[str] = Field(
         default_factory=lambda: [
-            "otakulogia",
             "dattebayo",
-            "sushianimes",
             "anitube",
+            "otakulogia",
+            "animesonlinecloud",
+            "sushianimes",
             "animesdigital",
             "animefire",
+            "animesonlineio",
             "goyabu",
+            "anroll",
             "animesonlinecc",
         ],
         description="Priority order for scraper sources (first = highest priority)",
