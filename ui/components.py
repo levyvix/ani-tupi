@@ -312,8 +312,10 @@ def menu_navigate(
 
 
 def menu_navigate_episodes(
-    episode_numbers: list[int], msg: str = "Escolha o episódio."
-) -> int | None:
+    episode_numbers: list[int],
+    msg: str = "Escolha o episódio.",
+    extra_options: list[str] | None = None,
+) -> int | str | None:
     """Show an episode menu from a list of episode numbers.
 
     Episode lists are stored as plain ints; this renders them as "Episódio N"
@@ -322,14 +324,18 @@ def menu_navigate_episodes(
     Args:
         episode_numbers: Episode numbers to display
         msg: Title message for the menu
+        extra_options: Extra action labels shown after the episodes (e.g. "🔀 Trocar fonte")
 
     Returns:
-        0-based index of the selected episode, or None if the user goes back/cancels.
+        0-based index of the selected episode, the extra option label when one of
+        ``extra_options`` is chosen, or None if the user goes back/cancels.
     """
     labels = [f"Episódio {n}" for n in episode_numbers]
-    selected = menu_navigate(labels, msg=msg)
+    selected = menu_navigate(labels + list(extra_options or []), msg=msg)
     if not selected:
         return None
+    if extra_options and selected in extra_options:
+        return selected
     return labels.index(selected)
 
 
