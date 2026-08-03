@@ -246,6 +246,17 @@ _KEYWORD_ROMAN_RE = re.compile(rf"\b({_SEASON_KEYWORD})\s+([ivx]+)\b", re.IGNORE
 # Standalone romans are only converted when at least two letters long.
 _STANDALONE_ROMAN_RE = re.compile(r"\b([ivx]{2,})\b", re.IGNORECASE)
 
+# Series numeral sitting between the base name and a subtitle separator
+# ("Mushoku Tensei III: Isekai Ittara Honki Dasu"). Matched on the RAW title,
+# because normalize_title_for_dedup() collapses separators into spaces and the
+# separator is exactly what tells a season numeral apart from a numeral that
+# belongs to the name ("Jujutsu Kaisen 0", "Mob Psycho 100", "86 Eighty-Six").
+# Requirements encoded here: at least one preceding token (so "86: Eighty Six"
+# is untouched), the numeral as a whole token, and a subtitle after the separator.
+_MID_TITLE_SERIES_NUMERAL = re.compile(
+    r"(?<=\S)\s+(\d{1,2}|[ivx]{2,})\s*(?=[:\-–—|]\s*\S)", re.IGNORECASE
+)
+
 
 def roman_to_int(token: str) -> int | None:
     """Return the integer value of a roman numeral token, or None if unknown."""
@@ -272,6 +283,26 @@ def _normalize_roman_seasons(text: str) -> str:
     return _STANDALONE_ROMAN_RE.sub(_standalone, text)
 
 
+def _strip_mid_title_series_numeral(title: str) -> tuple[str, int | None]:
+    """Pull a series numeral that precedes a subtitle separator out of the title.
+
+    Returns the title without the numeral plus its value, or the title unchanged
+    and ``None`` when there is no such numeral. A single-letter roman ("Mushoku
+    Tensei I: ...") is deliberately not recognized, mirroring
+    :data:`_STANDALONE_ROMAN_RE`: it is indistinguishable from a real word.
+    """
+    match = _MID_TITLE_SERIES_NUMERAL.search(title)
+    if not match:
+        return title, None
+
+    token = match.group(1)
+    value = int(token) if token.isdigit() else roman_to_int(token)
+    if value is None or not (1 <= value <= 99):
+        return title, None
+
+    return title[: match.start()] + title[match.end() :], value
+
+
 def dedup_signature(title: str) -> tuple[str, int | None, frozenset[str]]:
     """Reduce a title to a merge signature: (base_key, season_num, lang_markers).
 
@@ -285,6 +316,7 @@ def dedup_signature(title: str) -> tuple[str, int | None, frozenset[str]]:
     a language marker are subtitled. Only an explicit dub distinguishes a release, so
     sub-marked and unmarked titles share a signature and merge.
     """
+    title, mid_title_season = _strip_mid_title_series_numeral(title)
     normalized = normalize_title_for_dedup(title)
     lang_markers = frozenset(get_language_version_markers(normalized)) & {"dub"}
 
@@ -307,12 +339,15 @@ def dedup_signature(title: str) -> tuple[str, int | None, frozenset[str]]:
             base = pattern.sub(" ", base)
             break
     else:
-        match = _BARE_TRAILING_NUMBER.search(base)
-        if match:
-            candidate = int(match.group(1))
-            if 2 <= candidate <= 99:
-                season = candidate
-                base = _BARE_TRAILING_NUMBER.sub("", base)
+        if mid_title_season is not None:
+            season = mid_title_season
+        else:
+            match = _BARE_TRAILING_NUMBER.search(base)
+            if match:
+                candidate = int(match.group(1))
+                if 2 <= candidate <= 99:
+                    season = candidate
+                    base = _BARE_TRAILING_NUMBER.sub("", base)
 
     if season == 1:
         season = None
@@ -330,6 +365,11 @@ def dedup_signature(title: str) -> tuple[str, int | None, frozenset[str]]:
 # ~98 while distinct titles stay <=80.
 _FUZZY_MERGE_MIN_LEN = 8
 _FUZZY_MERGE_THRESHOLD = 90
+# Digits inside a base key carry series identity (season numeral left in place,
+# "Jujutsu Kaisen 0", "Mob Psycho 100"). The longer the title, the cheaper a
+# one-digit difference looks to fuzz.ratio — so numeric tokens are compared
+# exactly instead of being left to the ratio.
+_DIGIT_RUN_RE = re.compile(r"\d+")
 
 
 def signatures_merge(
@@ -339,9 +379,9 @@ def signatures_merge(
     """Return True when two dedup signatures should merge into one entry.
 
     Exact equality always merges. As a fallback, base keys that differ only by
-    minor transliteration variance merge — but ONLY when season and language
-    markers are identical, so the dub/leg/season separation that :func:`dedup_signature`
-    encodes is never collapsed.
+    minor transliteration variance merge — but ONLY when season, language markers
+    and numeric tokens are identical, so the dub/leg/season separation that
+    :func:`dedup_signature` encodes is never collapsed.
     """
     if sig_a == sig_b:
         return True
@@ -349,6 +389,8 @@ def signatures_merge(
     base_a, season_a, lang_a = sig_a
     base_b, season_b, lang_b = sig_b
     if season_a != season_b or lang_a != lang_b:
+        return False
+    if _DIGIT_RUN_RE.findall(base_a) != _DIGIT_RUN_RE.findall(base_b):
         return False
     if len(base_a) < _FUZZY_MERGE_MIN_LEN or len(base_b) < _FUZZY_MERGE_MIN_LEN:
         return False

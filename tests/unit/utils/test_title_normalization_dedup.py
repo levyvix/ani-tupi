@@ -540,6 +540,49 @@ class TestDedupSignature:
             "Jujutsu Kaisen Dublado"
         )
 
+    def test_mid_title_series_numeral_is_season(self):
+        # Numeral between the base name and the subtitle ("Mushoku Tensei III: ...")
+        # must land in `season`, not inside the base key.
+        assert dedup_signature("Mushoku Tensei III: Isekai Ittara Honki Dasu Dublado") == (
+            "mushokutenseiisekaiittarahonkidasu",
+            3,
+            frozenset({"dub"}),
+        )
+        assert dedup_signature("Mushoku Tensei II: Isekai Ittara Honki Dasu Dublado") == (
+            "mushokutenseiisekaiittarahonkidasu",
+            2,
+            frozenset({"dub"}),
+        )
+        assert dedup_signature("Mushoku Tensei: Isekai Ittara Honki Dasu Dublado") == (
+            "mushokutenseiisekaiittarahonkidasu",
+            None,
+            frozenset({"dub"}),
+        )
+
+    def test_mid_title_arabic_numeral_is_season(self):
+        assert dedup_signature("Mushoku Tensei 3: Isekai Ittara Honki Dasu") == dedup_signature(
+            "Mushoku Tensei III: Isekai Ittara Honki Dasu"
+        )
+        # Numeral 1 is the first season, which normalizes to None.
+        assert dedup_signature("Mushoku Tensei 1: Isekai Ittara Honki Dasu") == dedup_signature(
+            "Mushoku Tensei: Isekai Ittara Honki Dasu"
+        )
+
+    def test_numeral_belonging_to_the_name_survives_a_separator(self):
+        # A numeral that is the last semantic word is part of the name, even when
+        # scraper boilerplate adds a separator right after it.
+        assert dedup_signature("Mob Psycho 100 - Todos os Episodios")[0] == "mobpsycho100"
+        assert dedup_signature("Steins;Gate 0 - Todos os Episodios")[0] == "steinsgate0"
+        assert dedup_signature("86 - Eighty Six")[0] == "86eightysix"
+        assert all(
+            dedup_signature(title)[1] is None
+            for title in (
+                "Mob Psycho 100 - Todos os Episodios",
+                "Steins;Gate 0 - Todos os Episodios",
+                "86 - Eighty Six",
+            )
+        )
+
     def test_filme_and_movie_are_synonyms(self):
         # Cross-language movie labels merge; the film is not merged into the series.
         assert dedup_signature("Jujutsu Kaisen 0 Filme") == dedup_signature(
@@ -582,6 +625,45 @@ class TestSignaturesMerge:
         # Different animes sharing season/language must not be fused.
         assert not signatures_merge(dedup_signature("Death Note"), dedup_signature("Death March"))
         assert not signatures_merge(dedup_signature("One Piece"), dedup_signature("One Punch Man"))
+
+    def test_mushoku_tensei_seasons_never_merge(self):
+        # The reported defect: base keys differing by a single digit inside a long
+        # title scored ~97 on fuzz.ratio and fused S1/S2/S3 into one entry.
+        s3 = dedup_signature("Mushoku Tensei III: Isekai Ittara Honki Dasu Dublado")
+        s2 = dedup_signature("Mushoku Tensei II: Isekai Ittara Honki Dasu Dublado")
+        s1 = dedup_signature("Mushoku Tensei: Isekai Ittara Honki Dasu Dublado")
+        assert not signatures_merge(s3, s2)
+        assert not signatures_merge(s3, s1)
+        assert not signatures_merge(s2, s1)
+        # Order of insertion must not change the verdict.
+        assert not signatures_merge(s1, s3)
+
+    def test_differing_numeric_tokens_block_fuzzy_merge(self):
+        # Same season and language markers, but the numerals live in the base key.
+        left = dedup_signature("Yu Gi Oh 5Ds")
+        right = dedup_signature("Yu Gi Oh 6Ds")
+        assert left[1] == right[1] and left[2] == right[2]
+        assert not signatures_merge(left, right)
+
+    def test_matching_numeric_tokens_still_allow_fuzzy_merge(self):
+        left = dedup_signature("Otome Kaijuu Caramelise 100")
+        right = dedup_signature("Otome Kaijuu Carameliser 100")
+        assert signatures_merge(left, right)
+
+    def test_dub_and_default_never_merge(self):
+        # "Legendado" (and the unmarked default) must stay apart from a dub.
+        for sub_title in (
+            "Mushoku Tensei III: Isekai Ittara Honki Dasu",
+            "Mushoku Tensei III: Isekai Ittara Honki Dasu Legendado",
+        ):
+            assert not signatures_merge(
+                dedup_signature("Mushoku Tensei III: Isekai Ittara Honki Dasu Dublado"),
+                dedup_signature(sub_title),
+            )
+        assert not signatures_merge(
+            dedup_signature("Otome Kaijuu Caramelise (Dub)"),
+            dedup_signature("Otome Kaijuu Carameliser"),
+        )
 
     def test_short_base_keys_stay_on_exact_match(self):
         # Below the length floor a single edit is proportionally huge — no fuzzy merge.
