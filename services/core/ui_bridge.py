@@ -36,11 +36,11 @@ def menu_navigate(opts, msg="", **kwargs):
     return ui.components.menu_navigate(opts, msg=msg, **kwargs)
 
 
-def menu_navigate_episodes(episode_numbers, msg="Escolha o episódio."):
+def menu_navigate_episodes(episode_numbers, msg="Escolha o episódio.", **kwargs):
     """Proxy to ``ui.components.menu_navigate_episodes``."""
     import ui.components
 
-    return ui.components.menu_navigate_episodes(episode_numbers, msg=msg)
+    return ui.components.menu_navigate_episodes(episode_numbers, msg=msg, **kwargs)
 
 
 @contextmanager

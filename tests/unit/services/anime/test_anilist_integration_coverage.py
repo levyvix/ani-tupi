@@ -398,6 +398,33 @@ class TestResolveStartEpisodeIdx:
         assert result == 0
         assert reset_called == ["Anime"]
 
+    def test_no_progress_menu_offers_source_switch(self, monkeypatch):
+        mod = _mod_episode_selection()
+        ui = _make_ui_bridge_mock()
+        ui.menu_navigate_episodes.return_value = 0
+        monkeypatch.setattr(mod, "ui_bridge", ui)
+        self._call(mod, [object()] * 5, 0, 0, ui)
+        assert ui.menu_navigate_episodes.call_args.kwargs["extra_options"] == [
+            mod.SWITCH_SOURCE_LABEL
+        ]
+
+    def test_no_progress_user_chooses_source_switch(self, monkeypatch):
+        mod = _mod_episode_selection()
+        ui = _make_ui_bridge_mock()
+        ui.menu_navigate_episodes.return_value = mod.SWITCH_SOURCE_LABEL
+        monkeypatch.setattr(mod, "ui_bridge", ui)
+        result = self._call(mod, [object()] * 5, 0, 0, ui)
+        assert result is mod.SWITCH_SOURCE
+
+    def test_choose_episode_user_chooses_source_switch(self, monkeypatch):
+        mod = _mod_episode_selection()
+        ui = _make_ui_bridge_mock()
+        ui.menu_navigate.return_value = "📋 Escolher outro episódio"
+        ui.menu_navigate_episodes.return_value = mod.SWITCH_SOURCE_LABEL
+        monkeypatch.setattr(mod, "ui_bridge", ui)
+        result = mod.resolve_start_episode_idx("Anime", [object()] * 5, 2, 2, None, None)
+        assert result is mod.SWITCH_SOURCE
+
     def test_user_cancels_reset(self, monkeypatch):
         mod = _mod_episode_selection()
         ui = _make_ui_bridge_mock()

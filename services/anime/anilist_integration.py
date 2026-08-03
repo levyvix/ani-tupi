@@ -429,7 +429,7 @@ def _confirm_watch_or_download(
 
         if action == "🔙 Voltar":
             new_idx = ui_bridge.menu_navigate_episodes(episode_list)
-            if new_idx is None:
+            if not isinstance(new_idx, int):
                 return None
             current_episode_idx = new_idx
             continue
@@ -695,7 +695,7 @@ def _run_playback_loop(
         elif selected_opt == "📋 Escolher outro episódio":
             episode_list = rep.get_episode_list(selected_anime)
             new_idx = ui_bridge.menu_navigate_episodes(episode_list)
-            if new_idx is None:
+            if not isinstance(new_idx, int):
                 return
             episode_idx = new_idx
             current_episode_idx = new_idx

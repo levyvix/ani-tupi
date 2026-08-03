@@ -33,6 +33,7 @@ __all__ = [
     "get_next_episode_context",
     # Seleção de episódio
     "SWITCH_SOURCE",
+    "SWITCH_SOURCE_LABEL",
     "resolve_start_episode_idx",
     # Carregamento da lista de episódios
     "load_episode_list",
@@ -207,6 +208,9 @@ def get_next_episode_context(
 # switch sources. The caller owns the switch flow (it has args/anilist_id/etc.).
 SWITCH_SOURCE = object()
 
+# Menu label that maps to ``SWITCH_SOURCE``.
+SWITCH_SOURCE_LABEL = "🔀 Trocar fonte"
+
 
 def _build_continue_menu(
     selected_anime: str,
@@ -249,7 +253,7 @@ def _build_continue_menu(
 
     options.append("📋 Escolher outro episódio")
     options.append("🔄 Começar do zero")
-    options.append("🔀 Trocar fonte")
+    options.append(SWITCH_SOURCE_LABEL)
 
     menu_msg = f"{selected_anime} - De onde quer continuar?"
     if total_episodes and scraper_episode_count:
@@ -314,6 +318,19 @@ def _find_awaiting_episode_idx(
         return None
 
 
+def _select_episode_or_switch_source(episode_list: list) -> int | object | None:
+    """Show the episode list with a "trocar fonte" escape hatch.
+
+    Useful when the chosen source is behind (e.g. the dubbed episode the user
+    wants has not been released there yet), so the user can jump to another
+    source without walking back through the whole search flow.
+    """
+    choice = ui_bridge.menu_navigate_episodes(episode_list, extra_options=[SWITCH_SOURCE_LABEL])
+    if choice == SWITCH_SOURCE_LABEL:
+        return SWITCH_SOURCE
+    return choice
+
+
 def resolve_start_episode_idx(
     selected_anime: str,
     episode_list: list,
@@ -330,7 +347,7 @@ def resolve_start_episode_idx(
     max_progress = max(anilist_progress, local_progress)
 
     if not (0 < max_progress <= len(episode_list)):
-        return ui_bridge.menu_navigate_episodes(episode_list)
+        return _select_episode_or_switch_source(episode_list)
 
     options, option_to_idx, menu_msg = _build_continue_menu(
         selected_anime,
@@ -347,11 +364,11 @@ def resolve_start_episode_idx(
     if not choice:
         return None
 
-    if choice == "🔀 Trocar fonte":
+    if choice == SWITCH_SOURCE_LABEL:
         return SWITCH_SOURCE
 
     if choice == "📋 Escolher outro episódio":
-        return ui_bridge.menu_navigate_episodes(episode_list)
+        return _select_episode_or_switch_source(episode_list)
 
     if choice == "🔄 Começar do zero":
         confirm_reset = ui_bridge.menu_navigate(
