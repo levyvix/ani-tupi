@@ -623,7 +623,12 @@ def _run_playback_loop(
         elif result.action == "auto-next":
             current_episode = result.data.get("episode", episode) if result.data else episode
 
-            sync_anilist_progress(anilist_id, current_episode, num_episodes)
+            sync_anilist_progress(
+                anilist_id,
+                current_episode,
+                num_episodes,
+                total_episodes=total_episodes,
+            )
 
             episode_idx = current_episode - 1
             current_episode_idx = current_episode - 1
@@ -667,7 +672,12 @@ def _run_playback_loop(
                 episode = current_episode_idx + 1
                 save_history(selected_anime, episode_idx, anilist_id, source)
 
-                sync_anilist_progress(anilist_id, episode, num_episodes)
+                sync_anilist_progress(
+                    anilist_id,
+                    episode,
+                    num_episodes,
+                    total_episodes=total_episodes,
+                )
 
                 if episode == num_episodes and _maybe_offer_sequel_on_finish(
                     anilist_id, args, episode

@@ -901,8 +901,9 @@ def _validate_anilist_id(
 def sync_progress_to_anilist(
     anilist_id: int | None,
     episode: int,
-    num_episodes: int,
+    num_episodes: int | None,
     anime_title: str | None = None,
+    total_episodes: int | None = None,
 ) -> bool:
     """Sync episode progress to AniList.
 
@@ -912,15 +913,16 @@ def sync_progress_to_anilist(
     3. Adds anime to list if not present
     4. Promotes status if needed (PLANNING -> CURRENT)
     5. Updates episode progress
-    6. Marks as COMPLETED if last episode
+    6. Marks as COMPLETED only when AniList's total episode count is known
 
     All errors are handled gracefully - function never raises exceptions.
 
     Args:
         anilist_id: The AniList media ID (None = no sync)
         episode: The episode number watched (1-indexed)
-        num_episodes: Total number of episodes
+        num_episodes: Total number of episodes available from the scraper
         anime_title: Original anime title (for cache cleanup if ID is invalid)
+        total_episodes: Total number of episodes known by AniList, when available
 
     Returns:
         True if sync was successful, False otherwise
@@ -955,7 +957,7 @@ def sync_progress_to_anilist(
             return False
 
         logger.debug(
-            "Syncing to AniList: anime_id=%d, episode=%d/%d",
+            "Syncing to AniList: anime_id=%d, episode=%d/%s",
             anilist_id,
             episode,
             num_episodes,
@@ -1001,7 +1003,7 @@ def sync_progress_to_anilist(
             logger.info(f"✅ Progresso sincronizado com AniList (ID: {anilist_id})")
 
         # Check if last episode - mark as completed
-        if episode == num_episodes and num_episodes > 0:
+        if total_episodes is not None and total_episodes > 0 and episode >= total_episodes:
             if entry and entry.status == "CURRENT":
                 logger.info("Marking anime %d as COMPLETED", anilist_id)
                 logger.info("✅ Anime marcado como COMPLETO no AniList")

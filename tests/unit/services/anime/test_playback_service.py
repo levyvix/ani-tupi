@@ -514,9 +514,26 @@ class TestSyncProgressToAnilist:
         mock_anilist.change_status.return_value = True
         mock_anilist.update_progress.reset_mock()
 
-        result = sync_progress_to_anilist(anilist_id=12345, episode=24, num_episodes=24)
+        result = sync_progress_to_anilist(
+            anilist_id=12345,
+            episode=24,
+            num_episodes=24,
+            total_episodes=24,
+        )
         assert result is True
         mock_anilist.change_status.assert_called_once_with(12345, Status.COMPLETED)
+
+        # Scenario 5: The scraper has fewer episodes than AniList
+        mock_anilist.change_status.reset_mock()
+
+        result = sync_progress_to_anilist(
+            anilist_id=12345,
+            episode=5,
+            num_episodes=5,
+            total_episodes=12,
+        )
+        assert result is True
+        mock_anilist.change_status.assert_not_called()
 
     @patch("services.anime.playback_service.anilist_client")
     def test_anilist_api_fails(self, mock_anilist):

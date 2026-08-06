@@ -160,9 +160,10 @@ def handle_anime_download(ctx: "PlaybackContext", args) -> None:
 def handle_post_playback_confirmation(
     anime_title: str,
     episode_number: int,
-    num_episodes: int,
+    num_episodes: int | None,
     anilist_id: int | None,
     source: str | None,
+    total_episodes_anilist: int | None = None,
     is_local: bool = False,
     file_path: "Path | None" = None,
 ) -> bool:
@@ -178,6 +179,7 @@ def handle_post_playback_confirmation(
         num_episodes: Total episodes in series
         anilist_id: AniList ID if discovered (None = no sync)
         source: Video source name
+        total_episodes_anilist: Total episode count reported by AniList
         is_local: Whether episode came from local library
         file_path: Path to local episode file (for cleanup after sync)
 
@@ -205,7 +207,11 @@ def handle_post_playback_confirmation(
         # AniList sync
         if anilist_id:
             success = sync_progress_to_anilist(
-                anilist_id, episode_number, num_episodes, anime_title
+                anilist_id,
+                episode_number,
+                num_episodes,
+                anime_title,
+                total_episodes_anilist,
             )
             if success:
                 logger.info("✅ Progresso salvo no AniList!")
@@ -483,6 +489,7 @@ def anime(args) -> None:
                 num_episodes=ctx.num_episodes,
                 anilist_id=ctx.anilist_id,
                 source=source_used,
+                total_episodes_anilist=ctx.total_episodes_anilist,
                 is_local=False,
             )
         else:

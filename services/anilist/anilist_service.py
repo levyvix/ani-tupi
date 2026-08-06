@@ -475,6 +475,7 @@ def sync_anilist_progress(
     anilist_id: int,
     episode: int,
     num_episodes: int,
+    total_episodes: int | None = None,
 ) -> None:
     """Sync watched episode progress to AniList and update status if needed.
 
@@ -485,6 +486,7 @@ def sync_anilist_progress(
         anilist_id: AniList media ID
         episode: Episode number just watched (1-indexed)
         num_episodes: Total episodes available (from scrapers)
+        total_episodes: Total episodes known by AniList, when available
     """
     if not anilist_client.is_authenticated() or not anilist_id:
         return
@@ -498,7 +500,12 @@ def sync_anilist_progress(
             if entry.status == "PLANNING":
                 logger.info("📝 Movendo de 'Planejo Assistir' para 'Assistindo'...")
                 anilist_client.add_to_list(anilist_id, Status.CURRENT)
-            elif entry.status == "CURRENT" and episode == num_episodes:
+            elif (
+                entry.status == "CURRENT"
+                and total_episodes is not None
+                and total_episodes > 0
+                and episode >= total_episodes
+            ):
                 logger.info("✅ Marcando como 'Completo'...")
                 anilist_client.change_status(anilist_id, Status.COMPLETED)
 
