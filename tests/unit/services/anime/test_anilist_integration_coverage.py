@@ -528,8 +528,20 @@ class TestSyncAnilistProgress:
         monkeypatch.setattr(mod, "anilist_client", client)
         from models.models import Status
 
-        mod.sync_anilist_progress(1, 12, 12)
+        mod.sync_anilist_progress(1, 12, 12, total_episodes=12)
         client.change_status.assert_called_with(1, Status.COMPLETED)
+
+    def test_scraper_shorter_than_anilist_does_not_complete(self, monkeypatch):
+        mod = _mod_progress_sync()
+        entry = SimpleNamespace(status="CURRENT")
+        client = self._make_client(
+            authenticated=True, in_list=True, entry=entry, update_success=True
+        )
+        monkeypatch.setattr(mod, "anilist_client", client)
+
+        mod.sync_anilist_progress(1, 5, 5, total_episodes=12)
+
+        client.change_status.assert_not_called()
 
     def test_current_status_not_last_ep_no_complete(self, monkeypatch):
         mod = _mod_progress_sync()
@@ -1425,7 +1437,7 @@ class TestRunPlaybackLoopBranches:
         rep = MagicMock()
         rep.get_all_episode_sources.return_value = []
         monkeypatch.setattr(mod, "rep", rep)
-        monkeypatch.setattr(mod, "sync_anilist_progress", lambda *a: None)
+        monkeypatch.setattr(mod, "sync_anilist_progress", lambda *a, **kw: None)
         monkeypatch.setattr(mod, "_maybe_offer_sequel_on_finish", lambda *a, **kw: False)
         monkeypatch.setattr(mod, "save_history", lambda *a, **kw: None)
         monkeypatch.setattr(mod, "ui_bridge", _make_ui_bridge_mock())

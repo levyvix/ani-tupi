@@ -252,7 +252,11 @@ class RandomAnimeService:
 
             if ctx.anilist_id:
                 success = sync_progress_to_anilist(
-                    ctx.anilist_id, episode, ctx.num_episodes, ctx.anime_title
+                    ctx.anilist_id,
+                    episode,
+                    ctx.num_episodes,
+                    ctx.anime_title,
+                    ctx.total_episodes_anilist,
                 )
                 if success:
                     logger.info("✅ Progresso salvo no AniList!")
