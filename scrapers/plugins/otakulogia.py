@@ -143,8 +143,11 @@ def _temporada_entry(cid: str, category: str, temp: dict) -> AnimeMetadata:
     if season is not None:
         # Always anchor on the catalog title: part names like "T01: Parte III"
         # carry no anime name of their own and would otherwise isolate the source.
-        title = f"{category} Temporada {season}"
-        if language:
+        if season == 1 and language == "Legendado":
+            title = category
+        else:
+            title = f"{category} Temporada {season}"
+        if language and title != category:
             title = f"{title} {language}"
         params = {"cid": cid, "season": season}
         if tid is not None:
