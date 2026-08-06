@@ -124,6 +124,37 @@ class TestOtakulogiaScraper:
         }
 
     @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_search_anime_uses_catalog_title_for_first_subbed_season(self, mock_req):
+        seasons = {
+            "has_temporada": True,
+            "temporadas": [
+                {"tid": 900, "name": "Temporada 01 | Legendado"},
+            ],
+        }
+
+        def side_effect(method, url, **kwargs):
+            query = kwargs["json"]["query"]
+            if "SearchVideo" in query:
+                return _response(
+                    {
+                        "SearchVideo": _wrapped(
+                            [{"cid": "555", "category_name": "Otome Kaijuu Caramelise"}]
+                        )
+                    }
+                )
+            if "CheckTemporada" in query:
+                return _response({"CheckTemporada": seasons})
+            raise AssertionError(query)
+
+        mock_req.side_effect = side_effect
+
+        results = self.scraper.search_anime("otome")
+
+        assert len(results) == 1
+        assert results[0].title == "Otome Kaijuu Caramelise"
+        assert results[0].params == {"cid": "555", "tid": 900, "season": 1}
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
     def test_search_anime_movie_entry(self, mock_req):
         seasons = {
             "has_temporada": True,
@@ -180,7 +211,7 @@ class TestOtakulogiaScraper:
 
         by_title = {r.title: r for r in results}
         assert set(by_title) == {
-            "Kimi no Koto Temporada 1 Legendado",
+            "Kimi no Koto",
             "Kimi no Koto Temporada 2 Dublado",
             "Kimi no Koto Temporada 3 Legendado",
         }

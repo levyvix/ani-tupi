@@ -231,9 +231,7 @@ class TestTransliterationVarianceMerging:
 
     def test_otakulogia_caramelise_merges_with_other_sources(self, clean_repository):
         # otakulogia grafa "Caramelise"; as demais fontes usam "Carameliser".
-        clean_repository.add_anime(
-            "Otome Kaijuu Caramelise Temporada 1 Legendado", "url1", "otakulogia"
-        )
+        clean_repository.add_anime("Otome Kaijuu Caramelise", "url1", "otakulogia")
         clean_repository.add_anime("Otome Kaijuu Carameliser", "url2", "animefire")
         clean_repository.add_anime("Otome Kaijuu Carameliser", "url3", "anroll")
 
@@ -249,9 +247,7 @@ class TestTransliterationVarianceMerging:
         clean_repository.add_anime(
             "Otome Kaijuu Caramelise Temporada 1 Dublado", "url1", "otakulogia"
         )
-        clean_repository.add_anime(
-            "Otome Kaijuu Caramelise Temporada 1 Legendado", "url2", "otakulogia"
-        )
+        clean_repository.add_anime("Otome Kaijuu Caramelise", "url2", "otakulogia")
         clean_repository.add_anime("Otome Kaijuu Carameliser", "url3", "animefire")
         clean_repository.add_anime("Otome Kaijuu Carameliser Dublado", "url4", "anroll")
 
