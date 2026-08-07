@@ -355,7 +355,17 @@ class SearchRepository:
         with self._add_lock:
             self._populated = True
             params = params or {}
-            self.norm_titles[title] = normalize_title_for_dedup(title)
+            normalized_title = normalize_title_for_dedup(title)
+            if not normalized_title:
+                logger.warning(
+                    "Ignoring invalid anime search result from {}: title={!r}, url={!r}",
+                    source,
+                    title,
+                    url,
+                )
+                return
+
+            self.norm_titles[title] = normalized_title
 
             signature = dedup_signature(title)
             existing_title = self._sig_idx.get(signature)

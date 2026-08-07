@@ -78,14 +78,15 @@ def normalize_title_for_dedup(title: str) -> str:
         title: Raw title from scraper (may include separators, accents, etc.)
 
     Returns:
-        Normalized lowercase form with letters, numbers, spaces, and apostrophes only.
-        Returns empty string if title becomes empty after normalization.
+        Normalized lowercase form with Unicode letters, numbers, spaces, and
+        apostrophes only. Returns empty string if title becomes empty after
+        normalization.
     """
     if not title or not title.strip():
         return ""
 
     # Early exit: if stripped input has no alphanumeric characters, return ""
-    if not re.search(r"[a-zA-Z0-9]", title):
+    if not any(character.isalnum() for character in title):
         return ""
 
     # Normalize typographic apostrophes before unicode normalization
@@ -113,9 +114,13 @@ def normalize_title_for_dedup(title: str) -> str:
     # Step 3: Clean whitespace (collapse multiple spaces)
     normalized = re.sub(r"\s+", " ", normalized).strip()
 
-    # Step 4: Keep only alphanumerics, spaces, and apostrophes
+    # Step 4: Keep Unicode alphanumerics, spaces, and apostrophes
     # (Apostrophes preserved for English titles like "Hell's Paradise")
-    normalized = re.sub(r"[^A-Za-z0-9\s']", "", normalized)
+    normalized = "".join(
+        character
+        for character in normalized
+        if character.isalnum() or character.isspace() or character == "'"
+    )
 
     # Step 5: Clean whitespace again
     # Previous step may have created spaces where special chars were removed
