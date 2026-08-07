@@ -28,6 +28,10 @@ from utils.title_normalization import (
 class TestSeparatorNormalization:
     """Test that all separator types are normalized to spaces."""
 
+    def test_preserve_unicode_letters_and_numbers(self):
+        """Non-Latin anime titles remain valid normalized values."""
+        assert normalize_title_for_dedup("为什么老师会在这里") == "为什么老师会在这里"
+
     def test_colon_separator(self):
         """Colon is normalized to space."""
         assert normalize_title_for_dedup("Anime A: Title") == "anime a title"

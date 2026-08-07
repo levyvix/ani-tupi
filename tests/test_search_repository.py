@@ -77,6 +77,27 @@ class TestSearchRepository:
         _, _, params = repo.anime_to_urls["Anime Title"][0]
         assert params == {}
 
+    def test_add_anime_ignores_titles_without_alphanumeric_content(self):
+        """Invalid scraper titles should not enter the search repository."""
+        repo = SearchRepository()
+
+        repo.add_anime("—", "http://url.com", "source", {})
+
+        assert repo.anime_to_urls == {}
+        assert repo.norm_titles == {}
+
+    def test_build_search_results_supports_unicode_titles(self):
+        """Unicode-only titles must not produce an empty normalized title."""
+        repo = SearchRepository()
+        title = "为什么老师会在这里"
+
+        repo.add_anime(title, "http://url.com", "otakulogia", {})
+
+        results = repo._build_search_results("hell")
+
+        assert results.results[0].normalized_title == title.lower()
+        assert repo.get_anime_titles_with_sources(filter_by_query="hell") == []
+
     def test_add_anime_deduplication_by_normalized_title(self):
         """Same anime with different title formats should be deduplicated."""
         repo = SearchRepository()
