@@ -84,6 +84,7 @@ class MPVLogManager:
             "http error 403",
             "http error 404",
             "unable to open url",
+            "got eof with no data before it",
         ]
         return any(signature in haystack for signature in error_signatures)
 
@@ -98,6 +99,10 @@ class MPVLogManager:
             return "A fonte bloqueou o acesso ao vídeo (HTTP 403)."
         if "timed out" in haystack or "timeout" in haystack:
             return "Timeout ao carregar o vídeo desta fonte."
-        if "errors when loading file" in haystack or "failed to open" in haystack:
+        if (
+            "errors when loading file" in haystack
+            or "failed to open" in haystack
+            or "got eof with no data before it" in haystack
+        ):
             return "Falha ao carregar vídeo nesta fonte."
         return None
