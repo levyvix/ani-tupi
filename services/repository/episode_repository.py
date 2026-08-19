@@ -116,6 +116,11 @@ class EpisodeRepository:
         Raises:
             ValueError: If title_list and url_list have different lengths.
         """
+        if len(title_list) != len(url_list):
+            raise ValueError(
+                f"Mismatched episodes: {len(title_list)} titles vs {len(url_list)} URLs"
+            )
+
         # Infer season from anime title if not explicitly provided
         if season == 1:  # Only infer if default
             inferred_season = self._infer_season_from_title(anime)
@@ -123,15 +128,22 @@ class EpisodeRepository:
                 season = inferred_season
 
         # Normalize raw labels ("Episódio 1", "Episodio - Legendado - 1") to ints
-        episode_numbers = [
-            parse_episode_number(title, fallback=i + 1) for i, title in enumerate(title_list)
-        ]
+        valid_episodes = []
+        for i, (title, url) in enumerate(zip(title_list, url_list)):
+            episode_number = parse_episode_number(title, fallback=i + 1)
+            if episode_number > 0:
+                valid_episodes.append((episode_number, url))
+        if not valid_episodes:
+            return
+
+        episode_numbers = [number for number, _ in valid_episodes]
+        episode_urls = [url for _, url in valid_episodes]
 
         # Validate using EpisodeData model
         episode_data = EpisodeData(
             anime_title=anime,
             episode_numbers=episode_numbers,
-            episode_urls=url_list,
+            episode_urls=episode_urls,
             source=source,
             season=season,
         )
