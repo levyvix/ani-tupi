@@ -33,6 +33,18 @@ class TestEpisodeRepository:
         # Should store without raising error (normalized to episode numbers)
         assert episode_repo.get_episode_list("Naruto") == [1, 2, 3]
 
+    def test_add_episode_list_discards_zero_episode(self, episode_repo):
+        """Should ignore invalid episode zero without shifting valid URLs."""
+        titles = ["Episode 0", "Episode 1", "Episode 2"]
+        urls = ["http://ep0.com", "http://ep1.com", "http://ep2.com"]
+
+        episode_repo.add_episode_list("Yomi no Tsugai", titles, urls, "animesonlinecloud")
+
+        assert episode_repo.get_episode_list("Yomi no Tsugai") == [1, 2]
+        assert episode_repo.get_all_episode_sources("Yomi no Tsugai", 2) == [
+            ("http://ep2.com", "animesonlinecloud")
+        ]
+
     def test_add_episode_list_validation(self, episode_repo):
         """Should validate that titles and urls have same length."""
         titles = ["Episode 1", "Episode 2"]
