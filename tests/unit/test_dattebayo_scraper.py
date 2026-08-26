@@ -55,7 +55,7 @@ PLAYER_HTML = """
 <script>var vid = 'https://dynamic.r2.cloudflarestorage.com/fiphonec/560174.mp4';</script>
 <script>var vid = 'https://evil.example.com/fful/560174.mp4';</script>
 <script>var vid = 'https://dynamic.r2.cloudflarestorage.com/f333/560174.mp4';</script>
-<script>var vid = 'https://dynamic.r2.cloudflarestorage.com/fful/999999.mp4';</script>
+<script>var vid = 'https://dynamic.r2.cloudflarestorage.com/fful/999999.webm';</script>
 <script>var vid = 'https://dynamic.r2.cloudflarestorage.com/fful/560174.mp4';</script>
 """
 
@@ -159,6 +159,24 @@ class TestDattebayoSigning:
             "https://dynamic.r2.cloudflarestorage.com/fful/560174.mp4",
             "https://dynamic.r2.cloudflarestorage.com/f333/560174.mp4",
             "https://dynamic.r2.cloudflarestorage.com/fiphonec/560174.mp4",
+        ]
+
+    def test_extract_unsigned_video_urls_accepts_current_r2_paths_and_media_ids(self):
+        html = """
+        <script>var vid = 'https://dynamic.r2.cloudflarestorage.com/zful/49514.mp4';</script>
+        <script>var vid = 'https://dynamic.r2.cloudflarestorage.com/z222/49514.mp4';</script>
+        <script>var vid = 'https://dynamic.r2.cloudflarestorage.com/ziphoneb/49514.mp4';</script>
+        """
+
+        urls = extract_unsigned_video_urls(
+            html,
+            "https://www.dattebayo-br.com/videos/477620",
+        )
+
+        assert urls == [
+            "https://dynamic.r2.cloudflarestorage.com/zful/49514.mp4",
+            "https://dynamic.r2.cloudflarestorage.com/z222/49514.mp4",
+            "https://dynamic.r2.cloudflarestorage.com/ziphoneb/49514.mp4",
         ]
 
     def test_unsigned_video_url_fullhd(self):
