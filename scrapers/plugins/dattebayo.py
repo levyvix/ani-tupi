@@ -37,6 +37,12 @@ QUALITY_PATHS = {
     "hd": "f333",
     "sd": "fiphonec",
 }
+QUALITY_PATH_ALIASES = {
+    **{path: quality for quality, path in QUALITY_PATHS.items()},
+    "zful": "fullhd",
+    "z222": "hd",
+    "ziphoneb": "sd",
+}
 PLAYBACK_QUALITIES = ("fullhd", "hd", "sd")
 
 
@@ -99,9 +105,9 @@ def extract_unsigned_video_urls(
     qualities: tuple[str, ...] = PLAYBACK_QUALITIES,
 ) -> list[str]:
     """Extract validated R2 video URLs from an episode page, ordered by quality."""
-    video_id = extract_video_id(episode_url)
+    extract_video_id(episode_url)
     quality_by_path = {
-        QUALITY_PATHS[quality]: quality for quality in qualities if quality in QUALITY_PATHS
+        path: quality for path, quality in QUALITY_PATH_ALIASES.items() if quality in qualities
     }
     candidates: dict[str, str] = {}
 
@@ -121,7 +127,7 @@ def extract_unsigned_video_urls(
             or parsed.query
             or parsed.fragment
             or len(path_parts) != 2
-            or path_parts[1] != f"{video_id}.mp4"
+            or not re.fullmatch(r"\d+\.mp4", path_parts[1], re.IGNORECASE)
         ):
             continue
 
