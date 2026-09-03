@@ -183,7 +183,6 @@ class SeleniumWebDriver:
                 break
             except Exception:
                 break
-            time.sleep(0.5)
 
     def fetch_json(self, url: str, referer: str | None = None) -> dict | None:
         """Fetch JSON via browser fetch API (uses Cloudflare clearance cookies).
