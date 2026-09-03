@@ -232,7 +232,6 @@ class PluginSettings(BaseModel):
             "dattebayo",
             "anitube",
             "otakulogia",
-            "animesonlinecloud",
             "sushianimes",
             "animesdigital",
             "animefire",
