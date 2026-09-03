@@ -38,11 +38,11 @@ class TestEpisodeRepository:
         titles = ["Episode 0", "Episode 1", "Episode 2"]
         urls = ["http://ep0.com", "http://ep1.com", "http://ep2.com"]
 
-        episode_repo.add_episode_list("Yomi no Tsugai", titles, urls, "animesonlinecloud")
+        episode_repo.add_episode_list("Yomi no Tsugai", titles, urls, "animefire")
 
         assert episode_repo.get_episode_list("Yomi no Tsugai") == [1, 2]
         assert episode_repo.get_all_episode_sources("Yomi no Tsugai", 2) == [
-            ("http://ep2.com", "animesonlinecloud")
+            ("http://ep2.com", "animefire")
         ]
 
     def test_add_episode_list_validation(self, episode_repo):
