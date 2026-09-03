@@ -239,171 +239,98 @@ def match_anilist_progress(manga_list, manga_title: str, format_title) -> int | 
 # === Preferências persistidas ===
 
 
-class MangaSelectionPreferences:
-    """Manages manga selection preferences with JSON persistence."""
+class _JsonPreferences:
+    """Persist normalized string keys and values in a small JSON file."""
 
-    def __init__(self):
-        """Initialize preferences manager."""
-        self.preferences_file = get_data_path() / "manga_selection_preferences.json"
-        self._preferences: dict[str, str] = {}  # search_query -> manga_id
-        self._load_preferences()
-
-    def _load_preferences(self) -> None:
-        """Load preferences from JSON file."""
-        try:
-            if self.preferences_file.exists():
-                with self.preferences_file.open("r", encoding="utf-8") as f:
-                    self._preferences = json.load(f)
-        except (OSError, json.JSONDecodeError):
-            self._preferences = {}
-
-    def _save_preferences(self) -> None:
-        """Save preferences to JSON file."""
-        try:
-            # Ensure directory exists
-            self.preferences_file.parent.mkdir(parents=True, exist_ok=True)
-
-            with self.preferences_file.open("w", encoding="utf-8") as f:
-                json.dump(self._preferences, f, indent=2, ensure_ascii=False)
-        except OSError:
-            # Silently fail if unable to save (graceful degradation)
-            pass
-
-    def get_preferred_manga_id(self, search_query: str) -> str | None:
-        """Get preferred manga ID for a search query.
-
-        Args:
-            search_query: The original search query
-
-        Returns:
-            Preferred manga ID or None if not set
-        """
-        # Normalize query for consistent matching
-        normalized_query = search_query.strip().lower()
-        return self._preferences.get(normalized_query)
-
-    def set_preferred_manga_id(self, search_query: str, manga_id: str) -> None:
-        """Set preferred manga ID for a search query.
-
-        Args:
-            search_query: The original search query
-            manga_id: The manga ID to prefer
-        """
-        # Normalize query for consistent matching
-        normalized_query = search_query.strip().lower()
-        self._preferences[normalized_query] = manga_id
-        self._save_preferences()
-
-    def remove_preference(self, search_query: str) -> bool:
-        """Remove preference for a search query.
-
-        Args:
-            search_query: The search query
-
-        Returns:
-            True if preference was removed, False if not found
-        """
-        normalized_query = search_query.strip().lower()
-        if normalized_query in self._preferences:
-            del self._preferences[normalized_query]
-            self._save_preferences()
-            return True
-        return False
-
-    def get_all_preferences(self) -> dict[str, str]:
-        """Get all manga selection preferences.
-
-        Returns:
-            Dictionary mapping search queries to manga IDs
-        """
-        return self._preferences.copy()
-
-
-# Global instance for use throughout the app
-manga_selection_preferences = MangaSelectionPreferences()
-
-
-class MangaSourcePreferences:
-    """Manages manga source preferences with JSON persistence."""
-
-    def __init__(self):
-        """Initialize preferences manager."""
-        self.preferences_file = get_data_path() / "manga_source_preferences.json"
+    def __init__(self, filename: str) -> None:
+        self.preferences_file = get_data_path() / filename
         self._preferences: dict[str, str] = {}
         self._load_preferences()
 
     def _load_preferences(self) -> None:
-        """Load preferences from JSON file."""
         try:
             if self.preferences_file.exists():
-                with self.preferences_file.open("r", encoding="utf-8") as f:
-                    self._preferences = json.load(f)
-        except (OSError, json.JSONDecodeError):
+                with self.preferences_file.open("r", encoding="utf-8") as file:
+                    data = json.load(file)
+                if isinstance(data, dict):
+                    self._preferences = {str(key): str(value) for key, value in data.items()}
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
             self._preferences = {}
 
     def _save_preferences(self) -> None:
-        """Save preferences to JSON file."""
         try:
-            # Ensure directory exists
             self.preferences_file.parent.mkdir(parents=True, exist_ok=True)
-
-            with self.preferences_file.open("w", encoding="utf-8") as f:
-                json.dump(self._preferences, f, indent=2, ensure_ascii=False)
+            with self.preferences_file.open("w", encoding="utf-8") as file:
+                json.dump(self._preferences, file, indent=2, ensure_ascii=False)
         except OSError:
-            # Silently fail if unable to save (graceful degradation)
+            # Preferences are optional; a read-only state directory should not
+            # prevent searching or reading manga.
             pass
 
-    def get_preferred_source(self, manga_title: str) -> str | None:
-        """Get preferred source for a manga.
+    @staticmethod
+    def _normalize_key(key: str) -> str:
+        return key.strip().lower()
 
-        Args:
-            manga_title: The manga title
+    def get(self, key: str) -> str | None:
+        return self._preferences.get(self._normalize_key(key))
 
-        Returns:
-            Preferred source name or None if not set
-        """
-        # Normalize title for consistent matching
-        normalized_title = manga_title.strip().lower()
-        return self._preferences.get(normalized_title)
-
-    def set_preferred_source(self, manga_title: str, source: str) -> None:
-        """Set preferred source for a manga.
-
-        Args:
-            manga_title: The manga title
-            source: The source name (e.g., "mugiwaras", "mangadex")
-        """
-        # Normalize title for consistent matching
-        normalized_title = manga_title.strip().lower()
-        self._preferences[normalized_title] = source
+    def set(self, key: str, value: str) -> None:
+        self._preferences[self._normalize_key(key)] = value
         self._save_preferences()
 
-    def remove_preference(self, manga_title: str) -> bool:
-        """Remove preference for a manga.
+    def remove(self, key: str) -> bool:
+        normalized_key = self._normalize_key(key)
+        if normalized_key not in self._preferences:
+            return False
+        del self._preferences[normalized_key]
+        self._save_preferences()
+        return True
 
-        Args:
-            manga_title: The manga title
-
-        Returns:
-            True if preference was removed, False if not found
-        """
-        normalized_title = manga_title.strip().lower()
-        if normalized_title in self._preferences:
-            del self._preferences[normalized_title]
-            self._save_preferences()
-            return True
-        return False
-
-    def get_all_preferences(self) -> dict[str, str]:
-        """Get all manga source preferences.
-
-        Returns:
-            Dictionary mapping manga titles to source names
-        """
+    def all(self) -> dict[str, str]:
         return self._preferences.copy()
 
 
-# Global instance for use throughout the app
+class MangaSelectionPreferences(_JsonPreferences):
+    """Manage the preferred manga for each search query."""
+
+    def __init__(self) -> None:
+        super().__init__("manga_selection_preferences.json")
+
+    def get_preferred_manga_id(self, search_query: str) -> str | None:
+        return self.get(search_query)
+
+    def set_preferred_manga_id(self, search_query: str, manga_id: str) -> None:
+        self.set(search_query, manga_id)
+
+    def remove_preference(self, search_query: str) -> bool:
+        return self.remove(search_query)
+
+    def get_all_preferences(self) -> dict[str, str]:
+        return self.all()
+
+
+manga_selection_preferences = MangaSelectionPreferences()
+
+
+class MangaSourcePreferences(_JsonPreferences):
+    """Manage the preferred source for each manga."""
+
+    def __init__(self) -> None:
+        super().__init__("manga_source_preferences.json")
+
+    def get_preferred_source(self, manga_title: str) -> str | None:
+        return self.get(manga_title)
+
+    def set_preferred_source(self, manga_title: str, source: str) -> None:
+        self.set(manga_title, source)
+
+    def remove_preference(self, manga_title: str) -> bool:
+        return self.remove(manga_title)
+
+    def get_all_preferences(self) -> dict[str, str]:
+        return self.all()
+
+
 manga_source_preferences = MangaSourcePreferences()
 
 

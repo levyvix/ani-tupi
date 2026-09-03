@@ -16,8 +16,6 @@ import time
 from concurrent.futures import FIRST_EXCEPTION, ProcessPoolExecutor, wait
 from dataclasses import dataclass, field
 
-from thefuzz import fuzz
-
 from models.config import settings
 from models.models import AnimeTitleResolution
 from services.anilist.anilist_service import get_scraper_cache
@@ -294,12 +292,6 @@ def rank_anime_results_by_reference(titles: list[str], reference_title: str) -> 
     reference_compact = SearchRepository._normalize_for_similarity(reference_title)
     reference_words = SearchRepository._normalize_words_for_similarity(reference_title)
 
-    def contains_word_sequence(haystack: list[str], needle: list[str]) -> bool:
-        if not needle:
-            return True
-        it = iter(haystack)
-        return all(any(word == candidate for candidate in it) for word in needle)
-
     scored_titles = []
     for title in titles:
         base_title = title.split(" [")[0] if " [" in title else title
@@ -307,11 +299,11 @@ def rank_anime_results_by_reference(titles: list[str], reference_title: str) -> 
         compact_title = SearchRepository._normalize_for_similarity(base_title)
         title_words = SearchRepository._normalize_words_for_similarity(base_title)
 
-        score = max(
-            fuzz.ratio(reference_normalized, normalized_title),
-            fuzz.partial_ratio(reference_normalized, normalized_title),
-            fuzz.token_sort_ratio(reference_normalized, normalized_title),
-            fuzz.ratio(reference_compact, compact_title),
+        score = SearchRepository._fuzz_score(
+            reference_normalized,
+            reference_compact,
+            normalized_title,
+            compact_title,
         )
 
         if reference_words and title_words[: len(reference_words)] == reference_words:
@@ -321,19 +313,13 @@ def rank_anime_results_by_reference(titles: list[str], reference_title: str) -> 
         elif reference_compact in compact_title:
             score = min(100, score + 10)
 
-        if contains_word_sequence(title_words, reference_words):
+        if SearchRepository._contains_word_sequence(title_words, reference_words):
             score = min(100, score + 25)
         else:
             score = max(0, score - 25)
 
         # Prefer more specific titles over short prefix-only matches.
-        if len(title_words) < len(reference_words):
-            if title_words == reference_words[: len(title_words)]:
-                score = 0
-            else:
-                score = max(0, score - 50)
-        elif len(title_words) > len(reference_words):
-            score = min(100, score + min(30, (len(title_words) - len(reference_words)) * 5))
+        score = SearchRepository._apply_word_count_adjustment(score, title_words, reference_words)
 
         scored_titles.append((title, score, len(title_words), base_title))
 
@@ -355,11 +341,11 @@ def _best_similarity_score_for_reference(titles: list[str], reference_title: str
         normalized_title = normalize_title_for_filter(base_title)
         compact_title = SearchRepository._normalize_for_similarity(base_title)
 
-        score = max(
-            fuzz.ratio(reference_normalized, normalized_title),
-            fuzz.partial_ratio(reference_normalized, normalized_title),
-            fuzz.token_sort_ratio(reference_normalized, normalized_title),
-            fuzz.ratio(reference_compact, compact_title),
+        score = SearchRepository._fuzz_score(
+            reference_normalized,
+            reference_compact,
+            normalized_title,
+            compact_title,
         )
         best_score = max(best_score, score)
 

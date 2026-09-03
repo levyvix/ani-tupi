@@ -2,8 +2,6 @@ import re
 import time
 
 import httpx
-from bs4 import BeautifulSoup
-
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -12,9 +10,6 @@ DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
     "Accept-Language": "pt-BR,pt;q=0.9",
 }
-
-_BG_MP4_IFRAME_RE = re.compile(r'<iframe[^>]+src=["\']([^"\']*bg\.mp4[^"\']*)["\']', re.I)
-_TOKEN_RE = re.compile(r"blogger\.com/video\.g\?token=([^&\"'\s]+)")
 
 
 def http_request_with_retry(
@@ -250,59 +245,6 @@ def extract_anivideo_hls(html: str) -> str | None:
     if base.endswith(".mp4"):
         return f"{base}/index.m3u8"
     return base
-
-
-def extract_blogger_from_bg_mp4(
-    html: str,
-    episode_url: str,
-    site_referer: str,
-    headers: dict | None = None,
-    timeout: float = 30,
-) -> list[str]:
-    """Follow bg.mp4 redirector iframes and resolve Blogger streams (HD first)."""
-    from scrapers.core.blogger_resolver import resolve_blogger_streams
-
-    request_headers = headers or DEFAULT_HEADERS
-    iframe_urls = _BG_MP4_IFRAME_RE.findall(html)
-    if not iframe_urls:
-        soup = BeautifulSoup(html, "html.parser")
-        iframe_urls = [
-            src
-            for iframe in soup.select("iframe.metaframe, iframe")
-            if (src := iframe.get("src")) and "bg.mp4" in src
-        ]
-
-    for iframe_url in iframe_urls:
-        try:
-            hop = httpx.get(
-                iframe_url,
-                headers={**request_headers, "Referer": episode_url},
-                timeout=timeout,
-                follow_redirects=False,
-            )
-            location = hop.headers.get("location", "")
-            if not location:
-                continue
-            if location.startswith("/"):
-                from urllib.parse import urlparse
-
-                parsed = urlparse(iframe_url)
-                location = f"{parsed.scheme}://{parsed.netloc}{location}"
-
-            provider = httpx.get(
-                location,
-                headers={**request_headers, "Referer": site_referer},
-                timeout=timeout,
-                follow_redirects=True,
-            )
-            provider.raise_for_status()
-            token_match = _TOKEN_RE.search(provider.text)
-            if not token_match:
-                continue
-            return resolve_blogger_streams(token_match.group(1))
-        except Exception:
-            continue
-    return []
 
 
 def load_plugin(plugin_cls, register) -> None:
