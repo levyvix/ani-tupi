@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from models.models import AnimeMetadata, ScrapedEpisodes
 from scrapers.plugins.utils import (
     DEFAULT_HEADERS,
+    CloudflareChallengeError,
     http_get_with_retry,
     load_plugin,
     store_player_source,
@@ -22,6 +23,7 @@ REQUEST_TIMEOUT = 20
 _PLAYER_OPTION_RE = re.compile(r"data-type='([^']+)' data-post='(\d+)' data-nume='([^']+)'")
 _EPISODE_NUM_RE = re.compile(r"-episodio-(\d+)/?$")
 _ALL_EPISODES_SUFFIX_RE = re.compile(r"\s+todos\s+os\s+epis[oó]dios\s*$", re.IGNORECASE)
+_CLOUDFLARE_WARNING = "AnimesOnlineCloud indisponível: o Cloudflare exige validação no navegador."
 
 
 class AnimesOnlineCloud:
@@ -44,6 +46,8 @@ class AnimesOnlineCloud:
                 link = a.get("href", "")
                 if title and link:
                     results.append(AnimeMetadata(title=title, url=link, source=self.name))
+        except CloudflareChallengeError:
+            logger.warning(_CLOUDFLARE_WARNING)
         except httpx.HTTPError as e:
             logger.debug(f"AnimesOnlineCloud search request failed for '{query}': {e}")
         return results
@@ -72,6 +76,9 @@ class AnimesOnlineCloud:
             if titles and urls:
                 return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
             return []
+        except CloudflareChallengeError:
+            logger.warning(_CLOUDFLARE_WARNING)
+            return []
         except httpx.HTTPError as e:
             logger.debug(f"AnimesOnlineCloud episode fetch failed for '{anime}': {e}")
             return []
@@ -95,7 +102,7 @@ class AnimesOnlineCloud:
             if not found:
                 raise ValueError("No playable source in AnimesOnlineCloud episode page")
         except Exception as e:
-            raise type(e)(f"AnimesOnlineCloud: {e}") from e
+            raise RuntimeError(f"AnimesOnlineCloud: {e}") from e
 
     def _dooplayer_embed(self, referer: str, post: str, typ: str, nume: str) -> dict | None:
         api = f"{BASE_URL}/wp-json/dooplayer/v2/{post}/{typ}/{nume}"
