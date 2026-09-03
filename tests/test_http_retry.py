@@ -5,6 +5,7 @@ import pytest
 
 from scrapers.plugins import utils
 from scrapers.plugins.utils import (
+    CloudflareChallengeError,
     http_get_with_retry,
     http_request_with_retry,
     http_head_with_fallback,
@@ -153,6 +154,22 @@ def test_404_raises_immediately_no_retry(monkeypatch, no_sleep):
     assert no_sleep == []
 
 
+def test_cloudflare_challenge_raises_clear_error_without_retry(monkeypatch, no_sleep):
+    request = httpx.Request("GET", "https://protected.example")
+    response = httpx.Response(
+        403,
+        request=request,
+        headers={"cf-mitigated": "challenge", "server": "cloudflare"},
+    )
+    calls = _patch_request(monkeypatch, [response])
+
+    with pytest.raises(CloudflareChallengeError, match="requires a browser challenge"):
+        http_get_with_retry("https://protected.example")
+
+    assert calls["count"] == 1
+    assert no_sleep == []
+
+
 # Tests for http_request_with_retry (POST support)
 
 
@@ -245,6 +262,21 @@ def test_head_403_falls_back_to_get(monkeypatch):
     assert resp.status_code == 200
     assert calls["count"] == 2
     assert calls["methods"] == ["HEAD", "GET"]
+
+
+def test_head_cloudflare_challenge_does_not_try_plain_get(monkeypatch):
+    request = httpx.Request("HEAD", "https://protected.example")
+    response = httpx.Response(
+        403,
+        request=request,
+        headers={"cf-mitigated": "challenge", "server": "cloudflare"},
+    )
+    calls = _patch_request_for_head(monkeypatch, response)
+
+    with pytest.raises(CloudflareChallengeError):
+        http_head_with_fallback("https://protected.example")
+
+    assert calls["methods"] == ["HEAD"]
 
 
 def test_head_405_falls_back_to_get(monkeypatch):

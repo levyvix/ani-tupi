@@ -12,6 +12,28 @@ DEFAULT_HEADERS = {
 }
 
 
+class CloudflareChallengeError(httpx.HTTPStatusError):
+    """Raised when Cloudflare requires an interactive browser challenge."""
+
+
+def _raise_for_cloudflare_challenge(response: httpx.Response, method: str, url: str) -> None:
+    if response.status_code != 403:
+        return
+    if response.headers.get("cf-mitigated", "").lower() != "challenge":
+        return
+
+    try:
+        request = response.request
+    except RuntimeError:
+        request = httpx.Request(method, url)
+
+    raise CloudflareChallengeError(
+        f"Automated access to {url} requires a browser challenge from Cloudflare",
+        request=request,
+        response=response,
+    )
+
+
 def http_request_with_retry(
     method: str,
     url: str,
@@ -88,6 +110,8 @@ def http_request_with_retry(
             )
             time.sleep(delay)
             continue
+
+        _raise_for_cloudflare_challenge(response, method, url)
 
         status = getattr(response, "status_code", None)
         if isinstance(status, int) and (status == 429 or status >= 500):
@@ -197,6 +221,8 @@ def http_head_with_fallback(
             backoff_base=backoff_base,
             client=client,
         )
+    except CloudflareChallengeError:
+        raise
     except httpx.HTTPStatusError as exc:
         if fallback_to_get and exc.response.status_code in (403, 405):
             logger.debug(f"HEAD failed with {exc.response.status_code} for {url}, trying GET...")
