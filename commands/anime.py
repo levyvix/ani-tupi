@@ -19,20 +19,18 @@ from services.anime import (
 )
 from services.core.history_service import save_history
 from services.repository import rep
-from services.anime.playback_service import (
-    prepare_playback_from_search,
-    prepare_playback_from_history,
-    get_episode_url_and_source,
-    sync_progress_to_anilist,
-    navigate_episodes,
-    build_episode_sources,
-    PlaybackContext,
-)
-from utils.logging import get_logger
 from services.anime.download_service import AnimeDownloadService
+from utils.logging import get_logger
 from services.anime.playback_service import (
+    PlaybackContext,
+    build_episode_sources,
+    get_episode_url_and_source,
+    navigate_episodes,
     play_episode_with_fallback,
+    prepare_playback_from_history,
+    prepare_playback_from_search,
     probe_url_playable,
+    sync_progress_to_anilist,
 )
 from ui.components import (
     loading,

@@ -21,9 +21,22 @@ from ui.anilist.airing_menu import (
     set_airing_service_factory,
     set_run_anime_actions as set_airing_menu_actions,
 )
-from ui.anilist.filters import choose_year, choose_season, choose_status
+from ui.anilist.filters import (
+    choose_season,
+    choose_status,
+    choose_year,
+    status_select_menu as _status_select_menu,
+)
+
+__all__ = ["status_select_menu"]
 
 logger = get_logger(__name__)
+
+
+def status_select_menu() -> Status | None:
+    """Show the shared AniList status menu using this module's UI seam."""
+    return _status_select_menu(menu_navigate)
+
 
 # History file path (centralized from config)
 HISTORY_PATH = get_data_path()
@@ -192,38 +205,6 @@ def anime_actions_menu(display_title: str) -> str | None:
         return None
 
     return action_map.get(selection)
-
-
-def status_select_menu() -> Status | None:
-    """Show status submenu mapping readable labels to Status enum.
-
-    Returns:
-        Selected Status, or None on ESC
-    """
-    status_options = [
-        "📺 Watching (Assistindo)",
-        "📋 Planning (Planejo assistir)",
-        "✅ Completed (Completo)",
-        "⏸️  Paused (Pausado)",
-        "❌ Dropped (Dropado)",
-        "🔁 Repeating (Reassistindo)",
-    ]
-
-    status_map = {
-        "📺 Watching (Assistindo)": Status.CURRENT,
-        "📋 Planning (Planejo assistir)": Status.PLANNING,
-        "✅ Completed (Completo)": Status.COMPLETED,
-        "⏸️  Paused (Pausado)": Status.PAUSED,
-        "❌ Dropped (Dropado)": Status.DROPPED,
-        "🔁 Repeating (Reassistindo)": Status.REPEATING,
-    }
-
-    selection = menu_navigate(status_options, "Escolha o novo status")
-
-    if selection is None:
-        return None
-
-    return status_map.get(selection)
 
 
 def anilist_main_menu() -> tuple[str, int] | None:

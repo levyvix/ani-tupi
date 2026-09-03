@@ -84,10 +84,6 @@ class Cache(ABC):
         """
         pass
 
-    def cleanup_expired(self) -> None:
-        """Remove expired items (optional for backends that handle automatically)."""
-        pass
-
 
 class MemoryCache(Cache):
     """In-memory cache with TTL and LRU eviction.

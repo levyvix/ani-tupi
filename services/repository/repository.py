@@ -131,63 +131,8 @@ class Repository:
             source: Plugin source name
             season: Season number (default: 1, inferred from title if not specified)
         """
-        # Infer season from anime title if not explicitly provided
-        if season == 1:  # Only infer if default
-            inferred_season = self._infer_season_from_title(anime)
-            if inferred_season:
-                season = inferred_season
+        # EpisodeRepository owns season inference so there is one implementation.
         self._episode_repo.add_episode_list(anime, title_list, url_list, source, season)
-
-    @staticmethod
-    def _infer_season_from_title(title: str) -> int | None:
-        """Infer season number from anime title.
-
-        Detects patterns like:
-        - "Season 2", "season 7", "temporada 12"
-        - "2nd Season", "7º", "7ª"
-        - Works for any season number 2-99
-
-        Args:
-            title: Anime title
-
-        Returns:
-            Inferred season number (2+) or None if season 1 (default)
-        """
-        import re
-
-        title_lower = title.lower()
-
-        # Patterns to detect season numbers
-        # Ordered by specificity (most specific first)
-        patterns = [
-            # English patterns: "Season N", "season N", "Nth season"
-            r"season\s+(\d+)",  # "Season 2", "season 7"
-            r"(\d+)(?:st|nd|rd|th)\s+season",  # "2nd season", "7th season"
-            r"season\s+(\d+)(?:st|nd|rd|th)",  # "season 2nd"
-            # Portuguese patterns
-            r"temporada\s+(\d+)",  # "temporada 2", "temporada 7"
-            r"(\d+)º\s+temporada",  # "2º temporada", "7º temporada"
-            r"(\d+)ª\s+temporada",  # "2ª temporada", "7ª temporada"
-            r"temp\s+(\d+)",  # "temp 2"
-            # Standalone number patterns (be careful not to match episode numbers)
-            r"\s-\s(\d+)(?:\s|$|[^0-9])",  # " - 2 ", " - 7 "
-            r"\|\s(\d+)(?:\s|$|[^0-9])",  # "| 2 ", "| 7 "
-            # Number at the end of title (most lenient, checked last)
-            # "Anime 2", "Anime 12", but NOT "Episode 100"
-            # Accept 1-2 digits to cover seasons 2-99 but not huge episode numbers
-            r"\s([2-9]|[1-9]\d)(?:\s|$)",  # 2-99 at end: "Anime 2 " or "Anime 12"
-        ]
-
-        # Try each pattern
-        for pattern in patterns:
-            match = re.search(pattern, title_lower)
-            if match:
-                season_num = int(match.group(1))
-                # Return if season number is 2 or higher (skip if season 1)
-                if season_num >= 2:
-                    return season_num
-
-        return None  # Default to season 1
 
     def get_episode_list(self, anime: str, season: int | None = None) -> list[int]:
         """Get episode list for anime, optionally filtered by season.

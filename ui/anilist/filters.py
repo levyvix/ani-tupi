@@ -6,7 +6,7 @@ from models.models import Status
 from ui.components import menu_navigate
 
 
-def status_select_menu() -> Status | None:
+def status_select_menu(navigate=None) -> Status | None:
     """Show status submenu mapping readable labels to Status enum.
 
     Returns:
@@ -30,7 +30,7 @@ def status_select_menu() -> Status | None:
         "🔁 Repeating (Reassistindo)": Status.REPEATING,
     }
 
-    selection = menu_navigate(status_options, "Escolha o novo status")
+    selection = (navigate or menu_navigate)(status_options, "Escolha o novo status")
 
     if selection is None:
         return None
