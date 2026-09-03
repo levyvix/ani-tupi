@@ -80,6 +80,11 @@ class SeleniumWebDriver:
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--lang=pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+        options.add_argument("--disable-features=VizDisplayCompositor")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option("useAutomationExtension", False)
 
         # Performance
         options.add_argument("--disable-images")
@@ -95,8 +100,15 @@ class SeleniumWebDriver:
         self.driver = webdriver.Chrome(options=options)
         self.driver.set_page_load_timeout(self.timeout)
 
-        # Add request headers via CDP (Chrome DevTools Protocol)
+        # Stealth: hide webdriver flag and set user agent via CDP
         self.driver.execute_cdp_cmd("Network.setUserAgentOverride", {"userAgent": user_agent})
+        try:
+            self.driver.execute_cdp_cmd(
+                "Page.addScriptToEvaluateOnNewDocument",
+                {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"},
+            )
+        except Exception:
+            pass
 
     def fetch(
         self, url: str, wait_selector: str | None = None, max_retries: int = 2
@@ -123,6 +135,9 @@ class SeleniumWebDriver:
                 # Add small random delay to mimic human browsing
                 time.sleep(random.uniform(0.5, 1.5))
 
+                # Wait for Cloudflare challenge to clear if present (up to 15s)
+                self._wait_for_cloudflare_challenge()
+
                 # Wait for specific element if provided
                 if wait_selector:
                     try:
@@ -145,6 +160,63 @@ class SeleniumWebDriver:
                     raise Exception(
                         f"Timeout after {max_retries + 1} attempts on {url}: {e}"
                     ) from e
+
+    def _wait_for_cloudflare_challenge(self, max_wait: float = 15.0) -> None:
+        """Wait for Cloudflare challenge to clear, if present.
+
+        Cloudflare renders a 'Just a moment...' page with Turnstile widget.
+        This polls the page title and DOM for challenge indicators.
+        """
+        end = time.time() + max_wait
+        while time.time() < end:
+            try:
+                title = (self.driver.title or "").lower()
+                html = (self.driver.page_source or "").lower()
+                # Detect challenge page
+                if "just a moment" in title or "cf-challenge" in html or "cf-turnstile" in html:
+                    time.sleep(1.0)
+                    continue
+                # Also detect cf-mitigated overlay - wait for it to disappear
+                if "checking if the site connection is secure" in html:
+                    time.sleep(1.0)
+                    continue
+                break
+            except Exception:
+                break
+
+    def fetch_json(self, url: str, referer: str | None = None) -> dict | None:
+        """Fetch JSON via browser fetch API (uses Cloudflare clearance cookies).
+
+        Useful for API endpoints protected by Cloudflare (e.g. dooplayer).
+        Returns parsed JSON dict or None on failure.
+        """
+        import json as _json
+
+        if referer:
+            try:
+                self.driver.get(referer)
+                time.sleep(random.uniform(0.5, 1.0))
+                self._wait_for_cloudflare_challenge()
+            except Exception:
+                pass
+
+        # Use browser's fetch with credentials to reuse cf_clearance cookies
+        script = """
+            var url = arguments[0];
+            var callback = arguments[arguments.length - 1];
+            fetch(url, {credentials: 'include', headers: {'Accept': 'application/json'}})
+                .then(function(r){ return r.text().then(function(t){ return {status: r.status, text: t}; }); })
+                .then(function(o){ callback(o); })
+                .catch(function(e){ callback({status: 0, text: '', error: e.toString()}); });
+        """
+        try:
+            self.driver.set_script_timeout(self.timeout)
+            result = self.driver.execute_async_script(script, url)
+            if not result or result.get("status") != 200:
+                return None
+            return _json.loads(result.get("text", ""))
+        except Exception:
+            return None
 
     def close(self) -> None:
         """Close browser and cleanup resources.
