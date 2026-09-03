@@ -30,7 +30,10 @@ from services.anime.playback_service import (
 )
 from utils.logging import get_logger
 from services.anime.download_service import AnimeDownloadService
-from services.anime.playback_service import play_episode_with_fallback, probe_url_playable
+from services.anime.playback_service import (
+    play_episode_with_fallback,
+    probe_url_playable,
+)
 from ui.components import (
     loading,
     menu_navigate,
@@ -63,7 +66,11 @@ def episode_index(episode_number: int, total_episodes: int) -> int:
 def build_post_playback_options(ctx: "PlaybackContext") -> list[str]:
     """Build post-playback action options for current context."""
     has_next = ctx.episode_idx < ctx.num_episodes - 1
-    extra = ["📋 Escolher outro episódio", "📥 Baixar para assistir depois", "🔄 Trocar fonte"]
+    extra = [
+        "📋 Escolher outro episódio",
+        "📥 Baixar para assistir depois",
+        "🔄 Trocar fonte",
+    ]
     return build_nav_options(
         has_next,
         ctx.episode_idx > 0,
@@ -192,7 +199,7 @@ def handle_post_playback_confirmation(
         confirm_options, msg=f"Você assistiu o episódio {episode_number} até o final?"
     )
 
-    confirmed = confirm == "✅ Sim, assisti até o final"
+    confirmed = confirm == confirm_options[0]
 
     if confirmed:
         # Save history for both remote and local episodes
@@ -203,6 +210,8 @@ def handle_post_playback_confirmation(
             source or "local",
             total_episodes=num_episodes,
         )
+
+        show_info("Sincronizado localmente!")
 
         # AniList sync
         if anilist_id:
@@ -437,16 +446,17 @@ def anime(args) -> None:
         elif all_failed:
             show_error("Nenhuma fonte conseguiu reproduzir o episódio")
             sources_tried = ", ".join(f"{source}" for source, _ in fallback_result.sources_tried)
-            show_info(f"Fontes tentadas: {sources_tried}")
-            show_info("Tente trocar de fonte manualmente ou verifique sua conexão.")
+            show_info(
+                f"Fontes tentadas: {sources_tried}\nTente trocar de fonte manualmente ou verifique sua conexão."
+            )
         else:
             show_warning(f"Erro ao reproduzir (código: {exit_code})")
             if error_hint:
                 show_error(error_hint)
 
-        logger.info("📊 Reprodução encerrada:")
-        logger.info(f"   Exit code: {exit_code}")
-        logger.info(f"   Ação: {playback_result.action}")
+        logger.info(
+            f"📊 Reprodução encerrada: \n\tExit code: {exit_code}\n\tAção: {playback_result.action}"
+        )
 
         # Log MPV exit code if it's not a normal exit
         if exit_code not in [0, 3]:  # 0=normal, 3=user quit with 'q'
@@ -553,6 +563,8 @@ def handle_random_anime(args) -> None:
     Args:
         args: Command line arguments
     """
-    from services.anime.random_anime_service import handle_random_anime as service_handler
+    from services.anime.random_anime_service import (
+        handle_random_anime as service_handler,
+    )
 
     service_handler(args)
