@@ -90,12 +90,26 @@ PR como esses três pontos foram preservados.
 
 ## Adicionando uma fonte nova
 
-1. Crie `scrapers/plugins/novafonte.py` implementando o protocolo `Scraper`
-   (`search`, `get_episodes`). Auto-descoberto por `scrapers/loader.py` — sem
-   registro manual.
-2. Posicione-a corretamente em `priority_order` conforme a qualidade/velocidade
-   real da entrega (fonte boa → topo; fonte que cai em blogger → fundo).
-3. Rode os testes: `uv run pytest` (inclui checagem de descoberta de plugins).
+Para fontes de anime, siga o [guia de implementação e testes em CLAUDE.md](./CLAUDE.md#add-a-new-scraper),
+que contém o esqueleto do plugin e os contratos de retorno.
+
+1. Crie `scrapers/plugins/novafonte.py` com `name = "novafonte"` e os métodos
+   `search_anime`, `search_episodes` e `search_player_src`.
+2. Exporte `load(register)` no módulo. Essa função deve chamar
+   `load_plugin(NovaFonte, register)`, usando o helper de `scrapers.plugins.utils`,
+   para instanciar e registrar a classe. Não faça requisições ao importar ou registrar.
+3. A descoberta do arquivo é automática; o loader importa o módulo e chama
+   `load(register)`. Ele não procura classes por protocolo. Não é necessário
+   editar uma lista central, mas omitir `load` causa falha no carregamento.
+4. Defina uma posição em `priority_order` quando justificada pela qualidade e
+   velocidade reais. Isso não habilita a descoberta: fontes não desabilitadas e
+   ausentes dessa lista já carregam após as priorizadas, em ordem alfabética.
+5. Teste descoberta, registro e extração com o plugin real e HTTP/browser
+   simulados. Depois verifique busca, episódios e reprodução na fonte real;
+   registro bem-sucedido não comprova que o vídeo toca.
+
+Fontes de mangá têm outro contrato: consulte `manga_scrapers/loader.py`
+(`MangaScraperProtocol` e `load()` retornando uma instância).
 
 ---
 

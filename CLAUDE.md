@@ -114,32 +114,35 @@ reader = settings.manga.pdf_reader
 
 Why? Environment variables override defaults (`ANI_TUPI__CACHE__DURATION_HOURS=48`), no scattered `.env` files, type validation on boot, configuration is self-documenting.
 
-### Pattern: Plugin Protocol (Not Inheritance)
+### Pattern: Automatic Discovery and Explicit Plugin Entry Point
 
-Each plugin implements a structural type:
+Anime plugins follow a duck-typed contract; the loader does not inspect classes
+or match them against a `Scraper(Protocol)` declaration.
 
-```python
-class Scraper(Protocol):
-    def search(self, query: str) -> list[AnimeMetadata]: ...
-    def get_episodes(self, url: str) -> list[EpisodeData]: ...
-```
+1. `discover_plugin_names()` scans `scrapers/plugins/*.py`, excluding
+   `__init__.py` and `utils.py`.
+2. `load_plugins(register)` filters disabled plugins and applies configured
+   priority, then imports each selected module.
+3. The loader calls the module's `load(register)`. That function creates the
+   scraper instance and passes it to the supplied registration callback.
 
-Why protocol, not ABC?
+Discovery is automatic; registration is explicit **inside the plugin**. No
+central registry or loader edit is required. A discovered module without
+`load(register)` fails to load. Keep shared helper modules in `scrapers/core/`
+or the existing `scrapers/plugins/utils.py` so they are not treated as plugins.
 
-- Scrapers auto-discover with duck typing
-
-- No base class boilerplate
-- Plugin loading is one loop: find `.py` files in `scrapers/plugins/`, import them, extract classes matching the protocol
+See [Add a New Scraper](#add-a-new-scraper) for the required methods and entry point.
 
 ### Pattern: Repository for Plugin Access
 
 Don't import plugins directly. Use the repository:
 
 ```python
-from services.repository import get_scrapers
+from services.repository import rep
 
-for scraper in get_scrapers():
-    results.extend(scraper.search(query))
+# After startup has loaded plugins with load_plugins(rep.register):
+rep.clear_search_results()
+results = rep.search_anime(query)
 ```
 
 Why? Scrapers are loaded dynamically. The repository tracks which ones exist, which ones are enabled.
@@ -211,22 +214,27 @@ Why? Replacing MPV = swap one class. Testing doesn't require external tools (moc
 
 ## Data Structures
 
-All data validated with Pydantic (`models/models.py`):
+Anime scraper results use Pydantic models defined in `models/anime.py` and
+re-exported by `models/models.py`:
 
 ```python
-class AnimeMetadata(BaseModel):
-    title: str
-    url: str
-    cover: str | None = None
+from models.models import AnimeMetadata, ScrapedEpisodes
 
-class EpisodeData(BaseModel):
-    number: int
-    title: str
-    video_url: str
-    aired: date | None = None
+metadata = AnimeMetadata(
+    title="Example Anime", url="https://example.com/anime", source="newsource"
+)
+episodes = ScrapedEpisodes(
+    titles=["Episode 1"],
+    urls=["https://example.com/anime/episode-1"],
+    source="newsource",
+    season=1,
+)
 ```
 
-Why Pydantic? Validation on entry (fail fast if scraper returns garbage), type hints everywhere, serialization to JSON for cache/history.
+`AnimeMetadata` validates non-empty title/source and HTTP(S) URLs. For
+`ScrapedEpisodes`, the plugin must ensure titles and URLs have matching lengths,
+URLs are absolute, and the season is positive; the model does not enforce those
+constraints. The repository normalizes raw episode labels.
 
 ---
 
@@ -234,22 +242,84 @@ Why Pydantic? Validation on entry (fail fast if scraper returns garbage), type h
 
 ### Add a New Scraper
 
-1. Create `scrapers/plugins/newsource.py`:
+These instructions apply to **anime** sources. Manga sources use
+`MangaScraperProtocol` and a `load()` that returns an instance; read
+`manga_scrapers/loader.py` for that separate contract.
+
+1. Read `scrapers/loader.py`, `scrapers/plugins/utils.py`, and an existing plugin
+   such as `scrapers/plugins/sushianimes.py`. Inspect the target site's actual
+   search, episode, and player responses before implementing extraction.
+2. Create `scrapers/plugins/newsource.py`. Use a unique `name` matching the
+   filename stem. The following is a contract skeleton: replace every
+   `NotImplementedError` with real extraction before shipping.
 
 ```python
-class NewSourceScraper:
-    def search(self, query: str) -> list[AnimeMetadata]:
-        # Call API, parse HTML, return metadata
-        pass
+from threading import Event
 
-    def get_episodes(self, url: str) -> list[EpisodeData]:
-        # Parse page, extract video URLs
-        pass
+from models.models import AnimeMetadata, ScrapedEpisodes
+from scrapers.plugins.utils import load_plugin, store_player_source
+
+
+class NewSourceScraper:
+    name = "newsource"
+
+    def search_anime(self, query: str) -> list[AnimeMetadata]:
+        # Return metadata with title, absolute URL, source=self.name,
+        # and optional params passed back to search_episodes.
+        raise NotImplementedError
+
+    def search_episodes(
+        self, anime: str, url: str, params: dict | None
+    ) -> list[ScrapedEpisodes]:
+        # Return batches of aligned titles/URLs, source=self.name, and season.
+        # URLs identify episode pages; do not mutate the repository.
+        raise NotImplementedError
+
+    def search_player_src(self, url: str, container: list, event: Event) -> None:
+        # Resolve the episode page to playable URLs, best candidate first.
+        # For each real candidate, call:
+        # store_player_source(container, event, candidate_url)
+        raise NotImplementedError
+
+
+def load(register) -> None:
+    load_plugin(NewSourceScraper, register)
 ```
 
-1. Auto-discovered by `scrapers/loader.py` on boot. No registration needed.
+3. Keep imports, construction, and `load` free of network requests and browser
+   startup. `load_plugin(NewSourceScraper, register)` simply calls
+   `register(NewSourceScraper())`. Do not import services or the global repository
+   from the plugin. Reuse HTTP retry helpers from `scrapers.plugins.utils`.
+4. Search and episode methods return lists (`[]` for no results). Player
+   extraction instead appends candidates to the supplied container and returns
+   `None`; returning a URL alone is insufficient. `store_player_source` removes
+   duplicates and retains insertion order. Its `event` argument is currently
+   retained for compatibility, not first-result cancellation.
+5. No central registration change is needed. An enabled source omitted from
+   `priority_order` still loads, alphabetically after explicitly prioritized
+   sources. Set an explicit priority only when justified by delivery quality.
+   Check source-specific routing such as `PlaybackCoordinator._detect_source_from_url`
+   if the new source needs a URL-only lookup path; discovery does not add domain
+   mappings automatically.
+6. Add tests in `tests/unit/test_newsource_scraper.py`. Exercise the real plugin,
+   mocking HTTP/browser boundaries only. Cover metadata, empty responses,
+   episode ordering and title/URL alignment, player candidate ordering and
+   deduplication, and failed extraction. Test real discovery and loading too:
+   assert `newsource` is in `discover_plugin_names()`, then call
+   `load_plugins(instances.append, plugins=["newsource"])` and check the instance
+   name and required methods. Passing a list isolates loading; the discovery
+   assertion separately proves the file is found automatically.
 
-2. Test: `uv run pytest tests/` includes plugin discovery checks.
+```bash
+rtk uv run ruff check scrapers/plugins/newsource.py tests/unit/test_newsource_scraper.py
+rtk uv run ruff format --check scrapers/plugins/newsource.py tests/unit/test_newsource_scraper.py
+set -o pipefail
+rtk uv run pytest -v tests/unit/test_newsource_scraper.py | rtk tail -30
+```
+
+7. Verify a real search → episode list → playable video flow for the new source.
+   Loading successfully or receiving HTTP 200 does not prove playback works.
+   Report any live verification that could not be completed.
 
 ### Add a New Service
 
