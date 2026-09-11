@@ -7,6 +7,7 @@ sequel detection, and synchronization with AniList API.
 from collections.abc import Callable
 from typing import Any
 
+from models.config import settings
 from services.anilist.client import anilist_client
 from services.repository import rep
 from services.core import ui_bridge
@@ -25,7 +26,11 @@ from services.anime.search_service import incremental_search_anime
 from services.anime.search_service import rank_anime_results_by_reference
 from utils.title_normalization import normalize_title_for_dedup
 from services.anime.playback_service import play_episode_with_fallback, probe_url_playable
+from services.anime.local_anime_service import LocalAnimeService
+from services.anime.download_catalog import record_confirmed_remote_playback
+from services.anime.airing_sources import AiringSourceStore
 from services.anime.episode_service import registry as awaiting_registry
+from models.download import AiringSourceBinding
 from utils.video_player import _format_episode_progress
 
 # Import extracted functions
@@ -94,29 +99,18 @@ def resolve_preferred_title(
     if normalized_english == normalized_romaji:
         return romaji_title
 
-    # Titles are different - check cache or ask user
+    # Titles are different - use a saved per-anime choice, then the global
+    # preference.  Romaji is the default and avoids an interactive prompt on
+    # the first search.
     cached_language = load_language_preference(anilist_id) if anilist_id else None
 
     if cached_language:
         return english_title if cached_language == "english" else romaji_title
 
-    language_options = [
-        f"🇯🇵 Romaji: {romaji_title}",
-        f"🇬🇧 Inglês: {english_title}",
-    ]
-    language_choice = ui_bridge.menu_navigate(language_options, msg="Escolha o idioma para buscar:")
-
-    if not language_choice:
-        return None  # User cancelled
-
-    if language_choice.startswith("🇬🇧"):
-        if anilist_id:
-            save_language_preference(anilist_id, "english")
-        return english_title
-    else:
-        if anilist_id:
-            save_language_preference(anilist_id, "romaji")
-        return romaji_title
+    default_language = "english" if settings.anilist.prefer_english_title else "romaji"
+    if anilist_id:
+        save_language_preference(anilist_id, default_language)
+    return english_title if default_language == "english" else romaji_title
 
 
 def load_episodes_from_cache_or_search(
@@ -412,6 +406,10 @@ def _confirm_watch_or_download(
     start_episode_idx: int,
     num_episodes: int,
     source: str | None,
+    *,
+    anilist_id: int | None = None,
+    season: int | None = 1,
+    variant: str | None = None,
 ) -> int | None:
     """Ask whether to watch now or download; run download loop if chosen.
 
@@ -435,7 +433,15 @@ def _confirm_watch_or_download(
             continue
 
         if action == "📥 Baixar para assistir depois":
-            _download_episodes(selected_anime, episode_number, num_episodes, source)
+            _download_episodes(
+                selected_anime,
+                episode_number,
+                num_episodes,
+                source,
+                anilist_id=anilist_id,
+                season=season,
+                variant=variant,
+            )
             return None
 
         if action == "▶️ Assistir agora":
@@ -449,6 +455,10 @@ def _download_episodes(
     episode_number: int,
     num_episodes: int,
     source: str | None,
+    *,
+    anilist_id: int | None = None,
+    season: int | None = 1,
+    variant: str | None = None,
 ) -> None:
     """Prompt for an episode range and download it."""
     from services.anime.download_service import AnimeDownloadService
@@ -487,6 +497,10 @@ def _download_episodes(
                 range_input=range_input,
                 total_episodes=num_episodes,
                 get_episode_url=get_episode_url_for_download,
+                anilist_id=anilist_id,
+                season=season,
+                source=source,
+                variant=variant,
             )
 
         logger.info(f"{result.summary}")
@@ -539,6 +553,112 @@ def _maybe_offer_sequel_on_finish(
     )
 
 
+def _save_selected_airing_source(
+    anilist_id: int,
+    selected_anime: str,
+    source: str | None,
+) -> None:
+    """Persist an unambiguous AniList source selection for airing downloads."""
+    if not source or "," in source:
+        return
+
+    for candidate in rep.anime_to_urls.get(selected_anime, ()):
+        if not isinstance(candidate, (tuple, list)) or len(candidate) < 3:
+            continue
+        anime_url, candidate_source, params = candidate[:3]
+        if candidate_source != source or not isinstance(anime_url, str):
+            continue
+        AiringSourceStore().save_configured(
+            anilist_id,
+            AiringSourceBinding(
+                title=selected_anime,
+                source=source,
+                anime_url=anime_url,
+                params=params if isinstance(params, dict) else {},
+                season=1,
+            ),
+        )
+        logger.info(f"✅ Fonte {source} definida para o auto-download de '{selected_anime}'")
+        return
+
+
+def _source_context_for_playback(
+    anime_title: str,
+    source: str | None,
+    configured_binding: AiringSourceBinding | None = None,
+) -> dict[str, Any]:
+    """Return the catalog page context for a successfully played source."""
+    if source:
+        bindings = []
+        if configured_binding is not None:
+            bindings = [configured_binding, *configured_binding.alternatives]
+        for binding in bindings:
+            if binding.source == source:
+                return {
+                    "anime_url": binding.anime_url,
+                    "params": binding.params,
+                    "season": binding.season,
+                    "variant": binding.variant,
+                }
+
+        anime_to_urls = getattr(rep, "anime_to_urls", {})
+        if isinstance(anime_to_urls, dict):
+            for candidate in anime_to_urls.get(anime_title, ()):
+                if not isinstance(candidate, (tuple, list)) or len(candidate) < 3:
+                    continue
+                anime_url, candidate_source, params = candidate[:3]
+                if candidate_source != source or not isinstance(anime_url, str):
+                    continue
+                return {
+                    "anime_url": anime_url,
+                    "params": params if isinstance(params, dict) else {},
+                    "season": 1,
+                    "variant": None,
+                }
+
+    return {"anime_url": None, "params": {}, "season": 1, "variant": None}
+
+
+def _record_playback_source(
+    anilist_id: int,
+    anime_title: str,
+    source: str,
+    episode_number: int,
+    *,
+    configured_binding: AiringSourceBinding | None = None,
+    season: int | None = 1,
+    variant: str | None = None,
+) -> None:
+    """Record confirmed remote playback using the source's catalog context."""
+    context = _source_context_for_playback(anime_title, source, configured_binding)
+    record_confirmed_remote_playback(
+        anilist_id,
+        anime_title,
+        source,
+        context["anime_url"],
+        season=context["season"] or season,
+        variant=context["variant"] if context["variant"] is not None else variant,
+        episode_number=episode_number,
+        params=context["params"],
+    )
+
+
+def _delete_local_episode_after_watch(
+    local_service: LocalAnimeService,
+    anime_title: str,
+    episode: int,
+    anilist_id: int,
+) -> None:
+    """Remove a local episode after it has been marked as watched."""
+    if not settings.offline_sync.delete_after_watch:
+        return
+    try:
+        if local_service.delete_episode(anime_title, episode, anilist_id=anilist_id):
+            logger.info(f"🗑️  Arquivo local deletado (episódio {episode})")
+    except Exception as exc:
+        logger.warning(f"⚠️  Erro ao deletar arquivo local: {exc!r}")
+
+
 def _run_playback_loop(
     selected_anime: str,
     source: str | None,
@@ -548,6 +668,11 @@ def _run_playback_loop(
     anilist_id: int,
     total_episodes: int | None,
     args,
+    *,
+    source_filter: str | None = None,
+    season: int | None = 1,
+    variant: str | None = None,
+    source_binding: AiringSourceBinding | None = None,
 ) -> None:
     """Run the playback + AniList-sync loop until the user exits."""
     current_episode_idx = start_episode_idx
@@ -560,16 +685,35 @@ def _run_playback_loop(
     while True:
         episode = current_episode_idx + 1
 
-        all_sources = rep.get_all_episode_sources(selected_anime, episode)
-        if not all_sources:
-            logger.info("❌ Nenhuma fonte conseguiu extrair o vídeo.")
-            logger.info("   💡 O episódio está indisponível em todas as fontes.")
-            break
+        local_service = LocalAnimeService()
+        local_episode = local_service.find_episode(
+            anilist_id,
+            episode,
+            season=season,
+            variant=variant,
+            anime_title=selected_anime,
+        )
+        local_path = None
+        is_local = local_episode is not None
+        all_sources = []
+        if is_local:
+            local_path = local_service.path_for_record(local_episode)
+            all_sources = [(f"file://{local_path.resolve()}", "local", None)]
+        else:
+            all_sources = rep.get_all_episode_sources(selected_anime, episode)
+            if source_filter:
+                all_sources = [
+                    candidate for candidate in all_sources if candidate[1] == source_filter
+                ]
+            if not all_sources:
+                logger.info("❌ Nenhuma fonte conseguiu extrair o vídeo.")
+                logger.info("   💡 O episódio está indisponível em todas as fontes.")
+                break
 
         progress_str = _format_episode_progress(episode, num_episodes, total_episodes)
         logger.info(f"▶️  Iniciando reprodução do episódio {progress_str}...")
 
-        source_names = [s for _, s in all_sources]
+        source_names = [s for _, s, *_ in all_sources]
         if len(source_names) > 1:
             logger.info(f"   🔄 Tentando fontes: {', '.join(source_names)}")
         else:
@@ -585,12 +729,40 @@ def _run_playback_loop(
             debug=args.debug,
             anilist_id=anilist_id,
             anilist_episodes=total_episodes,
-            extractor=rep.search_player_from_page,
-            url_probe=probe_url_playable,
+            extractor=None if is_local else rep.search_player_from_page,
+            url_probe=None if is_local else probe_url_playable,
         )
 
         result = fallback_result.playback_result
         source_used = fallback_result.source_used or "unknown"
+
+        # A local file failing to open is allowed one fresh online resolution;
+        # voluntary cancellation is preserved and never falls through.
+        if is_local and result.exit_code not in (0, 3):
+            is_local = False
+            all_sources = rep.get_all_episode_sources(selected_anime, episode)
+            if source_filter:
+                all_sources = [
+                    candidate for candidate in all_sources if candidate[1] == source_filter
+                ]
+            if not all_sources:
+                logger.info("❌ O arquivo local falhou e não há fonte online disponível.")
+                break
+            fallback_result = play_episode_with_fallback(
+                player=player,
+                sources=all_sources,
+                anime_title=selected_anime,
+                episode_number=episode,
+                total_episodes=num_episodes,
+                use_ipc=True,
+                debug=args.debug,
+                anilist_id=anilist_id,
+                anilist_episodes=total_episodes,
+                extractor=rep.search_player_from_page,
+                url_probe=probe_url_playable,
+            )
+            result = fallback_result.playback_result
+            source_used = fallback_result.source_used or "unknown"
 
         logger.info("📊 Reprodução encerrada:")
         logger.info(f"   Exit code: {result.exit_code}")
@@ -623,12 +795,31 @@ def _run_playback_loop(
         elif result.action == "auto-next":
             current_episode = result.data.get("episode", episode) if result.data else episode
 
+            if not is_local and not getattr(args, "debug", False):
+                _record_playback_source(
+                    anilist_id,
+                    selected_anime,
+                    source_used,
+                    current_episode,
+                    configured_binding=source_binding,
+                    season=season,
+                    variant=variant,
+                )
+
             sync_anilist_progress(
                 anilist_id,
                 current_episode,
                 num_episodes,
                 total_episodes=total_episodes,
             )
+
+            if is_local:
+                _delete_local_episode_after_watch(
+                    local_service,
+                    selected_anime,
+                    current_episode,
+                    anilist_id,
+                )
 
             episode_idx = current_episode - 1
             current_episode_idx = current_episode - 1
@@ -679,6 +870,25 @@ def _run_playback_loop(
                     total_episodes=total_episodes,
                 )
 
+                if is_local:
+                    _delete_local_episode_after_watch(
+                        local_service,
+                        selected_anime,
+                        episode,
+                        anilist_id,
+                    )
+
+                if not is_local and not getattr(args, "debug", False):
+                    _record_playback_source(
+                        anilist_id,
+                        selected_anime,
+                        source_used,
+                        episode,
+                        configured_binding=source_binding,
+                        season=season,
+                        variant=variant,
+                    )
+
                 if episode == num_episodes and _maybe_offer_sequel_on_finish(
                     anilist_id, args, episode
                 ):
@@ -718,6 +928,10 @@ def _run_playback_loop(
                 episode_idx = new_episode_idx
                 current_episode_idx = new_episode_idx
                 num_episodes = len(rep.get_episode_list(selected_anime))
+                source_filter = None
+                season = 1
+                variant = None
+                source_binding = None
 
 
 def anilist_anime_flow(
@@ -762,6 +976,18 @@ def anilist_anime_flow(
         load_anilist_mapping(anilist_id) if anilist_id else (None, None, None)
     )
 
+    configured_binding = None
+    saved_params = None
+    if anilist_id:
+        effective_source = AiringSourceStore().effective(anilist_id)
+        if effective_source.origin == "configured":
+            configured_binding = effective_source.binding
+            if configured_binding is not None:
+                saved_title = configured_binding.title
+                saved_source = configured_binding.source
+                saved_url = configured_binding.anime_url
+                saved_params = configured_binding.params
+
     selected_anime, source, saved_cancelled = _prompt_saved_title_choice(saved_title, saved_source)
     if saved_cancelled:
         return
@@ -784,16 +1010,35 @@ def anilist_anime_flow(
         if selected_anime is None:
             return  # User cancelled or nothing found
 
+    use_configured_source = (
+        configured_binding is not None
+        and selected_anime == configured_binding.title
+        and source == configured_binding.source
+    )
+    source_filter = configured_binding.source if use_configured_source else None
+    playback_season = configured_binding.season if use_configured_source else 1
+    playback_variant = configured_binding.variant if use_configured_source else None
+    playback_binding = configured_binding if use_configured_source else None
+
     # Clear any stale awaiting episode URLs from previous sessions for this anime.
     awaiting_registry.clear(selected_anime)
 
     # 2. Persist the resolved choice for next time.
     if anilist_id:
         persist_anime_choice(anilist_id, selected_anime, anime_title, source)
+        if not use_configured_source:
+            _save_selected_airing_source(anilist_id, selected_anime, source)
 
     # 3. Load the episode list (cache-first).
     episode_list, scraper_episode_count = load_episode_list(
-        selected_anime, saved_title, saved_source, saved_url, anilist_id
+        selected_anime,
+        saved_title,
+        saved_source,
+        saved_url,
+        anilist_id,
+        source_filter=source_filter,
+        season=playback_season,
+        saved_params=saved_params,
     )
     if episode_list is None:
         return
@@ -826,6 +1071,10 @@ def anilist_anime_flow(
             episode_list = rep.get_episode_list(selected_anime)
             scraper_episode_count = len(episode_list)
             start_episode_idx = new_episode_idx
+            source_filter = None
+            playback_season = 1
+            playback_variant = None
+            playback_binding = None
             break
 
     if not isinstance(start_episode_idx, int):
@@ -833,7 +1082,14 @@ def anilist_anime_flow(
 
     # 5. Confirm watch vs download.
     watch_episode_idx = _confirm_watch_or_download(
-        selected_anime, episode_list, start_episode_idx, len(episode_list), source
+        selected_anime,
+        episode_list,
+        start_episode_idx,
+        len(episode_list),
+        source,
+        anilist_id=anilist_id,
+        season=playback_season,
+        variant=playback_variant,
     )
     if watch_episode_idx is None:
         return
@@ -848,4 +1104,8 @@ def anilist_anime_flow(
         anilist_id,
         total_episodes,
         args,
+        source_filter=source_filter,
+        season=playback_season,
+        variant=playback_variant,
+        source_binding=playback_binding,
     )

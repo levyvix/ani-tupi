@@ -9,6 +9,7 @@ from commands import (
     anilist_auth as anilist_auth_cmd,
     anilist_menu as anilist_menu_cmd,
     config as config_cmd,
+    airing_downloads as airing_downloads_cmd,
     manage_sources as manage_sources_cmd,
     manga as manga_cmd,
     update as update_cmd,
@@ -81,6 +82,19 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auth", "menu"],
         help="auth: fazer login | menu: navegar listas (padrão)",
     )
+    airing_downloads_parser = subparsers.add_parser(
+        "airing", help="Monitor de downloads de episódios em lançamento"
+    )
+    airing_actions = airing_downloads_parser.add_subparsers(
+        dest="airing_downloads", metavar="ACTION"
+    )
+    airing_actions.add_parser(
+        "configure", help="Escolher e salvar a fonte de cada anime em lançamento"
+    )
+    airing_actions.add_parser("install", help="Instalar ou atualizar o timer systemd do usuário")
+    airing_actions.add_parser("run", help="Executar uma verificação única sem interação")
+    airing_actions.add_parser("status", help="Consultar agendamento e última execução")
+    airing_actions.add_parser("remove", help="Remover o agendamento sem apagar os downloads")
     subparsers.add_parser("update", help="Verificar e atualizar ani-tupi")
     subparsers.add_parser("config", help="Configurar o ani-tupi interativamente")
 
@@ -116,12 +130,45 @@ def build_parser() -> argparse.ArgumentParser:
 
 def cli() -> None:
     """Entry point for CLI."""
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+
+    airing_action = getattr(args, "airing_downloads", None)
+    if args.command == "airing" and airing_action is None:
+        parser.parse_args(["airing", "--help"])
+
+    if airing_action:
+        conflicts = []
+        if args.query:
+            conflicts.append("--query")
+        if args.episode is not None:
+            conflicts.append("--episode")
+        if args.season is not None:
+            conflicts.append("--season")
+        if args.continue_watching:
+            conflicts.append("--continue-watching")
+        if args.manga:
+            conflicts.append("--manga")
+        if args.list_sources:
+            conflicts.append("--list-sources")
+        if args.random:
+            conflicts.append("--random")
+        if args.clear_cache:
+            conflicts.append("--clear-cache")
+        if args.version:
+            conflicts.append("--version")
+        if conflicts:
+            parser.error("airing não pode ser combinado com: " + ", ".join(conflicts))
 
     # Configure logging early, before any other imports or operations
     from utils.logging import configure_logging
 
     configure_logging(debug=args.debug)
+
+    # Monitor actions must run before startup checks, plugin loading, MPV and
+    # offline AniList retries.  The systemd service is intentionally one-shot.
+    if airing_action:
+        sys.exit(airing_downloads_cmd.airing_downloads(args))
 
     if args.command == "update":
         sys.exit(update_cmd(args))

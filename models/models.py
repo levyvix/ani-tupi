@@ -43,6 +43,12 @@ from models.anime import (
 )
 from models.cache import CacheStats, ScraperCacheData
 from models.download import (
+    AiringEpisodeCandidate,
+    AiringDownloadState,
+    AiringMonitorState,
+    AiringSourceCandidate,
+    AiringSourceBinding,
+    AiringSourceRecord,
     AnimeDownloadDatabase,
     AnimeDownloadHistory,
     DownloadedEpisode,
@@ -105,6 +111,12 @@ __all__ = [
     "AnimeDownloadDatabase",
     "OfflineSyncQueueEntry",
     "OfflineSyncQueue",
+    "AiringSourceBinding",
+    "AiringSourceCandidate",
+    "AiringSourceRecord",
+    "AiringEpisodeCandidate",
+    "AiringDownloadState",
+    "AiringMonitorState",
     # update / video
     "VideoUrl",
     "UpdateCheckState",

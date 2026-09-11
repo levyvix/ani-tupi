@@ -21,6 +21,7 @@ import asyncio
 import json
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from threading import Event
 from typing import Callable, NamedTuple
 
@@ -32,6 +33,7 @@ from services.anilist.anilist_service import discover_anilist_info
 from services.anilist.client import anilist_client
 from services.core.history_service import load_history
 from services.repository import rep
+from services.anime.local_anime_service import LocalAnimeService
 from utils.logging import get_logger
 from utils.video_player import VideoPlayer, VideoPlaybackResult
 
@@ -595,6 +597,8 @@ class EpisodePlaybackResult:
     source: str | None
     success: bool
     error_message: str | None
+    is_local: bool = False
+    file_path: Path | None = None
 
 
 # =============================================================================
@@ -716,6 +720,11 @@ def get_episode_url_and_source(
     anime_title: str,
     episode: int,
     current_player_url: str | None = None,
+    *,
+    anilist_id: int | None = None,
+    season: int | None = 1,
+    variant: str | None = None,
+    use_local: bool = True,
 ) -> EpisodePlaybackResult:
     """Get video URL for an episode.
 
@@ -737,6 +746,41 @@ def get_episode_url_and_source(
         EpisodePlaybackResult with video URL or error message
     """
     try:
+        # Local identity lookup is deliberately before URL derivation, cache,
+        # HEAD probes, or any scraper call.  A title-only lookup remains
+        # available for the existing local-library flow.
+        if use_local:
+            local_service = LocalAnimeService()
+            local_episode = local_service.find_episode(
+                anilist_id,
+                episode,
+                season=season if anilist_id is not None else None,
+                variant=variant,
+                anime_title=anime_title,
+            )
+            if local_episode is not None:
+                local_path = local_service.path_for_record(local_episode)
+                return EpisodePlaybackResult(
+                    player_url=f"file://{local_path.resolve()}",
+                    source="local",
+                    success=True,
+                    error_message=None,
+                    is_local=True,
+                    file_path=local_path,
+                )
+
+        # A stale video URL must never be the reason a missing local file is
+        # treated as available.  Clear only the relevant video cache keys;
+        # normal online source fallback remains unchanged below.
+        if anilist_id is not None:
+            try:
+                from utils.cache import clear_cache_by_prefix
+
+                clear_cache_by_prefix(f"video:{anilist_id}:ep:{episode}")
+                clear_cache_by_prefix(f"video:{anime_title}:ep:{episode}")
+            except Exception:
+                logger.debug("Could not invalidate stale video URL cache", exc_info=True)
+
         # Fast path: try URL pattern derivation when we have an existing player URL
         if current_player_url:
             try:
@@ -1081,6 +1125,8 @@ def build_episode_sources(
     anime_title: str,
     episode: int,
     url_result: "EpisodePlaybackResult",
+    *,
+    include_source_context: bool = False,
 ) -> list[tuple[str, str, str | None]]:
     """Build ordered playback sources for an episode.
 
@@ -1105,6 +1151,15 @@ def build_episode_sources(
 
     page_sources = rep.get_all_episode_sources(anime_title, episode)
     logger.debug("Found %d page sources", len(page_sources))
+
+    if include_source_context:
+        for index, (video_url, source_name, referrer) in enumerate(sources):
+            if referrer is None:
+                page_url = next(
+                    (url for url, source in page_sources if source == source_name), None
+                )
+                if page_url:
+                    sources[index] = (video_url, source_name, page_url)
 
     for page_url, source_name in page_sources:
         if source_name in seen_sources:

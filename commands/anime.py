@@ -171,6 +171,8 @@ def handle_post_playback_confirmation(
     total_episodes_anilist: int | None = None,
     is_local: bool = False,
     file_path: "Path | None" = None,
+    source_url: str | None = None,
+    season: int | None = 1,
 ) -> bool:
     """Handle post-playback confirmation and syncing.
 
@@ -200,6 +202,18 @@ def handle_post_playback_confirmation(
     confirmed = confirm == confirm_options[0]
 
     if confirmed:
+        if anilist_id and not is_local:
+            from services.anime.download_catalog import record_confirmed_remote_playback
+
+            record_confirmed_remote_playback(
+                anilist_id,
+                anime_title,
+                source,
+                source_url,
+                season=season,
+                episode_number=episode_number,
+            )
+
         # Save history for both remote and local episodes
         save_history(
             anime_title,
@@ -231,7 +245,9 @@ def handle_post_playback_confirmation(
                     if settings.offline_sync.enable_file_cleanup:
                         try:
                             service = LocalAnimeService()
-                            deleted = service.delete_episode(anime_title, episode_number)
+                            deleted = service.delete_episode(
+                                anime_title, episode_number, anilist_id=anilist_id
+                            )
                             if deleted:
                                 logger.info(
                                     f"🗑️  Arquivo local deletado (episódio {episode_number})"
@@ -262,7 +278,9 @@ def handle_post_playback_confirmation(
                 if settings.offline_sync.delete_after_watch:
                     try:
                         service = LocalAnimeService()
-                        deleted = service.delete_episode(anime_title, episode_number)
+                        deleted = service.delete_episode(
+                            anime_title, episode_number, anilist_id=anilist_id
+                        )
                         if deleted:
                             logger.info(f"🗑️  Arquivo local deletado (episódio {episode_number})")
                     except Exception as e:
@@ -370,9 +388,21 @@ def anime(args) -> None:
         # Get all episode sources with fallback support
         with loading("Buscando vídeo..."):
             url_result = get_episode_url_and_source(
-                ctx.anime_title, episode, current_player_url=current_player_url
+                ctx.anime_title,
+                episode,
+                current_player_url=current_player_url,
+                anilist_id=ctx.anilist_id,
+                season=getattr(args, "season", None) or 1,
             )
-            sources = build_episode_sources(ctx.anime_title, episode, url_result)
+            if url_result.is_local and url_result.player_url:
+                sources = [(url_result.player_url, "local", None)]
+            else:
+                sources = build_episode_sources(
+                    ctx.anime_title,
+                    episode,
+                    url_result,
+                    include_source_context=True,
+                )
             logger.info(f"[DEBUG] Final sources count: {len(sources)}")
 
         if not sources:
@@ -425,6 +455,39 @@ def anime(args) -> None:
         playback_result = fallback_result.playback_result
         source_used = fallback_result.source_used
         all_failed = fallback_result.all_failed
+
+        if url_result.is_local and playback_result.exit_code not in (0, 3):
+            logger.info("Arquivo local não abriu; buscando uma URL online atualizada.")
+            fresh_result = get_episode_url_and_source(
+                ctx.anime_title,
+                episode,
+                anilist_id=ctx.anilist_id,
+                season=getattr(args, "season", None) or 1,
+                use_local=False,
+            )
+            if fresh_result.success and not fresh_result.is_local:
+                url_result = fresh_result
+                sources = build_episode_sources(
+                    ctx.anime_title,
+                    episode,
+                    fresh_result,
+                    include_source_context=True,
+                )
+                fallback_result = play_episode_with_fallback(
+                    player=player,
+                    sources=sources,
+                    anime_title=ctx.anime_title,
+                    episode_number=episode,
+                    total_episodes=ctx.num_episodes,
+                    use_ipc=True,
+                    debug=args.debug,
+                    anilist_id=ctx.anilist_id,
+                    anilist_episodes=ctx.total_episodes_anilist,
+                    url_probe=probe_url_playable,
+                )
+                playback_result = fallback_result.playback_result
+                source_used = fallback_result.source_used
+                all_failed = fallback_result.all_failed
 
         exit_code = playback_result.exit_code
         error_hint = (
@@ -498,7 +561,17 @@ def anime(args) -> None:
                 anilist_id=ctx.anilist_id,
                 source=source_used,
                 total_episodes_anilist=ctx.total_episodes_anilist,
-                is_local=False,
+                is_local=url_result.is_local,
+                file_path=url_result.file_path,
+                source_url=next(
+                    (
+                        referrer
+                        for _, source, referrer in sources
+                        if source == source_used and referrer
+                    ),
+                    None,
+                ),
+                season=getattr(args, "season", None) or 1,
             )
         else:
             confirmed = False

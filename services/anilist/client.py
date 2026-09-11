@@ -11,6 +11,7 @@ Seções:
 """
 
 import json
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 import httpx
@@ -37,6 +38,7 @@ from utils.logging import get_logger
 
 __all__ = [
     "AniListClient",
+    "AiringWatchQueryResult",
     "AnimeOperationsMixin",
     "MangaOperationsMixin",
     "anilist_client",
@@ -49,6 +51,25 @@ if TYPE_CHECKING:
     anilist_client: "AniListClient"
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class AiringWatchQueryResult:
+    """Result of the monitor's Watching query.
+
+    An empty ``entries`` list with no error is a valid, current empty list.
+    ``error_kind`` is set when authentication or the API prevented obtaining
+    the current list, so callers never need to interpret an empty list as a
+    successful query.
+    """
+
+    entries: list[dict]
+    error_kind: str | None = None
+    error: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error_kind is None
 
 
 # === Contrato exigido pelos mixins ===
@@ -702,6 +723,108 @@ class AnimeOperationsMixin(_ClientOperationsRequired):  # type: ignore[misc]
             return []
         except (KeyError, TypeError, ValidationError):
             return []
+
+    def get_watching_releasing_entries(self) -> AiringWatchQueryResult:
+        """Fetch the monitor's current, releasing anime list.
+
+        This method deliberately has a result type because ``[]`` can mean a
+        valid empty list. It filters the API's ``CURRENT`` collection to media
+        whose own status is ``RELEASING`` and removes duplicate media IDs.
+        """
+        if not self.is_authenticated():
+            return AiringWatchQueryResult([], "authentication", "AniList authentication is missing")
+
+        if not self.user_id:
+            try:
+                viewer_result = self._query(
+                    "query { Viewer { id name } }",
+                    {},
+                )
+            except Exception as exc:
+                return AiringWatchQueryResult([], "api", str(exc))
+            viewer = viewer_result.get("Viewer") if viewer_result else None
+            if isinstance(viewer, dict) and isinstance(viewer.get("id"), int):
+                self.user_id = viewer["id"]
+            else:
+                return AiringWatchQueryResult(
+                    [], "authentication", "AniList viewer could not be authenticated"
+                )
+
+        query = """
+        query ($userId: Int) {
+            MediaListCollection(userId: $userId, type: ANIME, status: CURRENT) {
+                lists {
+                    entries {
+                        progress
+                        status
+                        media {
+                            id
+                            title {
+                                romaji
+                                english
+                                native
+                            }
+                            status
+                            episodes
+                            nextAiringEpisode {
+                                episode
+                                airingAt
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        """
+
+        try:
+            result = self._query(query, {"userId": self.user_id})
+            collection = result.get("MediaListCollection") if result else None
+            if not isinstance(collection, dict) or "lists" not in collection:
+                return AiringWatchQueryResult(
+                    [], "api", "AniList returned no usable Watching collection"
+                )
+            lists = collection["lists"]
+            if not isinstance(lists, list):
+                return AiringWatchQueryResult([], "api", "AniList returned an invalid list shape")
+
+            entries: list[dict] = []
+            seen_ids: set[int] = set()
+            for list_group in lists:
+                if not isinstance(list_group, dict) or not isinstance(
+                    list_group.get("entries"), list
+                ):
+                    return AiringWatchQueryResult(
+                        [], "api", "AniList returned an invalid Watching entry group"
+                    )
+                for entry in list_group["entries"]:
+                    if not isinstance(entry, dict):
+                        continue
+                    if entry.get("status") not in (None, "CURRENT"):
+                        continue
+                    media = entry.get("media")
+                    if not isinstance(media, dict) or media.get("status") != "RELEASING":
+                        continue
+                    media_id = media.get("id")
+                    if not isinstance(media_id, int) or media_id <= 0 or media_id in seen_ids:
+                        continue
+                    seen_ids.add(media_id)
+                    entries.append(entry)
+            return AiringWatchQueryResult(entries)
+        except Exception as exc:
+            logger.warning("Failed to query AniList Watching airing entries: %s", exc)
+            message = str(exc)
+            lowered = message.lower()
+            auth_markers = ("unauthorized", "forbidden", "invalid token", "not authorized")
+            error_kind = (
+                "authentication" if any(marker in lowered for marker in auth_markers) else "api"
+            )
+            return AiringWatchQueryResult([], error_kind, message)
+
+    # Descriptive aliases keep the monitor API easy to discover without
+    # changing the legacy method's exception behavior.
+    get_airing_episodes_for_watching_result = get_watching_releasing_entries
+    get_current_releasing_watching = get_watching_releasing_entries
 
 
 # === Operações de manga ===
