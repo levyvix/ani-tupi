@@ -13,6 +13,24 @@ def _fresh_settings() -> AppSettings:
     return AppSettings()
 
 
+def test_airing_download_poll_interval_defaults_to_30(monkeypatch):
+    monkeypatch.delenv("ANI_TUPI__AIRING_DOWNLOADS__POLL_INTERVAL_MINUTES", raising=False)
+    assert _fresh_settings().airing_downloads.poll_interval_minutes == 30
+
+
+def test_airing_download_poll_interval_accepts_environment_override(monkeypatch):
+    monkeypatch.setenv("ANI_TUPI__AIRING_DOWNLOADS__POLL_INTERVAL_MINUTES", "20")
+    assert _fresh_settings().airing_downloads.poll_interval_minutes == 20
+
+
+def test_airing_download_poll_interval_rejects_non_divisors(monkeypatch):
+    monkeypatch.setenv("ANI_TUPI__AIRING_DOWNLOADS__POLL_INTERVAL_MINUTES", "7")
+    import pytest
+
+    with pytest.raises(ValueError):
+        _fresh_settings()
+
+
 def test_debug_incremental_search_enabled_when_one(monkeypatch):
     monkeypatch.setenv("ANI_TUPI_DEBUG_INCREMENTAL_SEARCH", "1")
     assert _fresh_settings().debug_incremental_search is True

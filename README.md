@@ -197,6 +197,61 @@ ani-tupi --version
 ani-tupi update
 ```
 
+### Monitor de episódios em lançamento
+
+O monitor prepara episódios de animes que estão em `Watching` no AniList e
+continuam com status `RELEASING`. A primeira execução também tenta baixar o
+backlog acima do seu progresso atual. Os arquivos usam o mesmo destino da
+biblioteca local configurado em `ANI_TUPI__ANIME_DOWNLOAD__DOWNLOAD_DIRECTORY`
+(por padrão, `~/.local/share/ani-tupi/anime`).
+
+```bash
+# Escolher e salvar a fonte de cada anime em lançamento
+ani-tupi airing configure
+
+# Instalar ou atualizar o timer systemd do usuário
+ani-tupi airing install
+
+# Executar uma verificação única, sem menus ou reprodução
+ani-tupi airing run
+
+# Consultar agendamento, última execução e fonte efetiva
+ani-tupi airing status
+
+# Remover somente as unidades do ani-tupi; arquivos e histórico permanecem
+ani-tupi airing remove
+```
+
+O fluxo recomendado é executar primeiro `configure` para salvar a fonte de cada
+anime e depois `install` para criar e ativar o timer do usuário. `configure`
+não baixa episódios nem ativa o agendamento. `install` também não inicia um
+download imediatamente: o primeiro ciclo acontece no próximo horário do
+timer. Para executar uma verificação na hora, use `ani-tupi airing run`.
+
+O intervalo padrão é de 30 minutos e pode ser alterado para um divisor de uma
+hora (`1`, `2`, `3`, `4`, `5`, `6`, `10`, `12`, `15`, `20`, `30` ou `60`) pela
+configuração do monitor. Resultados equivalentes são exibidos como um único
+grupo de fontes, e a fonte configurada explicitamente tem prioridade
+sobre a última fonte reproduzida; sem uma associação inequívoca, o episódio é
+ignorado e o motivo aparece em `status`. Pré-download não altera o progresso
+nem o histórico do AniList.
+
+Ao assistir, o ani-tupi procura primeiro um arquivo local completo e
+compatível. Quando ele não existe ou não pode ser aberto, o app atualiza a
+resolução online e mantém o fallback online existente. O agendamento usa
+`systemd --user`, grava um serviço e um timer em
+`~/.config/systemd/user` e usa `Persistent=true` para recuperar uma
+execução perdida enquanto o gerenciador de usuário estiver disponível.
+Consulte o diagnóstico com:
+
+```bash
+systemctl --user list-timers ani-tupi-airing-download.timer
+journalctl --user -u ani-tupi-airing-download.service
+```
+
+Esta feature foi testada somente no Arch Linux. O backend atual depende de
+`systemd --user`; outras distribuições e ambientes ainda não foram validados.
+
 ## ⚙️ Configurar pela CLI
 
 Agora você pode configurar o `ani-tupi` sem editar `models/config.py`:

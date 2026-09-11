@@ -28,7 +28,7 @@ def get_data_path() -> Path:
     """
     if os.name == "nt":
         return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "ani-tupi"
-    return Path.home() / ".local" / "state" / "ani-tupi"
+    return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "ani-tupi"
 
 
 def get_user_config_path() -> Path:
@@ -38,7 +38,7 @@ def get_user_config_path() -> Path:
         if appdata:
             return Path(appdata) / "ani-tupi"
         return Path.home() / "AppData" / "Roaming" / "ani-tupi"
-    return Path.home() / ".config" / "ani-tupi"
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "ani-tupi"
 
 
 def get_user_settings_file() -> Path:
@@ -468,6 +468,28 @@ class AiringSettings(BaseModel):
     )
 
 
+class AiringDownloadsSettings(BaseModel):
+    """Configuration for the non-interactive airing download monitor."""
+
+    poll_interval_minutes: int = Field(
+        30,
+        description="Monitor interval in minutes; must divide one hour evenly",
+    )
+
+    @field_validator("poll_interval_minutes")
+    @classmethod
+    def validate_poll_interval(cls, value: int) -> int:
+        """Accept intervals that align with the hourly systemd timer schedule."""
+        valid_intervals = {1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60}
+        if value not in valid_intervals:
+            raise ValueError(f"poll_interval_minutes must be one of {sorted(valid_intervals)}")
+        return value
+
+
+# Singular spelling is kept as a compatibility alias for service callers.
+AiringDownloadSettings = AiringDownloadsSettings
+
+
 class UpdateCheckSettings(BaseModel):
     """Configuration for startup update checks."""
 
@@ -544,6 +566,7 @@ class AppSettings(BaseSettings):
     manga: MangaSettings = MangaSettings()  # type: ignore[call-arg]
     performance: PerformanceSettings = PerformanceSettings()  # type: ignore[call-arg]
     airing: AiringSettings = AiringSettings()  # type: ignore[call-arg]
+    airing_downloads: AiringDownloadsSettings = AiringDownloadsSettings()  # type: ignore[call-arg]
     updates: UpdateCheckSettings = UpdateCheckSettings()  # type: ignore[call-arg]
 
     # Legacy single-underscore debug/runtime flags.

@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import json
 from contextlib import contextmanager
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -172,31 +173,26 @@ class TestResolvePreferredTitle:
         result = mod.resolve_preferred_title(1, "Attack on Titan", "Shingeki no Kyojin", "x")
         assert result == "Shingeki no Kyojin"
 
-    def test_user_picks_english(self, monkeypatch):
+    def test_default_prefers_romaji(self, monkeypatch):
         mod = _mod()
         monkeypatch.setattr(mod, "load_language_preference", lambda aid: None)
         monkeypatch.setattr(mod, "save_language_preference", lambda aid, lang: None)
-        ui = _make_ui_bridge_mock(menu_returns="🇬🇧 Inglês: Attack on Titan")
-        monkeypatch.setattr(mod, "ui_bridge", ui)
-        result = mod.resolve_preferred_title(1, "Attack on Titan", "Shingeki no Kyojin", "x")
-        assert result == "Attack on Titan"
-
-    def test_user_picks_romaji(self, monkeypatch):
-        mod = _mod()
-        monkeypatch.setattr(mod, "load_language_preference", lambda aid: None)
-        monkeypatch.setattr(mod, "save_language_preference", lambda aid, lang: None)
-        ui = _make_ui_bridge_mock(menu_returns="🇯🇵 Romaji: Shingeki no Kyojin")
-        monkeypatch.setattr(mod, "ui_bridge", ui)
         result = mod.resolve_preferred_title(1, "Attack on Titan", "Shingeki no Kyojin", "x")
         assert result == "Shingeki no Kyojin"
 
-    def test_user_cancels_returns_none(self, monkeypatch):
+    def test_global_english_preference_overrides_default(self, monkeypatch):
         mod = _mod()
         monkeypatch.setattr(mod, "load_language_preference", lambda aid: None)
-        ui = _make_ui_bridge_mock(menu_returns=None)
-        monkeypatch.setattr(mod, "ui_bridge", ui)
+        monkeypatch.setattr(mod, "save_language_preference", lambda aid, lang: None)
+        monkeypatch.setattr(mod.settings.anilist, "prefer_english_title", True)
         result = mod.resolve_preferred_title(1, "Attack on Titan", "Shingeki no Kyojin", "x")
-        assert result is None
+        assert result == "Attack on Titan"
+
+    def test_default_does_not_require_language_prompt(self, monkeypatch):
+        mod = _mod()
+        monkeypatch.setattr(mod, "load_language_preference", lambda aid: None)
+        result = mod.resolve_preferred_title(1, "Attack on Titan", "Shingeki no Kyojin", "x")
+        assert result == "Shingeki no Kyojin"
 
     def test_no_anilist_id_skips_cache(self, monkeypatch):
         mod = _mod()
@@ -826,11 +822,25 @@ class TestConfirmWatchOrDownload:
         ui = _make_ui_bridge_mock(menu_returns="📥 Baixar para assistir depois")
         monkeypatch.setattr(mod, "ui_bridge", ui)
         download_called = []
-        monkeypatch.setattr(mod, "_download_episodes", lambda *a, **kw: download_called.append(a))
+        monkeypatch.setattr(
+            mod,
+            "_download_episodes",
+            lambda *a, **kw: download_called.append((a, kw)),
+        )
         ep_list = [object()] * 5
-        result = mod._confirm_watch_or_download("Anime", ep_list, 2, 5, None)
+        result = mod._confirm_watch_or_download(
+            "Anime",
+            ep_list,
+            2,
+            5,
+            "src",
+            anilist_id=42,
+            season=2,
+            variant="dub",
+        )
         assert result is None
         assert download_called
+        assert download_called[0][1] == {"anilist_id": 42, "season": 2, "variant": "dub"}
 
     def test_user_goes_back_then_watches(self, monkeypatch):
         mod = _mod()
@@ -931,6 +941,38 @@ class TestLoadEpisodeList:
         monkeypatch.setattr(mod, "set_scraper_cache", lambda *a: None)
         episode_list, count = mod.load_episode_list("Anime", "Anime", "src1", "http://url1", 1)
         rep.add_anime.assert_called_with("Anime", "http://url1", "src1")
+
+    def test_configured_source_filters_episode_search_and_season(self, monkeypatch):
+        mod = _mod_episode_loader()
+        monkeypatch.setattr(mod, "get_scraper_cache", lambda _query: None)
+        rep = MagicMock()
+        rep.get_episode_list.return_value = ["ep1"]
+        monkeypatch.setattr(mod, "rep", rep)
+        ui = _make_ui_bridge_mock()
+        monkeypatch.setattr(mod, "ui_bridge", ui)
+        monkeypatch.setattr(mod, "set_scraper_cache", lambda *args: None)
+
+        episode_list, count = mod.load_episode_list(
+            "Anime",
+            "Anime",
+            "configured-source",
+            "https://configured.example/anime",
+            42,
+            source_filter="configured-source",
+            season=2,
+            saved_params={"cid": "configured"},
+        )
+
+        assert episode_list == ["ep1"]
+        assert count == 1
+        rep.add_anime.assert_called_once_with(
+            "Anime",
+            "https://configured.example/anime",
+            "configured-source",
+            {"cid": "configured"},
+        )
+        rep.search_episodes.assert_called_once_with("Anime", source_filter="configured-source")
+        rep.get_episode_list.assert_called_once_with("Anime", season=2)
 
 
 # ---------------------------------------------------------------------------
@@ -1286,7 +1328,7 @@ class TestAnilistAnimeFlow:
         # These are imported into anilist_integration from sub-modules; patch the local binding.
         monkeypatch.setattr(mod, "read_local_progress", lambda a: 0)
         monkeypatch.setattr(mod, "persist_anime_choice", lambda *a, **kw: None)
-        monkeypatch.setattr(mod, "load_episode_list", lambda *a: (ep_list, len(ep_list)))
+        monkeypatch.setattr(mod, "load_episode_list", lambda *a, **kw: (ep_list, len(ep_list)))
         monkeypatch.setattr(mod, "resolve_start_episode_idx", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_run_playback_loop", lambda *a, **kw: None)
@@ -1329,12 +1371,95 @@ class TestAnilistAnimeFlow:
             "_search_and_select_anime",
             lambda *a, **kw: search_called.append(True) or (None, None, None),
         )
-        monkeypatch.setattr(mod, "load_episode_list", lambda *a: (["ep1"], 1))
+        monkeypatch.setattr(mod, "load_episode_list", lambda *a, **kw: (["ep1"], 1))
         monkeypatch.setattr(mod, "resolve_start_episode_idx", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_run_playback_loop", lambda *a, **kw: None)
         mod.anilist_anime_flow("Test Anime", 1, _make_args())
         assert not search_called
+
+    def test_configured_airing_source_is_reused_instead_of_searching(self, monkeypatch):
+        mod = _mod()
+        _client, _rep_mock, ui = self._patch_everything(monkeypatch, mod)
+
+        from models.download import AiringSourceBinding
+        from services.anime.airing_sources import EffectiveAiringSource
+
+        binding = AiringSourceBinding(
+            title="Configured Anime",
+            source="configured-source",
+            anime_url="https://configured.example/anime",
+            params={"variant": "sub"},
+            season=2,
+        )
+        source_store = MagicMock()
+        source_store.effective.return_value = EffectiveAiringSource(binding, "configured")
+        monkeypatch.setattr(mod, "AiringSourceStore", lambda: source_store, raising=False)
+
+        monkeypatch.setattr(mod, "load_anilist_mapping", lambda _aid: (None, None, None))
+        search_calls = []
+        monkeypatch.setattr(
+            mod,
+            "_search_and_select_anime",
+            lambda *args, **kwargs: search_calls.append((args, kwargs)) or (None, None, None),
+        )
+        load_calls = []
+        monkeypatch.setattr(
+            mod,
+            "load_episode_list",
+            lambda *args, **kwargs: load_calls.append((args, kwargs)) or (["ep1"], 1),
+        )
+        monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(mod, "_run_playback_loop", lambda *args, **kwargs: None)
+        ui.menu_navigate.return_value = "✅ Continuar com este"
+
+        mod.anilist_anime_flow("AniList Title", 42, _make_args())
+
+        assert not search_calls
+        assert load_calls == [
+            (
+                (
+                    "Configured Anime",
+                    "Configured Anime",
+                    "configured-source",
+                    "https://configured.example/anime",
+                    42,
+                ),
+                {
+                    "source_filter": "configured-source",
+                    "season": 2,
+                    "saved_params": {"variant": "sub"},
+                },
+            )
+        ]
+        assert "configured-source" in ui.menu_navigate.call_args_list[0].kwargs["msg"]
+
+    def test_selected_anilist_source_updates_airing_download_preference(self, monkeypatch):
+        mod = _mod()
+        _client, rep_mock, ui = self._patch_everything(monkeypatch, mod)
+        rep_mock.anime_to_urls = {
+            "Test Anime": (("https://selected.example/anime", "src", {"dub": True}),)
+        }
+
+        from services.anime.airing_sources import EffectiveAiringSource
+
+        source_store = MagicMock()
+        source_store.effective.return_value = EffectiveAiringSource(None, "missing")
+        monkeypatch.setattr(mod, "AiringSourceStore", lambda: source_store)
+        monkeypatch.setattr(mod, "load_anilist_mapping", lambda _aid: (None, None, None))
+        monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(mod, "_run_playback_loop", lambda *args, **kwargs: None)
+        ui.menu_navigate.return_value = "test anime [src]"
+
+        mod.anilist_anime_flow("AniList Title", 42, _make_args())
+
+        source_store.save_configured.assert_called_once()
+        saved_id, binding = source_store.save_configured.call_args.args
+        assert saved_id == 42
+        assert binding.title == "Test Anime"
+        assert binding.source == "src"
+        assert binding.anime_url == "https://selected.example/anime"
+        assert binding.params == {"dub": True}
 
     def test_no_episode_list_returns_early(self, monkeypatch):
         mod = _mod()
@@ -1342,7 +1467,7 @@ class TestAnilistAnimeFlow:
         monkeypatch.setattr(
             mod, "_prompt_saved_title_choice", lambda a, b: ("Saved Anime", "src1", False)
         )
-        monkeypatch.setattr(mod, "load_episode_list", lambda *a: (None, 0))
+        monkeypatch.setattr(mod, "load_episode_list", lambda *a, **kw: (None, 0))
         play_calls = []
         monkeypatch.setattr(mod, "_run_playback_loop", lambda *a, **kw: play_calls.append(True))
         mod.anilist_anime_flow("Test Anime", 1, _make_args())
@@ -1354,7 +1479,7 @@ class TestAnilistAnimeFlow:
         monkeypatch.setattr(
             mod, "_prompt_saved_title_choice", lambda a, b: ("Saved Anime", "src1", False)
         )
-        monkeypatch.setattr(mod, "load_episode_list", lambda *a: (["ep1", "ep2"], 2))
+        monkeypatch.setattr(mod, "load_episode_list", lambda *a, **kw: (["ep1", "ep2"], 2))
         monkeypatch.setattr(mod, "resolve_start_episode_idx", lambda *a, **kw: None)
         play_calls = []
         monkeypatch.setattr(mod, "_run_playback_loop", lambda *a, **kw: play_calls.append(True))
@@ -1367,7 +1492,7 @@ class TestAnilistAnimeFlow:
         monkeypatch.setattr(
             mod, "_prompt_saved_title_choice", lambda a, b: ("Saved Anime", "src1", False)
         )
-        monkeypatch.setattr(mod, "load_episode_list", lambda *a: (["ep1"], 1))
+        monkeypatch.setattr(mod, "load_episode_list", lambda *a, **kw: (["ep1"], 1))
         monkeypatch.setattr(mod, "resolve_start_episode_idx", lambda *a, **kw: 0)
         monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *a, **kw: None)
         play_calls = []
@@ -1443,6 +1568,162 @@ class TestRunPlaybackLoopBranches:
         monkeypatch.setattr(mod, "ui_bridge", _make_ui_bridge_mock())
 
         mod._run_playback_loop("Anime", "src", "Display", 0, [object()], 1, None, _make_args())
+
+    def test_configured_source_filters_online_playback(self, monkeypatch):
+        mod, ep_list, rep, ui = self._setup(monkeypatch)
+        local_service = MagicMock()
+        local_service.find_episode.return_value = None
+        monkeypatch.setattr(mod, "LocalAnimeService", lambda: local_service)
+        rep.get_all_episode_sources.side_effect = None
+        rep.get_all_episode_sources.return_value = [
+            ("http://other", "other-source"),
+            ("http://configured", "configured-source"),
+        ]
+        fallback = self._make_fallback("quit", 1, exit_code=0)
+        playback_calls = []
+        monkeypatch.setattr(
+            mod,
+            "play_episode_with_fallback",
+            lambda **kwargs: playback_calls.append(kwargs) or fallback,
+        )
+        ui.menu_navigate.side_effect = [
+            "✅ Sim, assisti até o final",
+            "↩️  Voltar ao menu anterior",
+        ]
+
+        mod._run_playback_loop(
+            "Anime",
+            "configured-source",
+            "Display",
+            0,
+            ep_list,
+            1,
+            None,
+            _make_args(),
+            source_filter="configured-source",
+        )
+
+        assert playback_calls[0]["sources"] == [("http://configured", "configured-source")]
+
+    def test_configured_variant_is_used_for_local_lookup(self, monkeypatch):
+        mod, ep_list, rep, ui = self._setup(monkeypatch)
+        local_service = MagicMock()
+        local_service.find_episode.return_value = object()
+        local_service.path_for_record.return_value = Path("/tmp/anime-episode.mkv")
+        monkeypatch.setattr(mod, "LocalAnimeService", lambda: local_service)
+        monkeypatch.setattr(
+            mod,
+            "play_episode_with_fallback",
+            lambda **kwargs: self._make_fallback("quit", 1),
+        )
+        ui.menu_navigate.side_effect = [
+            "✅ Sim, assisti até o final",
+            "↩️  Voltar ao menu anterior",
+        ]
+
+        mod._run_playback_loop(
+            "Anime",
+            "src",
+            "Display",
+            0,
+            ep_list,
+            42,
+            None,
+            _make_args(),
+            season=2,
+            variant="dub",
+        )
+
+        local_service.find_episode.assert_called_once_with(
+            42,
+            1,
+            season=2,
+            variant="dub",
+            anime_title="Anime",
+        )
+
+    def test_remote_confirmation_uses_catalog_page_context(self, monkeypatch):
+        mod, ep_list, rep, ui = self._setup(monkeypatch)
+        rep.anime_to_urls = {"Anime": (("https://src.example/anime", "test-src", {"cid": "42"}),)}
+        local_service = MagicMock()
+        local_service.find_episode.return_value = None
+        monkeypatch.setattr(mod, "LocalAnimeService", lambda: local_service)
+        record = MagicMock()
+        monkeypatch.setattr(mod, "record_confirmed_remote_playback", record)
+        monkeypatch.setattr(
+            mod,
+            "play_episode_with_fallback",
+            lambda **kwargs: self._make_fallback("quit", 1),
+        )
+        ui.menu_navigate.side_effect = [
+            "✅ Sim, assisti até o final",
+            "↩️  Voltar ao menu anterior",
+        ]
+
+        mod._run_playback_loop("Anime", "test-src", "Display", 0, ep_list, 42, None, _make_args())
+
+        assert record.call_args.args[3] == "https://src.example/anime"
+        assert record.call_args.kwargs["params"] == {"cid": "42"}
+
+    def test_remote_autoplay_records_last_played_source(self, monkeypatch):
+        mod, _ep_list, rep, _ui = self._setup(monkeypatch)
+        rep.anime_to_urls = {"Anime": (("https://src.example/anime", "test-src", {"cid": "42"}),)}
+        local_service = MagicMock()
+        local_service.find_episode.return_value = None
+        monkeypatch.setattr(mod, "LocalAnimeService", lambda: local_service)
+        record = MagicMock()
+        monkeypatch.setattr(mod, "record_confirmed_remote_playback", record)
+        monkeypatch.setattr(
+            mod,
+            "play_episode_with_fallback",
+            lambda **kwargs: self._make_fallback("auto-next", 1),
+        )
+        monkeypatch.setattr(mod, "_maybe_offer_sequel_on_finish", lambda *args: False)
+
+        mod._run_playback_loop(
+            "Anime", "test-src", "Display", 0, [object()], 42, None, _make_args()
+        )
+
+        assert record.call_args.args[3] == "https://src.example/anime"
+
+    def test_confirmed_local_episode_is_deleted(self, monkeypatch):
+        mod, ep_list, rep, ui = self._setup(monkeypatch)
+        local_service = MagicMock()
+        local_service.find_episode.return_value = object()
+        local_service.path_for_record.return_value = Path("/tmp/anime-episode.mkv")
+        local_service.delete_episode.return_value = True
+        monkeypatch.setattr(mod, "LocalAnimeService", lambda: local_service)
+        monkeypatch.setattr(mod.settings.offline_sync, "delete_after_watch", True)
+        monkeypatch.setattr(
+            mod, "play_episode_with_fallback", lambda **kwargs: self._make_fallback("quit", 1)
+        )
+        ui.menu_navigate.side_effect = [
+            "✅ Sim, assisti até o final",
+            "↩️  Voltar ao menu anterior",
+        ]
+
+        mod._run_playback_loop("Anime", "src", "Display", 0, ep_list, 42, None, _make_args())
+
+        local_service.delete_episode.assert_called_once_with("Anime", 1, anilist_id=42)
+
+    def test_auto_next_local_episode_is_deleted(self, monkeypatch):
+        mod, _ep_list, _rep, _ui = self._setup(monkeypatch)
+        local_service = MagicMock()
+        local_service.find_episode.return_value = object()
+        local_service.path_for_record.return_value = Path("/tmp/anime-episode.mkv")
+        local_service.delete_episode.return_value = True
+        monkeypatch.setattr(mod, "LocalAnimeService", lambda: local_service)
+        monkeypatch.setattr(mod.settings.offline_sync, "delete_after_watch", True)
+        monkeypatch.setattr(
+            mod,
+            "play_episode_with_fallback",
+            lambda **kwargs: self._make_fallback("auto-next", 1),
+        )
+        monkeypatch.setattr(mod, "_maybe_offer_sequel_on_finish", lambda *args: False)
+
+        mod._run_playback_loop("Anime", "src", "Display", 0, [object()], 42, None, _make_args())
+
+        local_service.delete_episode.assert_called_once_with("Anime", 1, anilist_id=42)
 
     def test_quit_action_updates_episode(self, monkeypatch):
         mod, ep_list, rep, ui = self._setup(monkeypatch)

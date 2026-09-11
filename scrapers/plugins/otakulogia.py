@@ -68,7 +68,7 @@ def _gql(query: str, variables: dict) -> dict | None:
     )
     payload = response.json()
     if payload.get("errors"):
-        logger.debug("Otakulogia GraphQL errors: %s", payload["errors"][:1])
+        logger.debug(f"Otakulogia GraphQL errors: {payload['errors'][:1]}")
     return payload.get("data")
 
 
@@ -182,7 +182,7 @@ class Otakulogia:
                 return []
             return [t for t in (info.get("temporadas") or []) if isinstance(t, dict)]
         except Exception as exc:
-            logger.debug("Otakulogia CheckTemporada failed for cid %s: %s", cid, exc)
+            logger.debug(f"Otakulogia CheckTemporada failed for cid {cid}: {exc}")
             return []
 
     def search_anime(self, query: str) -> list[AnimeMetadata]:
@@ -220,7 +220,7 @@ class Otakulogia:
                 for temp in temporadas:
                     results.append(_temporada_entry(cid, title, temp))
         except httpx.HTTPError as exc:
-            logger.debug("Otakulogia search_anime failed for %r: %s", query, exc)
+            logger.debug(f"Otakulogia search_anime failed for {query!r}: {exc}")
         return results
 
     def _pick_temporada(self, cid: str, requested_season: int | None) -> tuple[int | None, int]:
@@ -259,7 +259,7 @@ class Otakulogia:
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
         cid = _resolve_cid(url, params)
         if not cid:
-            logger.debug("Otakulogia: could not resolve cid from %r", url)
+            logger.debug(f"Otakulogia: could not resolve cid from {url!r}")
             return []
 
         requested_season = None
@@ -304,7 +304,7 @@ class Otakulogia:
             urls = [episode_url for _, episode_url in ordered]
             return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name, season=season)]
         except httpx.HTTPError as exc:
-            logger.debug("Otakulogia search_episodes failed for %r: %s", anime, exc)
+            logger.debug(f"Otakulogia search_episodes failed for {anime!r}: {exc}")
             return []
 
     def search_player_src(self, url: str, container: list, event) -> None:

@@ -2,9 +2,9 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 
 class DownloadedEpisode(BaseModel):
@@ -27,6 +27,147 @@ class DownloadedEpisode(BaseModel):
     status: Literal["success", "failed", "corrupted"] = Field(
         "success", description="Download status (success, failed, corrupted)"
     )
+    # Optional fields make new records addressable by AniList while keeping
+    # legacy title-indexed records valid.
+    anilist_id: int | None = Field(None, gt=0, description="AniList media ID")
+    season: int | None = Field(None, ge=1, description="Anime season")
+    variant: str | None = Field(None, description="Dub/sub or other variant")
+    episode_url: str | None = Field(None, description="Episode page used for download")
+
+
+class AiringSourceCandidate(BaseModel):
+    """One source page belonging to an aggregated airing result."""
+
+    title: str = Field(..., min_length=1)
+    source: str = Field(..., min_length=1)
+    anime_url: str = Field(..., min_length=1, validation_alias=AliasChoices("anime_url", "url"))
+    params: dict[str, Any] = Field(default_factory=dict)
+    variant: str | None = None
+    season: int = Field(1, ge=1)
+
+    @field_validator("anime_url")
+    @classmethod
+    def validate_anime_url(cls, value: str) -> str:
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("anime_url must be an absolute HTTP(S) URL")
+        return value
+
+    @field_validator("source")
+    @classmethod
+    def validate_single_source(cls, value: str) -> str:
+        value = value.strip()
+        if not value or "," in value or value.lower() == "mixed":
+            raise ValueError("source must identify exactly one scraper")
+        return value
+
+
+class AiringSourceBinding(BaseModel):
+    """Source context that can be used safely by the airing monitor.
+
+    ``season=None`` deliberately represents an unresolved context. It is
+    accepted while reading old or partially written data, but the airing
+    source store refuses to make it effective.
+    """
+
+    model_config = {"populate_by_name": True}
+
+    title: str = Field(..., min_length=1)
+    source: str = Field(..., min_length=1)
+    anime_url: str = Field(..., min_length=1, validation_alias=AliasChoices("anime_url", "url"))
+    params: dict[str, Any] = Field(default_factory=dict)
+    variant: str | None = None
+    alternatives: list["AiringSourceCandidate"] = Field(
+        default_factory=list,
+        description="Additional equivalent source pages searched in order",
+    )
+    episode_number: int | None = Field(
+        None,
+        ge=1,
+        description="Episode number that established the playback evidence",
+    )
+    season: int | None = Field(1, ge=1)
+    episode_number_offset: int = 0
+    episode_mapping: dict[int, int] = Field(default_factory=dict)
+    recorded_at: datetime | None = Field(
+        None,
+        validation_alias=AliasChoices("recorded_at", "played_at", "last_played_at"),
+    )
+
+    @field_validator("anime_url")
+    @classmethod
+    def validate_anime_url(cls, value: str) -> str:
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("anime_url must be an absolute HTTP(S) URL")
+        return value
+
+    @field_validator("source")
+    @classmethod
+    def validate_single_source(cls, value: str) -> str:
+        value = value.strip()
+        if not value or "," in value or value.lower() == "mixed":
+            raise ValueError("source must identify exactly one scraper")
+        return value
+
+    def anilist_episode_number(self, source_episode: int) -> int:
+        """Translate a source episode number using the saved context."""
+        return self.episode_mapping.get(source_episode, source_episode + self.episode_number_offset)
+
+    @property
+    def url(self) -> str:
+        """Compatibility spelling for the saved anime page URL."""
+        return self.anime_url
+
+    @property
+    def source_name(self) -> str:
+        """Compatibility spelling for callers that use source_name."""
+        return self.source
+
+    @property
+    def played_at(self) -> datetime | None:
+        return self.recorded_at
+
+
+class AiringSourceRecord(BaseModel):
+    """The two independent origins associated with one AniList media ID."""
+
+    configured: AiringSourceBinding | None = None
+    last_played: AiringSourceBinding | None = None
+
+
+class AiringDownloadState(BaseModel):
+    """Small persisted summary for a monitor execution."""
+
+    version: int = Field(1, ge=1)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    downloaded: int = Field(0, ge=0)
+    skipped: int = Field(0, ge=0)
+    failures: dict[str, str] = Field(default_factory=dict)
+    exclusions: dict[str, str] = Field(default_factory=dict)
+
+
+# Descriptive aliases for integrations that call the record a preference or
+# the execution summary a monitor state.
+AiringSourcePreferences = AiringSourceRecord
+AiringMonitorState = AiringDownloadState
+
+
+class AiringEpisodeCandidate(BaseModel):
+    """A published, numbered episode returned by the linked source."""
+
+    episode_number: int = Field(..., ge=1)
+    source_episode_number: int = Field(..., ge=1)
+    title: str = Field(..., min_length=1)
+    url: str = Field(..., min_length=1)
+    source: str = Field(..., min_length=1)
+    season: int = Field(..., ge=1)
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("episode URL must be an absolute HTTP(S) URL")
+        return value
 
 
 class DownloadResult(BaseModel):
@@ -69,6 +210,9 @@ class AnimeDownloadHistory(BaseModel):
         default_factory=datetime.now, description="Last download timestamp"
     )
     total_size_mb: float = Field(default=0.0, ge=0.0, description="Total size of all episodes")
+    anilist_id: int | None = Field(None, gt=0, description="AniList media ID")
+    season: int | None = Field(None, ge=1, description="Anime season")
+    variant: str | None = Field(None, description="Dub/sub or other variant")
 
     def get_episode_numbers(self) -> list[int]:
         """Get sorted list of downloaded episode numbers.

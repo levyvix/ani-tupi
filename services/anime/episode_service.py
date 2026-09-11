@@ -413,6 +413,10 @@ def load_episode_list(
     saved_source: str | None,
     saved_url: str | None,
     anilist_id: int,
+    *,
+    source_filter: str | None = None,
+    season: int | None = None,
+    saved_params: dict | None = None,
 ) -> tuple[list | None, int]:
     """Load the episode list from cache or by scraping.
 
@@ -421,25 +425,28 @@ def load_episode_list(
     """
     cache_data = get_scraper_cache(selected_anime)
 
-    if cache_data:
+    if cache_data and source_filter is None:
         logger.info(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
         rep.search_episodes(selected_anime)
         return cache_data.episode_urls, cache_data.episode_count
 
     if selected_anime == saved_title:
         saved_urls = load_anilist_urls(anilist_id) if anilist_id else {}
-        if saved_urls:
+        if saved_url and saved_source:
+            logger.info(f"📺 Carregando '{selected_anime}' da fonte {saved_source}...")
+            if saved_params is None:
+                rep.add_anime(selected_anime, saved_url, saved_source)
+            else:
+                rep.add_anime(selected_anime, saved_url, saved_source, saved_params)
+        elif saved_urls:
             sources_list = ", ".join(sorted(saved_urls.keys()))
             logger.info(f"📺 Carregando '{selected_anime}' da fonte {sources_list}...")
             for src, url in saved_urls.items():
                 rep.add_anime(selected_anime, url, src)
-        elif saved_url and saved_source:
-            logger.info(f"📺 Carregando '{selected_anime}' da fonte {saved_source}...")
-            rep.add_anime(selected_anime, saved_url, saved_source)
 
     with ui_bridge.loading("Carregando episódios..."):
-        rep.search_episodes(selected_anime)
-    episode_list = rep.get_episode_list(selected_anime)
+        rep.search_episodes(selected_anime, source_filter=source_filter)
+    episode_list = rep.get_episode_list(selected_anime, season=season)
     scraper_episode_count = len(episode_list)
 
     if not episode_list:

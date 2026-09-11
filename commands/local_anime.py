@@ -264,7 +264,12 @@ def handle_local_library_playback(args) -> None:
                 continue
 
             if post_playback_action == "🗑️  Apagar episódio atual":
-                deleted = service.delete_episode(selected_title, final_episode)
+                if anilist_id is None:
+                    deleted = service.delete_episode(selected_title, final_episode)
+                else:
+                    deleted = service.delete_episode(
+                        selected_title, final_episode, anilist_id=anilist_id
+                    )
                 if deleted:
                     logger.info(f"🗑️  Episódio {final_episode} apagado")
                 else:

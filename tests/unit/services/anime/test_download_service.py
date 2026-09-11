@@ -9,6 +9,7 @@ File I/O uses real temp directories via tmp_path/monkeypatch.
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+import threading
 
 import pytest
 
@@ -277,11 +278,6 @@ class TestDownloadFile:
         svc = _make_service(tmp_path, monkeypatch)
         output_path = tmp_path / "1.mkv"
 
-        def fake_ydl_download(ydl_instance, urls):
-            # Simulate yt-dlp writing the file to the temp dir
-            # We need to write a file in the same temp dir yt-dlp would use
-            pass
-
         # Patch yt_dlp at the module level used by the service
         with patch("yt_dlp.YoutubeDL") as mock_ydl_class:
             mock_ydl_instance = MagicMock()
@@ -295,29 +291,63 @@ class TestDownloadFile:
             mock_ydl_class.return_value.__enter__ = fake_context_enter
             mock_ydl_class.return_value.__exit__ = fake_context_exit
 
-            # Simulate yt-dlp writing a file by hooking the download call
-            import tempfile as _tempfile
+            def fake_download(_urls):
+                options = mock_ydl_class.call_args.args[0]
+                downloaded_path = Path(options["outtmpl"].replace("%(ext)s", "mkv"))
+                downloaded_path.write_bytes(b"\x00" * 100)
 
-            original_tmp_class = _tempfile.TemporaryDirectory
-
-            class FakeTempDir:
-                def __init__(self, *a, **kw):
-                    self._real = original_tmp_class()
-
-                def __enter__(self):
-                    p = Path(self._real.__enter__())
-                    # Write the "downloaded" file
-                    (p / "download.mkv").write_bytes(b"\x00" * 100)
-                    return str(p)
-
-                def __exit__(self, *args):
-                    return self._real.__exit__(*args)
-
-            with patch("tempfile.TemporaryDirectory", FakeTempDir):
-                result = svc._download_file("http://example.com/ep1.mkv", output_path)
+            mock_ydl_instance.download.side_effect = fake_download
+            result = svc._download_file("http://example.com/ep1.mkv", output_path)
 
         assert result is True
         assert output_path.exists()
+        options = mock_ydl_class.call_args.args[0]
+        assert options["retries"] == 2
+        assert options["fragment_retries"] == 2
+        assert options["file_access_retries"] == 1
+        assert options["skip_unavailable_fragments"] is False
+        with patch("services.anime.download_service.logger.debug") as log_debug:
+            options["progress_hooks"][0](
+                {
+                    "status": "downloading",
+                    "fragment_index": 68,
+                    "downloaded_bytes": 123,
+                    "total_bytes": 456,
+                }
+            )
+        log_debug.assert_called_once_with("Downloading 1.mkv: fragment=68 bytes=123/456")
+
+    def test_retries_resume_the_same_partial_download(self, tmp_path, monkeypatch):
+        svc = _make_service(tmp_path, monkeypatch)
+        output_path = tmp_path / "1.mkv"
+        attempts = 0
+
+        with patch("yt_dlp.YoutubeDL") as mock_ydl_class:
+            mock_ydl_instance = MagicMock()
+            mock_ydl_class.return_value.__enter__.return_value = mock_ydl_instance
+            mock_ydl_class.return_value.__exit__.return_value = False
+
+            def fake_download(_urls):
+                nonlocal attempts
+                attempts += 1
+                options = mock_ydl_class.call_args.args[0]
+                partial_dir = Path(options["outtmpl"]).parent
+                if attempts == 1:
+                    (partial_dir / "download.mkv.part").write_bytes(b"partial")
+                    (partial_dir / "download.mkv.ytdl").write_text(
+                        '{"downloader": {"current_fragment": {"index": 68}}}'
+                    )
+                    raise OSError("interrupted")
+                assert (partial_dir / "download.mkv.part").exists()
+                assert (partial_dir / "download.mkv.ytdl").exists()
+                (partial_dir / "download.mkv").write_bytes(b"complete")
+
+            mock_ydl_instance.download.side_effect = fake_download
+            assert not svc._download_file("http://example.com/ep1.mkv", output_path)
+            assert svc._download_file("http://example.com/ep1.mkv", output_path)
+
+        assert output_path.read_bytes() == b"complete"
+        assert not (tmp_path / ".1.mkv.download").exists()
 
     def test_yt_dlp_exception_returns_false(self, tmp_path, monkeypatch):
         svc = _make_service(tmp_path, monkeypatch)
@@ -519,6 +549,33 @@ class TestDownloadEpisodes:
         assert history.has_episode(1)
         assert history.has_episode(2)
 
+    def test_catalog_can_use_anilist_episode_number_for_mapped_source(self, tmp_path, monkeypatch):
+        svc = _make_service(tmp_path, monkeypatch)
+
+        def getter(ep: int):
+            return (f"http://cdn.example.com/source-{ep}.mkv", "test")
+
+        def fake_dl(url: str, file_path: Path) -> bool:
+            _make_valid_video(file_path)
+            return True
+
+        with patch.object(svc, "_download_file", side_effect=fake_dl):
+            result = svc.download_episodes(
+                "Mapped Anime",
+                "3",
+                3,
+                getter,
+                anilist_id=42,
+                season=1,
+                catalog_episode_number=1,
+            )
+
+        assert result.successful == 1
+        history = svc._load_database().anime["Mapped Anime"]
+        assert 1 in history.episodes
+        assert history.episodes[1].episode_number == 1
+        assert history.episodes[1].file_path.name == "3.mkv"
+
     def test_skip_already_downloaded(self, tmp_path, monkeypatch):
         svc = _make_service(tmp_path, monkeypatch)
 
@@ -552,6 +609,37 @@ class TestDownloadEpisodes:
 
         # Episode 1 should be skipped
         assert 1 in result.skipped
+
+    def test_reconcile_orphan_file_with_anilist_id_does_not_deadlock(self, tmp_path, monkeypatch):
+        svc = _make_service(tmp_path, monkeypatch)
+
+        anime_dir = Path(svc.download_dir) / "anilist-77"
+        anime_dir.mkdir(parents=True)
+        _make_valid_video(anime_dir / "4.mkv")
+
+        outcome: dict = {}
+
+        def run() -> None:
+            outcome["result"] = svc.download_episodes(
+                "Orphan Anime",
+                "4",
+                4,
+                _noop_url_getter,
+                anilist_id=77,
+                season=1,
+                source="linked",
+                silent=True,
+            )
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        thread.join(10)
+
+        assert not thread.is_alive(), "download_episodes deadlocked while reconciling"
+        result = outcome["result"]
+        assert 4 in result.skipped
+        history = svc._load_database().anime["Orphan Anime"]
+        assert history.episodes[4].file_path.name == "4.mkv"
 
     def test_corrupted_file_tracked(self, tmp_path, monkeypatch):
         svc = _make_service(tmp_path, monkeypatch)

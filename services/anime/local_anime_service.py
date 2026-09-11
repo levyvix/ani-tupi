@@ -12,6 +12,14 @@ from models.config import get_data_path, settings
 from models.models import (
     AnimeDownloadDatabase,
 )
+from services.anime.download_catalog import (
+    DownloadCatalog,
+    atomic_write_json,
+    catalog_lock,
+    history_key,
+    is_valid_media_file,
+    stable_anime_directory,
+)
 
 __all__ = ["LocalAnimeService"]
 
@@ -30,6 +38,57 @@ class LocalAnimeService:
         self.download_dir = settings.anime_download.download_directory
         self.db_path = get_data_path() / "anime_downloads.json"
 
+    def _catalog(self) -> DownloadCatalog:
+        """Build a catalog using the service's possibly test-overridden paths."""
+        return DownloadCatalog(self.db_path, self.download_dir)
+
+    def find_episode(
+        self,
+        anilist_id: int | None,
+        episode_number: int,
+        *,
+        season: int | None = 1,
+        variant: str | None = None,
+        anime_title: str | None = None,
+    ):
+        """Return a valid catalog record matching the exact local identity."""
+        return self._catalog().find_episode(
+            anilist_id,
+            episode_number,
+            season=season,
+            variant=variant,
+            anime_title=anime_title,
+        )
+
+    def get_episode_by_identity(self, *args, **kwargs):
+        """Compatibility alias for callers that use lookup terminology."""
+        return self.find_episode(*args, **kwargs)
+
+    def find_episode_path(
+        self,
+        anilist_id: int | None,
+        episode_number: int,
+        *,
+        season: int | None = 1,
+        variant: str | None = None,
+        anime_title: str | None = None,
+    ) -> Path | None:
+        record = self.find_episode(
+            anilist_id,
+            episode_number,
+            season=season,
+            variant=variant,
+            anime_title=anime_title,
+        )
+        if record is None:
+            return None
+        path = self._catalog().episode_path(record)
+        return path if is_valid_media_file(path) else None
+
+    def path_for_record(self, record) -> Path:
+        """Resolve a catalog record to its physical path."""
+        return self._catalog().episode_path(record)
+
     def get_downloaded_anime_list(self) -> list[str]:
         """Get list of all downloaded anime titles.
 
@@ -40,9 +99,15 @@ class LocalAnimeService:
             return []
 
         anime_list = []
+        database = self._load_database()
+        titles_by_identity = {
+            f"anilist-{history.anilist_id}": title
+            for title, history in database.anime.items()
+            if history.anilist_id is not None
+        }
         for anime_dir in self.download_dir.iterdir():
             if anime_dir.is_dir() and self._has_video_files(anime_dir):
-                anime_list.append(anime_dir.name)
+                anime_list.append(titles_by_identity.get(anime_dir.name, anime_dir.name))
 
         return sorted(anime_list)
 
@@ -62,6 +127,10 @@ class LocalAnimeService:
         if not safe_title or safe_title != anime_title:
             raise ValueError("Título de anime inválido")
         anime_dir = self.download_dir / safe_title
+        if not anime_dir.exists():
+            history = self._load_database().anime.get(anime_title)
+            if history and history.anilist_id is not None:
+                anime_dir = self.download_dir / f"anilist-{history.anilist_id}"
         if not anime_dir.exists():
             raise FileNotFoundError(f"Anime directory not found: {anime_title}")
 
@@ -109,6 +178,10 @@ class LocalAnimeService:
             "source": episode.source,
             "downloaded_at": episode.downloaded_at.isoformat(),
             "status": episode.status,
+            "anilist_id": episode.anilist_id,
+            "season": episode.season,
+            "variant": episode.variant,
+            "episode_url": episode.episode_url,
         }
 
     def get_anime_info(self, anime_title: str) -> dict:
@@ -138,7 +211,9 @@ class LocalAnimeService:
                 "episode_numbers": [],
             }
 
-    def delete_episode(self, anime_title: str, episode_num: int) -> bool:
+    def delete_episode(
+        self, anime_title: str, episode_num: int, *, anilist_id: int | None = None
+    ) -> bool:
         """Delete a downloaded episode.
 
         Args:
@@ -156,42 +231,41 @@ class LocalAnimeService:
         safe_title = Path(anime_title).name
         if not safe_title or safe_title != anime_title:
             raise ValueError("Título de anime inválido")
-        anime_dir = self.download_dir / safe_title
-        if not anime_dir.exists():
-            return False
-
-        # Find and delete episode file
-        video_extensions = (".mkv", ".mp4", ".avi", ".webm")
-        deleted = False
-
-        for file_path in anime_dir.iterdir():
-            if file_path.is_file() and file_path.suffix.lower() in video_extensions:
-                try:
-                    ep_num = int(file_path.stem)
-                    if ep_num == episode_num:
-                        file_path.unlink()
-                        deleted = True
-                        logger.info(f"Deleted episode {episode_num}: {file_path}")
-                        break
-                except ValueError:
-                    continue
-
-        if deleted:
-            # Update database
+        with catalog_lock(self.db_path):
             db = self._load_database()
-            history = db.anime.get(anime_title)
+            key = history_key(db, anime_title, anilist_id)
+            history = db.anime.get(key)
+            anime_dir = stable_anime_directory(
+                self.download_dir,
+                safe_title,
+                history.anilist_id if history else None,
+            )
+            if not anime_dir.exists():
+                return False
+            video_extensions = (".mkv", ".mp4", ".avi", ".webm")
+            deleted = False
+            for file_path in anime_dir.iterdir():
+                if file_path.is_file() and file_path.suffix.lower() in video_extensions:
+                    try:
+                        if int(file_path.stem) == episode_num:
+                            file_path.unlink()
+                            deleted = True
+                            logger.info(f"Deleted episode {episode_num}: {file_path}")
+                            break
+                    except ValueError:
+                        continue
+
+            if not deleted:
+                return False
             if history and episode_num in history.episodes:
                 del history.episodes[episode_num]
                 history.total_size_mb = sum(ep.file_size_mb for ep in history.episodes.values())
-                db.anime[anime_title] = history
-                self._save_database(db)
-
-            # Clean up empty directories
+                db.anime[key] = history
+                self._save_database_unlocked(db)
             if not any(anime_dir.iterdir()):
                 anime_dir.rmdir()
                 logger.info(f"Removed empty directory: {anime_dir}")
-
-        return deleted
+            return True
 
     def delete_anime(self, anime_title: str) -> bool:
         """Delete all episodes of an anime.
@@ -205,25 +279,28 @@ class LocalAnimeService:
         safe_title = Path(anime_title).name
         if not safe_title or safe_title != anime_title:
             raise ValueError("Título de anime inválido")
-        anime_dir = self.download_dir / safe_title
-        if not anime_dir.exists():
-            return False
-
-        # Delete all files in directory
         try:
-            for file_path in anime_dir.iterdir():
-                if file_path.is_file():
-                    file_path.unlink()
-            anime_dir.rmdir()
-            logger.info(f"Deleted anime directory: {anime_dir}")
+            with catalog_lock(self.db_path):
+                db = self._load_database()
+                history = db.anime.get(anime_title)
+                anime_dir = stable_anime_directory(
+                    self.download_dir,
+                    safe_title,
+                    history.anilist_id if history else None,
+                )
+                if not anime_dir.exists():
+                    return False
 
-            # Update database
-            db = self._load_database()
-            if anime_title in db.anime:
-                del db.anime[anime_title]
-                self._save_database(db)
-
-            return True
+                # Delete all files in directory
+                for file_path in anime_dir.iterdir():
+                    if file_path.is_file():
+                        file_path.unlink()
+                anime_dir.rmdir()
+                logger.info(f"Deleted anime directory: {anime_dir}")
+                if anime_title in db.anime:
+                    del db.anime[anime_title]
+                    self._save_database_unlocked(db)
+                return True
         except Exception as e:
             logger.error(f"Failed to delete anime {anime_title}: {e}")
             return False
@@ -304,3 +381,7 @@ class LocalAnimeService:
             logger.debug(f"Saved download database: {self.db_path}")
         except Exception as e:
             logger.error(f"Failed to save download database: {e}")
+
+    def _save_database_unlocked(self, db: AnimeDownloadDatabase) -> None:
+        """Persist a database while the caller already owns the catalog lock."""
+        atomic_write_json(self.db_path, db.model_dump(mode="json"))
