@@ -453,6 +453,15 @@ def load_episode_list(
         logger.info(
             "\n❌ Nenhum episódio carregado — todos os scrapers falharam (timeout ou erro de rede)."
         )
+        try:
+            failures = rep._episode_repo.get_last_search_failures(selected_anime)
+        except (AttributeError, TypeError):
+            failures = []
+        try:
+            for source, error in failures:
+                logger.info(f"   • {source}: {str(error)[:160]}")
+        except TypeError:
+            pass
         logger.info("   Tente novamente em alguns instantes.")
         ui_bridge.prompt("\nPressione Enter para voltar...")
         return None, 0

@@ -914,6 +914,23 @@ class TestLoadEpisodeList:
         assert episode_list is None
         assert count == 0
 
+    def test_no_episodes_logs_per_source_failures(self, monkeypatch):
+        mod = _mod_episode_loader()
+        monkeypatch.setattr(mod, "get_scraper_cache", lambda q: None)
+        rep = MagicMock()
+        rep.get_episode_list.return_value = []
+        rep._episode_repo.get_last_search_failures.return_value = [
+            ("anroll", "timeout"),
+            ("sushianimes", "boom"),
+        ]
+        monkeypatch.setattr(mod, "rep", rep)
+        ui = _make_ui_bridge_mock()
+        monkeypatch.setattr(mod, "ui_bridge", ui)
+        episode_list, count = mod.load_episode_list("Anime", None, None, None, 0)
+        assert episode_list is None
+        assert count == 0
+        rep._episode_repo.get_last_search_failures.assert_called_once_with("Anime")
+
     def test_saved_title_with_urls_adds_anime(self, monkeypatch):
         mod = _mod_episode_loader()
         monkeypatch.setattr(mod, "get_scraper_cache", lambda q: None)

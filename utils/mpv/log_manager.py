@@ -93,10 +93,12 @@ class MPVLogManager:
         """Return a user-facing error hint based on MPV logs."""
         haystack = f"{stderr_output}\n{log_output}".lower()
 
-        if "404" in haystack or "not found" in haystack:
-            return "Episódio indisponível nesta fonte (HTTP 404)."
+        # 403 first: every MPV log contains benign "...conf not found" lines,
+        # so a bare "not found" check would mask a real 403 as 404.
         if "403" in haystack or "forbidden" in haystack:
             return "A fonte bloqueou o acesso ao vídeo (HTTP 403)."
+        if "404" in haystack or "file not found" in haystack:
+            return "Episódio indisponível nesta fonte (HTTP 404)."
         if "timed out" in haystack or "timeout" in haystack:
             return "Timeout ao carregar o vídeo desta fonte."
         if (
