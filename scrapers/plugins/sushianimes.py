@@ -47,6 +47,11 @@ _DUBBED_RE = re.compile(r"\bdublado\b", re.IGNORECASE)
 _SUBBED_RE = re.compile(r"\blegendado\b", re.IGNORECASE)
 _AUDIO_MARKER_RE = re.compile(r"\s*[(-]?\s*(dublado|legendado)\s*[)]?\s*", re.IGNORECASE)
 _WHITESPACE_RE = re.compile(r"\s+")
+# Clean media URL: extension plus optional query string, dropping trailing
+# JS/HTML junk such as '";var' left after entity decoding. m3u8 first: HLS
+# URLs embed ".mp4" in the path (".../07.mp4/index.m3u8").
+_CLEAN_M3U8_URL_RE = re.compile(r"https?://\S+?\.m3u8(?:\?[^\s\"'<>;]*)?", re.IGNORECASE)
+_CLEAN_MP4_URL_RE = re.compile(r"https?://\S+?\.mp4(?:\?[^\s\"'<>;]*)?", re.IGNORECASE)
 
 
 def _extract_embed_ids(soup: BeautifulSoup) -> list[str]:
@@ -72,8 +77,11 @@ def _extract_embed_ids(soup: BeautifulSoup) -> list[str]:
 
 def _extract_player_url(embed_html: str) -> str | None:
     """Extract direct player URL from AJAX embed response."""
+    # srcdoc payloads arrive HTML-escaped (&quot;, &lt;...); matching before
+    # decoding lets "&quot;;var" slip into the URL (see Hell Mode ep 11).
+    text = html.unescape(embed_html)
     for pattern in _PLAYER_PATTERNS:
-        match = pattern.search(embed_html)
+        match = pattern.search(text)
         if not match:
             continue
 
@@ -84,7 +92,8 @@ def _extract_player_url(embed_html: str) -> str | None:
             player_url = f"https:{player_url}"
 
         if player_url.startswith("http://") or player_url.startswith("https://"):
-            return player_url
+            clean = _CLEAN_M3U8_URL_RE.search(player_url) or _CLEAN_MP4_URL_RE.search(player_url)
+            return clean.group(0) if clean else player_url
 
     return None
 

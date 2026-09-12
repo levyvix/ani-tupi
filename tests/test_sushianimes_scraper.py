@@ -207,3 +207,11 @@ class TestPlayerUrlExtraction:
             _extract_player_url(embed_html)
             == "https://cdn.example.com/stream/y/my-anime/07.mp4/index.m3u8"
         )
+
+    def test_extract_player_url_strips_srcdoc_entity_junk(self):
+        embed_html = (
+            "<div>https://cdn-s01.pixel-sus-4k-image.com/stream/h/a/11.mp4&quot;;var foo</div>"
+        )
+        assert _extract_player_url(embed_html) == (
+            "https://cdn-s01.pixel-sus-4k-image.com/stream/h/a/11.mp4"
+        )

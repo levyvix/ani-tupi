@@ -109,6 +109,19 @@ class TestMPVLogManagerErrorClassification:
     def test_classify_returns_none_for_clean_output(self):
         assert MPVLogManager.classify_mpv_error("all good", "playing") is None
 
+    def test_classify_prefers_403_over_conf_not_found_noise(self):
+        log = (
+            "[0.028][d][positioning] script-opts/positioning.conf not found.\n"
+            "[0.468][w][ffmpeg] https: HTTP error 403 Forbidden"
+        )
+        assert MPVLogManager.classify_mpv_error("", log) == (
+            "A fonte bloqueou o acesso ao vídeo (HTTP 403)."
+        )
+
+    def test_classify_ignores_benign_conf_not_found(self):
+        log = "[0.028][d][positioning] script-opts/positioning.conf not found."
+        assert MPVLogManager.classify_mpv_error("", log) is None
+
 
 class TestSelectNextSource:
     """Source cycle used by the Shift+F switch."""

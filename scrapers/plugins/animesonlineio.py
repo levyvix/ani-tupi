@@ -26,6 +26,8 @@ _URL_RE = re.compile(r"^(?:https?:)?//", re.I)
 # juicycodes-style loader call: _fn([<b64 pieces>], [<indices>], "<b64 xor key>")
 _JUICY_CALL_RE = re.compile(r'\}\w+\((\[.*?\]),(\[[\d,\s]*\]),"([^"]+)"\)', re.S)
 _JW_SOURCES_RE = re.compile(r"sources:\s*(\[.*?\])\s*,?\n")
+# AniDrivePlayerConfig embeds sources as JSON: "sources":[{...}],"tracks"
+_ANIDRIVE_SOURCES_RE = re.compile(r'"sources":(\[.*?\]),"tracks"', re.S)
 
 
 class AnimesOnlineIO:
@@ -102,7 +104,9 @@ class AnimesOnlineIO:
 
             found = False
             for embed_url in self._extract_embed_urls(soup):
-                for video_url in self._resolve_embed_streams(embed_url):
+                # AniDrive gates the token embed on the episode-page Referer;
+                # the site root alone answers 403.
+                for video_url in self._resolve_embed_streams(embed_url, referer=url):
                     if store_player_source(container, event, video_url):
                         found = True
 
@@ -150,41 +154,83 @@ class AnimesOnlineIO:
             return self._normalize_url(value)
         return None
 
-    def _resolve_embed_streams(self, embed_url: str) -> list[str]:
-        """Resolve an anidrive-style embed to direct googlevideo MP4 URLs (720p first)."""
+    def _resolve_embed_streams(self, embed_url: str, referer: str | None = None) -> list[str]:
+        """Resolve an anidrive-style embed to playable stream URLs.
+
+        The ``?prime`` embed serves AniDrive HLS (``static.anidrive.click``);
+        the plain token serves blogger ``redirector.googlevideo.com`` MP4s.
+        """
         try:
             r = http_get_with_retry(
                 embed_url,
-                headers={**HEADERS, "Referer": f"{BASE_URL}/"},
+                headers={**HEADERS, "Referer": referer or f"{BASE_URL}/"},
                 timeout=REQUEST_TIMEOUT,
                 follow_redirects=True,
             )
-            payload = self._decode_juicy_payload(r.text)
-            sources_m = _JW_SOURCES_RE.search(payload)
-            if not sources_m:
-                raise ValueError("No jwplayer sources in embed payload")
-
             streams = []
-            for source in json.loads(sources_m.group(1)):
-                file_url = source.get("file", "")
-                if file_url.startswith("http"):
-                    streams.append(self._follow_redirector(file_url))
+            for payload in self._decode_all_juicy_payloads(r.text):
+                for source in self._extract_sources_from_payload(payload):
+                    file_url = source.get("file", "")
+                    if file_url.startswith("http"):
+                        streams.append(self._follow_redirector(file_url))
+            if not streams:
+                raise ValueError("No jwplayer sources in embed payload")
             return streams
         except Exception as e:
             logger.debug(f"AnimesOnlineIO embed resolve failed for '{embed_url}': {e}")
             return []
 
     @staticmethod
+    def _extract_sources_from_payload(payload: str) -> list[dict]:
+        """Extract ``[{file, ...}]`` source dicts from a decoded payload.
+
+        Supports the legacy ``sources: [...]`` jwplayer setup and the current
+        ``AniDrivePlayerConfig`` JSON (``"sources":[...],"tracks"``).
+        """
+        for pattern in (_ANIDRIVE_SOURCES_RE, _JW_SOURCES_RE):
+            match = pattern.search(payload)
+            if not match:
+                continue
+            try:
+                sources = json.loads(match.group(1))
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if isinstance(sources, list):
+                return [s for s in sources if isinstance(s, dict)]
+        return []
+
+    @staticmethod
+    def _decode_all_juicy_payloads(html: str) -> list[str]:
+        """Decode every XOR+base64 obfuscated script block in *html*."""
+        payloads = []
+        for m in _JUICY_CALL_RE.finditer(html):
+            try:
+                pieces = json.loads(m.group(1))
+                indices = json.loads(m.group(2))
+                data = base64.b64decode("".join(pieces[i] for i in indices))
+                key = base64.b64decode(m.group(3))
+                payloads.append(
+                    bytes(b ^ key[i % len(key)] for i, b in enumerate(data)).decode("utf-8")
+                )
+            except (ValueError, UnicodeDecodeError, IndexError, KeyError):
+                continue
+        return payloads
+
+    @staticmethod
     def _decode_juicy_payload(html: str) -> str:
-        """Decode the XOR+base64 obfuscated jwplayer setup script."""
-        m = _JUICY_CALL_RE.search(html)
-        if not m:
+        """Decode the XOR+base64 obfuscated jwplayer setup script.
+
+        The embed page now ships several obfuscated blocks (segment worker +
+        player config). Returns the first block holding video sources so legacy
+        callers keep working; raises when no block decodes.
+        """
+        payloads = AnimesOnlineIO._decode_all_juicy_payloads(html)
+        if not payloads:
             raise ValueError("No obfuscated payload in embed page")
-        pieces = json.loads(m.group(1))
-        indices = json.loads(m.group(2))
-        data = base64.b64decode("".join(pieces[i] for i in indices))
-        key = base64.b64decode(m.group(3))
-        return bytes(b ^ key[i % len(key)] for i, b in enumerate(data)).decode("utf-8")
+        for payload in payloads:
+            if AnimesOnlineIO._extract_sources_from_payload(payload):
+                return payload
+        return payloads[0]
 
     @staticmethod
     def _follow_redirector(url: str) -> str:
