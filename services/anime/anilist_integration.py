@@ -29,6 +29,7 @@ from services.anime.playback_service import play_episode_with_fallback, probe_ur
 from services.anime.local_anime_service import LocalAnimeService
 from services.anime.download_catalog import record_confirmed_remote_playback
 from services.anime.airing_sources import AiringSourceStore
+from services.anime.source_contexts import source_names_for
 from services.anime.episode_service import registry as awaiting_registry
 from models.download import AiringSourceBinding
 from utils.video_player import _format_episode_progress
@@ -553,35 +554,6 @@ def _maybe_offer_sequel_on_finish(
     )
 
 
-def _save_selected_airing_source(
-    anilist_id: int,
-    selected_anime: str,
-    source: str | None,
-) -> None:
-    """Persist an unambiguous AniList source selection for airing downloads."""
-    if not source or "," in source:
-        return
-
-    for candidate in rep.anime_to_urls.get(selected_anime, ()):
-        if not isinstance(candidate, (tuple, list)) or len(candidate) < 3:
-            continue
-        anime_url, candidate_source, params = candidate[:3]
-        if candidate_source != source or not isinstance(anime_url, str):
-            continue
-        AiringSourceStore().save_configured(
-            anilist_id,
-            AiringSourceBinding(
-                title=selected_anime,
-                source=source,
-                anime_url=anime_url,
-                params=params if isinstance(params, dict) else {},
-                season=1,
-            ),
-        )
-        logger.info(f"✅ Fonte {source} definida para o auto-download de '{selected_anime}'")
-        return
-
-
 def _source_context_for_playback(
     anime_title: str,
     source: str | None,
@@ -597,7 +569,7 @@ def _source_context_for_playback(
                 return {
                     "anime_url": binding.anime_url,
                     "params": binding.params,
-                    "season": binding.season,
+                    "season": None,
                     "variant": binding.variant,
                 }
 
@@ -612,11 +584,11 @@ def _source_context_for_playback(
                 return {
                     "anime_url": anime_url,
                     "params": params if isinstance(params, dict) else {},
-                    "season": 1,
+                    "season": None,
                     "variant": None,
                 }
 
-    return {"anime_url": None, "params": {}, "season": 1, "variant": None}
+    return {"anime_url": None, "params": {}, "season": None, "variant": None}
 
 
 def _record_playback_source(
@@ -980,11 +952,11 @@ def anilist_anime_flow(
     saved_params = None
     if anilist_id:
         effective_source = AiringSourceStore().effective(anilist_id)
-        if effective_source.origin == "configured":
+        if effective_source.binding is not None:
             configured_binding = effective_source.binding
             if configured_binding is not None:
                 saved_title = configured_binding.title
-                saved_source = configured_binding.source
+                saved_source = source_names_for(configured_binding)
                 saved_url = configured_binding.anime_url
                 saved_params = configured_binding.params
 
@@ -1015,8 +987,12 @@ def anilist_anime_flow(
         and selected_anime == configured_binding.title
         and source == configured_binding.source
     )
-    source_filter = configured_binding.source if use_configured_source else None
-    playback_season = configured_binding.season if use_configured_source else 1
+    source_filter = (
+        configured_binding.source
+        if use_configured_source and not configured_binding.alternatives
+        else None
+    )
+    playback_season = None
     playback_variant = configured_binding.variant if use_configured_source else None
     playback_binding = configured_binding if use_configured_source else None
 
@@ -1026,8 +1002,13 @@ def anilist_anime_flow(
     # 2. Persist the resolved choice for next time.
     if anilist_id:
         persist_anime_choice(anilist_id, selected_anime, anime_title, source)
-        if not use_configured_source:
-            _save_selected_airing_source(anilist_id, selected_anime, source)
+        shared_binding = AiringSourceStore().effective(anilist_id).binding
+        if (
+            shared_binding is not None
+            and shared_binding.title == selected_anime
+            and shared_binding.source == source
+        ):
+            configured_binding = shared_binding
 
     # 3. Load the episode list (cache-first).
     episode_list, scraper_episode_count = load_episode_list(
@@ -1072,7 +1053,7 @@ def anilist_anime_flow(
             scraper_episode_count = len(episode_list)
             start_episode_idx = new_episode_idx
             source_filter = None
-            playback_season = 1
+            playback_season = None
             playback_variant = None
             playback_binding = None
             break

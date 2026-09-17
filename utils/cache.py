@@ -392,7 +392,7 @@ def clear_cache_all() -> None:
 
 
 def clear_cache_all_with_mappings() -> None:
-    """Clear the global cache and the saved AniList mapping state."""
+    """Clear cache, AniList mappings, and shared source bindings."""
     clear_cache_all()
 
     from services.anime.anime_persistence import clear_anilist_mapping

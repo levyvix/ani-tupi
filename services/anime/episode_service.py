@@ -15,7 +15,7 @@ from models import EpisodeContext
 from models.config import get_data_path
 from scrapers.plugins.utils import http_head_with_fallback
 from services.anilist.anilist_service import get_scraper_cache, set_scraper_cache
-from services.anime.anime_persistence import load_anilist_urls
+from services.anime.anime_persistence import load_anilist_source_bindings, load_anilist_urls
 from services.core import ui_bridge
 from services.core.history_service import reset_history
 from services.repository import rep
@@ -423,6 +423,24 @@ def load_episode_list(
     Returns ``(episode_list, scraper_episode_count)``. ``episode_list`` is
     ``None`` when loading failed (no episodes could be scraped).
     """
+    saved_bindings = []
+    saved_urls = {}
+    if selected_anime == saved_title:
+        saved_bindings = load_anilist_source_bindings(anilist_id) if anilist_id else []
+        saved_urls = load_anilist_urls(anilist_id) if anilist_id else {}
+        if saved_bindings:
+            logger.info(
+                f"📺 Carregando '{selected_anime}' de "
+                f"{', '.join(binding.source for binding in saved_bindings)}..."
+            )
+            for binding in saved_bindings:
+                rep.add_anime(
+                    selected_anime,
+                    binding.anime_url,
+                    binding.source,
+                    binding.params,
+                )
+
     cache_data = get_scraper_cache(selected_anime)
 
     if cache_data and source_filter is None:
@@ -430,8 +448,7 @@ def load_episode_list(
         rep.search_episodes(selected_anime)
         return cache_data.episode_urls, cache_data.episode_count
 
-    if selected_anime == saved_title:
-        saved_urls = load_anilist_urls(anilist_id) if anilist_id else {}
+    if selected_anime == saved_title and not saved_bindings:
         if saved_url and saved_source:
             logger.info(f"📺 Carregando '{selected_anime}' da fonte {saved_source}...")
             if saved_params is None:

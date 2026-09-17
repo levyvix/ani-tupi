@@ -442,7 +442,7 @@ class AiringDownloadScheduler:
                         total_episodes=source_candidate.source_episode_number,
                         get_episode_url=lambda _n, u=ep_url, s=src: (u, s),
                         anilist_id=anilist_id,
-                        season=_value(candidate_binding, "season", selected_binding.season),
+                        season=source_candidate.season,
                         catalog_episode_number=source_candidate.episode_number,
                         source=source_candidate.source,
                         variant=_value(candidate_binding, "variant", selected_binding.variant),
@@ -489,7 +489,8 @@ class AiringDownloadScheduler:
             _value(binding, "params", {}) or {},
         )
         self.repository.search_episodes(_value(binding, "title", title), source_filter=source)
-        season = _value(binding, "season", 1) or 1
+        params = _value(binding, "params", {}) or {}
+        season = params.get("season", 1) if isinstance(params, dict) else 1
         episode_numbers = self.repository.get_episode_list(_value(binding, "title", title), season)
         progress = int(_value(entry, "progress", 0) or 0)
         next_airing = _value(_value(entry, "media", entry), "nextAiringEpisode")

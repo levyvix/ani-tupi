@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from models.anime import ScrapedEpisodes
-from models.download import AiringSourceBinding
+from models.download import AiringSourceBinding, AiringSourceCandidate
 from services.anime.airing_download_scheduler import (
     AiringDownloadScheduler,
     AiringDownloadSettings,
@@ -162,3 +162,60 @@ def test_mapped_source_episode_uses_source_number_for_storage(tmp_path: Path):
     assert download_calls[0]["range_input"] == "4"
     assert download_calls[0]["total_episodes"] == 4
     assert download_calls[0]["catalog_episode_number"] == 5
+
+
+def test_aggregated_source_download_falls_back_to_next_playable_source(tmp_path: Path):
+    binding = AiringSourceBinding(
+        title="Fallback Anime",
+        source="source-a",
+        anime_url="https://source-a.example/anime",
+        alternatives=[
+            AiringSourceCandidate(
+                title="Fallback Anime",
+                source="source-b",
+                anime_url="https://source-b.example/anime",
+            )
+        ],
+    )
+
+    class Plugin:
+        def __init__(self, source):
+            self.source = source
+
+        def search_episodes(self, title, url, params):
+            return [
+                ScrapedEpisodes(
+                    titles=["Episode 4"],
+                    urls=[f"https://{self.source}.example/episode-4"],
+                    source=self.source,
+                    season=1,
+                )
+            ]
+
+    download_calls = []
+
+    class Downloader:
+        def download_episodes(self, **kwargs):
+            download_calls.append(kwargs)
+            return SimpleNamespace(successful=1, skipped=[])
+
+    repository = SimpleNamespace(
+        sources={"source-a": Plugin("source-a"), "source-b": Plugin("source-b")},
+        search_player_from_page=lambda _url, source: (
+            [] if source == "source-a" else ["https://video.example/4"]
+        ),
+    )
+    source_store = SimpleNamespace(effective=lambda _id: SimpleNamespace(binding=binding))
+    scheduler = AiringDownloadScheduler(
+        repository=repository,
+        download_service=Downloader(),
+        binding_resolver=source_store,
+        state_path=tmp_path / "state.json",
+        lock_path=tmp_path / "lock",
+        log_path=tmp_path / "monitor.log",
+    )
+
+    result = scheduler._process_anime(_entry(7, "Fallback Anime"), binding, "Fallback Anime")
+
+    assert result["successful"] == 1
+    assert download_calls[0]["source"] == "source-b"

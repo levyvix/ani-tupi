@@ -4,7 +4,7 @@ import json
 import threading
 from pathlib import Path
 
-from models.download import AiringSourceBinding
+from models.download import AiringSourceBinding, AiringSourceCandidate
 from services.anime.download_catalog import (
     DownloadCatalog,
     catalog_lock,
@@ -110,7 +110,7 @@ def test_same_title_with_different_ids_keeps_catalog_entries_separate(tmp_path):
     assert catalog.find_episode(2, 1) is not None
 
 
-def test_source_precedence_and_removal(tmp_path):
+def test_shared_source_binding_and_removal(tmp_path):
     source_path = tmp_path / "airing_download_sources.json"
     set_configured_source(7, _binding("configured"), source_path)
     record_confirmed_remote_playback(
@@ -125,16 +125,46 @@ def test_source_precedence_and_removal(tmp_path):
     binding, origin = effective_source(7, source_path)
     assert binding is not None
     assert binding.source == "configured"
-    assert origin == "configured"
+    assert [item.source for item in binding.alternatives] == ["played"]
+    assert origin == "binding"
 
     remove_configured_source(7, source_path)
     binding, origin = effective_source(7, source_path)
-    assert binding is not None
-    assert binding.source == "played"
-    assert origin == "last_played"
+    assert binding is None
+    assert origin is None
 
 
-def test_incomplete_playback_context_does_not_remove_configured(tmp_path):
+def test_confirmed_playback_keeps_saved_source_fallbacks(tmp_path):
+    source_path = tmp_path / "airing_download_sources.json"
+    binding = _binding("anitube").model_copy(
+        update={
+            "alternatives": [
+                AiringSourceCandidate(
+                    title="Friendly title",
+                    source="otakulogia",
+                    anime_url="https://otaku.example/anime",
+                )
+            ]
+        }
+    )
+    set_configured_source(7, binding, source_path)
+
+    assert record_confirmed_remote_playback(
+        7,
+        "Friendly title",
+        "anitube",
+        "https://anitube.example/anime/title",
+        episode_number=11,
+        path=source_path,
+    )
+
+    saved = get_source_record(7, source_path).binding
+    assert saved is not None
+    assert saved.source == "anitube"
+    assert [item.source for item in saved.alternatives] == ["otakulogia"]
+
+
+def test_incomplete_playback_context_removes_shared_binding(tmp_path):
     source_path = tmp_path / "airing_download_sources.json"
     set_configured_source(8, _binding("configured"), source_path)
 
@@ -149,9 +179,7 @@ def test_incomplete_playback_context_does_not_remove_configured(tmp_path):
         is False
     )
     record = get_source_record(8, source_path)
-    assert record.configured is not None
-    assert record.configured.source == "configured"
-    assert record.last_played is None
+    assert record.binding is None
 
 
 def test_reconcile_registers_published_file_without_downloading_again(tmp_path):

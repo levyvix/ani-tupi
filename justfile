@@ -40,8 +40,7 @@ push:
 @clear-all:
     just clear-cache-full
     just clear-history
-    rm -f ~/.local/state/ani-tupi/anilist_mappings.json
-    echo "✅ AniList mappings cleared!"
+    uv run ani-tupi --clear-cache
 
 # Run tests
 @test:

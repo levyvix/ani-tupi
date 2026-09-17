@@ -34,24 +34,24 @@ AIRING_SOURCES_FILE = get_data_path() / "airing_download_sources.json"
 
 
 class AmbiguousAiringSourceError(ValueError):
-    """Raised when a source context cannot identify one safe season/source."""
+    """Raised when a source context cannot identify one safe source."""
 
 
 @dataclass(frozen=True)
 class EffectiveAiringSource:
-    """Resolved source plus the reason it was or was not selected."""
+    """Resolved shared source binding plus its availability."""
 
     binding: AiringSourceBinding | None
-    origin: Literal["configured", "last_played", "missing", "configured_invalid"]
+    origin: Literal["binding", "missing", "invalid"]
     reason: str | None = None
 
 
 def _is_usable(binding: AiringSourceBinding | None) -> bool:
-    return binding is not None and binding.season is not None
+    return binding is not None
 
 
 class AiringSourceStore:
-    """Atomically persist independent configured and last-played bindings."""
+    """Atomically persist one binding shared by playback and airing."""
 
     _lock = RLock()
 
@@ -120,10 +120,6 @@ class AiringSourceStore:
 
     @staticmethod
     def _require_safe_context(binding: AiringSourceBinding) -> None:
-        if binding.season is None:
-            raise AmbiguousAiringSourceError(
-                "airing source context must identify exactly one season"
-            )
         if not binding.source or "," in binding.source or binding.source.lower() == "mixed":
             raise AmbiguousAiringSourceError(
                 "airing source context must identify exactly one source"
@@ -132,7 +128,6 @@ class AiringSourceStore:
     def _update(
         self,
         anilist_id: int,
-        field: Literal["configured", "last_played"],
         binding: AiringSourceBinding,
     ) -> None:
         if anilist_id <= 0:
@@ -140,62 +135,57 @@ class AiringSourceStore:
         self._require_safe_context(binding)
         with self._lock, catalog_lock(self.file_path):
             records = self._load_records()
-            record = records.get(str(anilist_id), AiringSourceRecord())
-            records[str(anilist_id)] = record.model_copy(update={field: binding})
+            records[str(anilist_id)] = AiringSourceRecord(binding=binding)
             self._write_records(records)
+
+    def save_binding(self, anilist_id: int, binding: AiringSourceBinding) -> None:
+        """Save the source context shared by all playback channels."""
+        self._update(anilist_id, binding)
 
     def save_configured(self, anilist_id: int, binding: AiringSourceBinding) -> None:
-        """Save explicit configuration without touching playback evidence."""
-        self._update(anilist_id, "configured", binding)
+        """Compatibility alias for saving the shared binding."""
+        self.save_binding(anilist_id, binding)
 
     def save_last_played(self, anilist_id: int, binding: AiringSourceBinding) -> None:
-        """Save confirmed remote playback without touching configuration."""
-        self._update(anilist_id, "last_played", binding)
+        """Compatibility alias for saving the shared binding."""
+        self.save_binding(anilist_id, binding)
 
     def clear_configured(self, anilist_id: int) -> None:
-        """Remove only the explicit preference, retaining last playback."""
+        """Remove the shared source binding."""
         with self._lock, catalog_lock(self.file_path):
             records = self._load_records()
             record = records.get(str(anilist_id))
             if record is None:
                 return
-            updated = record.model_copy(update={"configured": None})
-            if updated.last_played is None:
-                records.pop(str(anilist_id), None)
-            else:
-                records[str(anilist_id)] = updated
+            records.pop(str(anilist_id), None)
             self._write_records(records)
 
+    def clear_all(self) -> None:
+        """Remove every shared source binding."""
+        with self._lock, catalog_lock(self.file_path):
+            try:
+                self.file_path.unlink()
+            except FileNotFoundError:
+                return
+
     def invalidate_last_played(self, anilist_id: int) -> None:
-        """Discard incomplete playback evidence while preserving configuration."""
+        """Remove the shared source binding after incomplete playback."""
         with self._lock, catalog_lock(self.file_path):
             records = self._load_records()
             record = records.get(str(anilist_id))
             if record is None:
                 return
-            updated = record.model_copy(update={"last_played": None})
-            if updated.configured is None:
-                records.pop(str(anilist_id), None)
-            else:
-                records[str(anilist_id)] = updated
+            records.pop(str(anilist_id), None)
             self._write_records(records)
 
     def effective(self, anilist_id: int) -> EffectiveAiringSource:
-        """Resolve configured first, with no fallback when it is unusable."""
+        """Resolve the one shared binding for an AniList media ID."""
         record = self.load(anilist_id)
         if record is None:
             return EffectiveAiringSource(None, "missing", "no source binding")
-        if record.configured is not None:
-            if _is_usable(record.configured):
-                return EffectiveAiringSource(record.configured, "configured")
-            return EffectiveAiringSource(
-                None,
-                "configured_invalid",
-                "configured source has ambiguous context",
-            )
-        if _is_usable(record.last_played):
-            return EffectiveAiringSource(record.last_played, "last_played")
-        return EffectiveAiringSource(None, "missing", "no valid source binding")
+        if _is_usable(record.binding):
+            return EffectiveAiringSource(record.binding, "binding")
+        return EffectiveAiringSource(None, "invalid", "no valid source binding")
 
 
 def load_airing_source(anilist_id: int, file_path: Path | None = None) -> AiringSourceRecord | None:

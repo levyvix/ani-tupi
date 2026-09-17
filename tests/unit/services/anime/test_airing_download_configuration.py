@@ -94,7 +94,7 @@ class _Client:
         )
 
 
-def test_configure_persists_selected_source_and_season(tmp_path):
+def test_configure_persists_selected_source_context(tmp_path):
     store = AiringSourceStore(tmp_path / "airing_download_sources.json")
     service = AiringDownloadConfigurationService(
         client=_Client(),
@@ -107,12 +107,12 @@ def test_configure_persists_selected_source_and_season(tmp_path):
     assert service.configure() == 0
     saved = store.load(100)
     assert saved is not None
-    assert saved.configured is not None
-    assert saved.configured.source == "source-a"
-    assert [source.source for source in saved.configured.alternatives] == ["source-b"]
-    assert saved.configured.season == 2
-    assert saved.configured.params == {"dub": True}
-    assert saved.configured.alternatives[0].params == {}
+    assert saved.binding is not None
+    assert saved.binding.source == "source-a"
+    assert [source.source for source in saved.binding.alternatives] == ["source-b"]
+    assert not hasattr(saved.binding, "season")
+    assert saved.binding.params == {"dub": True}
+    assert saved.binding.alternatives[0].params == {}
 
 
 def test_configure_cancel_preserves_existing_preference(tmp_path):
@@ -132,8 +132,8 @@ def test_configure_cancel_preserves_existing_preference(tmp_path):
 
     saved = store.load(100)
     assert saved is not None
-    assert saved.configured is not None
-    assert saved.configured.source == "source-a"
+    assert saved.binding is not None
+    assert saved.binding.source == "source-a"
 
 
 def test_similar_titles_from_separate_results_share_one_choice():
@@ -164,7 +164,7 @@ def test_same_title_with_different_source_seasons_stays_one_choice(monkeypatch):
 
     assert len(choices) == 1
     assert choices[0].label == "📺 Liar Game 3rd Season [source-a, source-b] / temporada 3"
-    assert choices[0].binding.season == 1
+    assert not hasattr(choices[0].binding, "season")
     assert choices[0].binding.alternatives[0].season == 3
 
 

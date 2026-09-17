@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import AliasChoices, BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 
 class DownloadedEpisode(BaseModel):
@@ -62,12 +62,7 @@ class AiringSourceCandidate(BaseModel):
 
 
 class AiringSourceBinding(BaseModel):
-    """Source context that can be used safely by the airing monitor.
-
-    ``season=None`` deliberately represents an unresolved context. It is
-    accepted while reading old or partially written data, but the airing
-    source store refuses to make it effective.
-    """
+    """Shared source context used by AniList playback and airing downloads."""
 
     model_config = {"populate_by_name": True}
 
@@ -85,7 +80,6 @@ class AiringSourceBinding(BaseModel):
         ge=1,
         description="Episode number that established the playback evidence",
     )
-    season: int | None = Field(1, ge=1)
     episode_number_offset: int = 0
     episode_mapping: dict[int, int] = Field(default_factory=dict)
     recorded_at: datetime | None = Field(
@@ -128,10 +122,29 @@ class AiringSourceBinding(BaseModel):
 
 
 class AiringSourceRecord(BaseModel):
-    """The two independent origins associated with one AniList media ID."""
+    """The single source binding associated with one AniList media ID."""
 
-    configured: AiringSourceBinding | None = None
-    last_played: AiringSourceBinding | None = None
+    binding: AiringSourceBinding | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_bindings(cls, value):
+        """Read the old split shape while converging it to one binding."""
+        if isinstance(value, dict) and not value.get("binding"):
+            legacy = value.get("configured") or value.get("last_played")
+            if legacy is not None:
+                return {**value, "binding": legacy}
+        return value
+
+    @property
+    def configured(self) -> AiringSourceBinding | None:
+        """Compatibility view for callers that used the old field name."""
+        return self.binding
+
+    @property
+    def last_played(self) -> AiringSourceBinding | None:
+        """Compatibility view for callers that used the old field name."""
+        return self.binding
 
 
 class AiringDownloadState(BaseModel):
