@@ -14,6 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from models.download import AiringSourceBinding
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -945,6 +947,40 @@ class TestLoadEpisodeList:
         episode_list, count = mod.load_episode_list("Anime", "Anime", "src1", "http://url1", 1)
         rep.add_anime.assert_called()
 
+    def test_saved_title_registers_all_shared_sources_for_fallback(self, monkeypatch):
+        mod = _mod_episode_loader()
+        monkeypatch.setattr(mod, "get_scraper_cache", lambda q: None)
+        bindings = [
+            AiringSourceBinding(
+                title="Anime",
+                source="anitube",
+                anime_url="https://anitube.example/anime",
+                params={"cid": "anitube"},
+            ),
+            AiringSourceBinding(
+                title="Anime",
+                source="otakulogia",
+                anime_url="https://otaku.example/anime",
+                params={"cid": "otaku"},
+            ),
+        ]
+        rep = MagicMock()
+        rep.get_episode_list.return_value = [1]
+        monkeypatch.setattr(mod, "rep", rep)
+        monkeypatch.setattr(mod, "load_anilist_source_bindings", lambda _aid: bindings)
+        monkeypatch.setattr(mod, "load_anilist_urls", lambda _aid: {})
+        monkeypatch.setattr(mod, "set_scraper_cache", lambda *args: None)
+
+        episode_list, count = mod.load_episode_list("Anime", "Anime", "anitube", None, 1)
+
+        assert episode_list == [1]
+        assert count == 1
+        assert [call.args for call in rep.add_anime.call_args_list] == [
+            ("Anime", "https://anitube.example/anime", "anitube", {"cid": "anitube"}),
+            ("Anime", "https://otaku.example/anime", "otakulogia", {"cid": "otaku"}),
+        ]
+        rep.search_episodes.assert_called_once_with("Anime", source_filter=None)
+
     def test_saved_title_with_fallback_url(self, monkeypatch):
         mod = _mod_episode_loader()
         monkeypatch.setattr(mod, "get_scraper_cache", lambda q: None)
@@ -1264,6 +1300,128 @@ class TestSearchAndSelectAnime:
 
 
 class TestPersistAnimeChoice:
+    def test_anilist_source_save_updates_shared_binding(self, monkeypatch):
+        mod = _mod_anime_choice_persistence()
+        rep = MagicMock()
+        rep.anime_to_urls = {
+            "Selected Anime": [("https://source.example/anime", "src", {"season": 3, "tid": 42})]
+        }
+        monkeypatch.setattr(mod, "rep", rep)
+        monkeypatch.setattr(mod, "_anilist_mappings_store", MagicMock())
+        source_store = MagicMock()
+        monkeypatch.setattr(mod, "AiringSourceStore", lambda: source_store)
+
+        mod.persist_anime_choice(1, "Selected Anime", "Selected Anime", "src")
+
+        source_store.save_binding.assert_called_once()
+        saved_id, binding = source_store.save_binding.call_args.args
+        assert saved_id == 1
+        assert binding.title == "Selected Anime"
+        assert binding.source == "src"
+        assert binding.anime_url == "https://source.example/anime"
+        assert binding.params == {"season": 3, "tid": 42}
+
+    def test_anilist_source_save_keeps_all_selected_source_contexts(self, monkeypatch):
+        mod = _mod_anime_choice_persistence()
+        rep = MagicMock()
+        rep.anime_to_urls = {
+            "Selected Anime": [
+                ("https://digital.example/anime", "animesdigital", {"cid": "digital"}),
+                ("https://anitube.example/anime", "anitube", {"cid": "anitube"}),
+                ("https://otaku.example/anime", "otakulogia", {"cid": "otaku"}),
+            ]
+        }
+        monkeypatch.setattr(mod, "rep", rep)
+        monkeypatch.setattr(mod, "_anilist_mappings_store", MagicMock())
+        source_store = MagicMock()
+        monkeypatch.setattr(mod, "AiringSourceStore", lambda: source_store)
+
+        mod.persist_anime_choice(
+            1,
+            "Selected Anime",
+            "Selected Anime",
+            "animesdigital, anitube, otakulogia",
+        )
+
+        binding = source_store.save_binding.call_args.args[1]
+        assert binding.source == "anitube"
+        assert binding.params == {"cid": "anitube"}
+        assert [item.source for item in binding.alternatives] == [
+            "otakulogia",
+            "animesdigital",
+        ]
+
+    def test_airing_source_is_visible_to_anilist_loader(self, monkeypatch):
+        mod = _mod_anime_choice_persistence()
+        binding = AiringSourceBinding(
+            title="Shared Anime",
+            source="src",
+            anime_url="https://source.example/anime",
+            params={"tid": 42},
+        )
+        source_store = MagicMock()
+        source_store.effective.return_value = SimpleNamespace(binding=binding)
+        monkeypatch.setattr(mod, "AiringSourceStore", lambda: source_store)
+
+        assert mod.load_anilist_mapping(1) == (
+            "Shared Anime",
+            "src",
+            "https://source.example/anime",
+        )
+        assert mod.load_anilist_urls(1) == {"src": "https://source.example/anime"}
+
+    def test_anilist_loader_exposes_all_shared_source_urls(self, monkeypatch):
+        mod = _mod_anime_choice_persistence()
+        binding = AiringSourceBinding(
+            title="Shared Anime",
+            source="anitube",
+            anime_url="https://anitube.example/anime",
+            alternatives=[
+                {
+                    "title": "Shared Anime",
+                    "source": "otakulogia",
+                    "anime_url": "https://otaku.example/anime",
+                    "params": {"tid": 42},
+                }
+            ],
+        )
+        source_store = MagicMock()
+        source_store.effective.return_value = SimpleNamespace(binding=binding)
+        monkeypatch.setattr(mod, "AiringSourceStore", lambda: source_store)
+
+        assert mod.load_anilist_urls(1) == {
+            "anitube": "https://anitube.example/anime",
+            "otakulogia": "https://otaku.example/anime",
+        }
+        assert mod.load_anilist_mapping(1) == (
+            "Shared Anime",
+            "anitube, otakulogia",
+            "https://anitube.example/anime",
+        )
+        assert [item.params for item in mod.load_anilist_source_bindings(1)] == [
+            {},
+            {"tid": 42},
+        ]
+
+    def test_clearing_anilist_mapping_removes_shared_source(self, monkeypatch, tmp_path):
+        mod = _mod_anime_choice_persistence()
+        from services.anime.airing_sources import AiringSourceStore
+
+        source_store = AiringSourceStore(tmp_path / "airing_download_sources.json")
+        source_store.save_binding(
+            1,
+            AiringSourceBinding(
+                title="Shared Anime",
+                source="src",
+                anime_url="https://source.example/anime",
+            ),
+        )
+        monkeypatch.setattr(mod, "AiringSourceStore", lambda: source_store)
+
+        mod.clear_anilist_mapping(1)
+
+        assert source_store.effective(1).binding is None
+
     def test_direct_url_lookup(self, monkeypatch):
         mod = _mod_anime_choice_persistence()
         rep = MagicMock()
@@ -1407,10 +1565,9 @@ class TestAnilistAnimeFlow:
             source="configured-source",
             anime_url="https://configured.example/anime",
             params={"variant": "sub"},
-            season=2,
         )
         source_store = MagicMock()
-        source_store.effective.return_value = EffectiveAiringSource(binding, "configured")
+        source_store.effective.return_value = EffectiveAiringSource(binding, "binding")
         monkeypatch.setattr(mod, "AiringSourceStore", lambda: source_store, raising=False)
 
         monkeypatch.setattr(mod, "load_anilist_mapping", lambda _aid: (None, None, None))
@@ -1444,25 +1601,22 @@ class TestAnilistAnimeFlow:
                 ),
                 {
                     "source_filter": "configured-source",
-                    "season": 2,
+                    "season": None,
                     "saved_params": {"variant": "sub"},
                 },
             )
         ]
         assert "configured-source" in ui.menu_navigate.call_args_list[0].kwargs["msg"]
 
-    def test_selected_anilist_source_updates_airing_download_preference(self, monkeypatch):
+    def test_selected_anilist_source_is_persisted_by_shared_source_flow(self, monkeypatch):
         mod = _mod()
         _client, rep_mock, ui = self._patch_everything(monkeypatch, mod)
         rep_mock.anime_to_urls = {
             "Test Anime": (("https://selected.example/anime", "src", {"dub": True}),)
         }
 
-        from services.anime.airing_sources import EffectiveAiringSource
-
-        source_store = MagicMock()
-        source_store.effective.return_value = EffectiveAiringSource(None, "missing")
-        monkeypatch.setattr(mod, "AiringSourceStore", lambda: source_store)
+        persist = MagicMock()
+        monkeypatch.setattr(mod, "persist_anime_choice", persist)
         monkeypatch.setattr(mod, "load_anilist_mapping", lambda _aid: (None, None, None))
         monkeypatch.setattr(mod, "_confirm_watch_or_download", lambda *args, **kwargs: 0)
         monkeypatch.setattr(mod, "_run_playback_loop", lambda *args, **kwargs: None)
@@ -1470,13 +1624,7 @@ class TestAnilistAnimeFlow:
 
         mod.anilist_anime_flow("AniList Title", 42, _make_args())
 
-        source_store.save_configured.assert_called_once()
-        saved_id, binding = source_store.save_configured.call_args.args
-        assert saved_id == 42
-        assert binding.title == "Test Anime"
-        assert binding.source == "src"
-        assert binding.anime_url == "https://selected.example/anime"
-        assert binding.params == {"dub": True}
+        persist.assert_called_once_with(42, "Test Anime", "Romaji", "src")
 
     def test_no_episode_list_returns_early(self, monkeypatch):
         mod = _mod()

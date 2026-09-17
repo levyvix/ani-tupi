@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
-from models.config import settings
 from models.download import AiringSourceBinding, AiringSourceCandidate
 from services.anime.airing_downloads import AiringDownloadsService
 from services.anime.airing_sources import AiringSourceStore
+from services.anime.source_contexts import binding_from_source_candidates
 from services.anilist.client import AiringWatchQueryResult, anilist_client
 from services.core import ui_bridge
 from services.repository import rep
@@ -143,12 +143,12 @@ class AiringDownloadConfigurationService:
             return
         anime_title = _title(media)
         record = self.source_store.load(anilist_id)
-        current = record.configured if record else None
+        current = record.binding if record else None
         choices = self._search_choices(anime_title)
         options: list[str] = []
         labels: dict[str, _SourceChoice] = {}
         if current is not None:
-            keep = f"✅ Manter {current.source} / temporada {current.season}"
+            keep = f"✅ Manter {current.source}"
             options.append(keep)
             options.append("🗑️ Remover preferência explícita")
             labels[keep] = _SourceChoice(keep, current)
@@ -164,7 +164,7 @@ class AiringDownloadConfigurationService:
             return
         choice = labels.get(selected)
         if choice is not None:
-            self.source_store.save_configured(anilist_id, choice.binding)
+            self.source_store.save_binding(anilist_id, choice.binding)
 
     def _search_choices(self, anime_title: str) -> list[_SourceChoice]:
         self.repository.clear_search_results()
@@ -239,27 +239,15 @@ class AiringDownloadConfigurationService:
                         group.candidates.append(candidate)
 
         choices: list[_SourceChoice] = []
-        priority = {name: index for index, name in enumerate(settings.plugins.priority_order)}
         for group in groups:
-            candidates = sorted(
-                group.candidates,
-                key=lambda candidate: (
-                    priority.get(candidate.source, len(priority)),
-                    candidate.source,
-                    candidate.anime_url,
-                ),
+            binding = binding_from_source_candidates(group.title, group.candidates)
+            if binding is None:
+                continue
+            sources = ", ".join(
+                dict.fromkeys(
+                    [binding.source, *(candidate.source for candidate in binding.alternatives)]
+                )
             )
-            primary, *alternatives = candidates
-            binding = AiringSourceBinding(
-                title=group.title,
-                source=primary.source,
-                anime_url=primary.anime_url,
-                params=primary.params,
-                variant=primary.variant,
-                season=primary.season,
-                alternatives=alternatives,
-            )
-            sources = ", ".join(dict.fromkeys(candidate.source for candidate in candidates))
             label = f"📺 {group.title} [{sources}] / temporada {group.season}"
             choices.append(_SourceChoice(label, binding))
         return choices

@@ -6,6 +6,13 @@ Seções:
 """
 
 from models.config import get_data_path
+from models.download import AiringSourceBinding, AiringSourceCandidate
+from services.anime.airing_sources import AiringSourceStore
+from services.anime.source_contexts import (
+    binding_from_source_candidates,
+    source_candidates_for,
+    source_names_for,
+)
 from services.repository import rep
 from utils.exceptions import PersistenceError
 from utils.logging import get_logger
@@ -15,6 +22,7 @@ __all__ = [
     "clear_anilist_mapping",
     "load_anilist_mapping",
     "load_anilist_search_title",
+    "load_anilist_source_bindings",
     "load_anilist_urls",
     "load_language_preference",
     "persist_anime_choice",
@@ -45,7 +53,10 @@ def load_anilist_mapping(
     Returns:
         Tuple of (scraper_title, source, anime_url) or (None, None, None) if not found
     """
+    shared = AiringSourceStore().effective(anilist_id).binding
     mapping = _anilist_mappings_store.get(str(anilist_id))
+    if shared is not None:
+        return shared.title, source_names_for(shared), shared.anime_url
     # Handle both old format (string) and new format (dict)
     if isinstance(mapping, dict):
         return (
@@ -66,10 +77,46 @@ def load_anilist_urls(anilist_id: int) -> dict[str, str]:
     Returns:
         Dict mapping sources to URLs (e.g., {"animefire": "https://...", "animesdigital": "https://..."})
     """
+    shared = AiringSourceStore().effective(anilist_id).binding
+    if shared is not None:
+        return {
+            candidate.source: candidate.anime_url
+            for candidate in [
+                AiringSourceCandidate(
+                    title=shared.title,
+                    source=shared.source,
+                    anime_url=shared.anime_url,
+                    params=shared.params,
+                    variant=shared.variant,
+                ),
+                *shared.alternatives,
+            ]
+        }
+
     mapping = _anilist_mappings_store.get(str(anilist_id))
     if isinstance(mapping, dict):
         return mapping.get("anime_urls", {})
     return {}
+
+
+def load_anilist_source_bindings(anilist_id: int) -> list[AiringSourceBinding]:
+    """Load all shared source contexts in playback fallback order."""
+    shared = AiringSourceStore().effective(anilist_id).binding
+    if shared is None:
+        return []
+    return [
+        shared,
+        *[
+            AiringSourceBinding(
+                title=candidate.title,
+                source=candidate.source,
+                anime_url=candidate.anime_url,
+                params=candidate.params,
+                variant=candidate.variant,
+            )
+            for candidate in shared.alternatives
+        ],
+    ]
 
 
 def load_anilist_search_title(anilist_id: int) -> str | None:
@@ -96,6 +143,8 @@ def save_anilist_mapping(
     anime_url: str | None = None,
     language_choice: str | None = None,
     anime_urls: dict[str, str] | None = None,
+    params: dict | None = None,
+    source_candidates: list[AiringSourceCandidate] | None = None,
 ) -> None:
     """Save scraper title choice, search title, source, URL(s), and language preference for an AniList ID.
 
@@ -135,6 +184,26 @@ def save_anilist_mapping(
                 "language_choice": language_choice or existing.get("language_choice"),
             },
         )
+        if anilist_id > 0 and source and source.lower() not in {"local", "unknown", "mixed"}:
+            candidates = source_candidates or []
+            if not candidates and "," not in source and anime_url:
+                candidates = [
+                    AiringSourceCandidate(
+                        title=scraper_title,
+                        source=source,
+                        anime_url=anime_url,
+                        params=params or {},
+                    )
+                ]
+            if not candidates:
+                return
+            binding = binding_from_source_candidates(scraper_title, candidates)
+            if binding is None:
+                return
+            AiringSourceStore().save_binding(
+                anilist_id,
+                binding,
+            )
     except PersistenceError as e:
         logger.error(f"Failed to save AniList mapping: {e}")
 
@@ -174,15 +243,17 @@ def save_language_preference(anilist_id: int, language_choice: str) -> None:
 
 
 def clear_anilist_mapping(anilist_id: int | None = None) -> None:
-    """Clear saved AniList mappings or a single mapping entry."""
+    """Clear AniList mappings and their shared source bindings."""
     try:
         from models.config import get_data_path
 
         store = JSONStore(get_data_path() / "anilist_mappings.json")
         if anilist_id is None:
             store.clear()
+            AiringSourceStore().clear_all()
         else:
             store.delete(str(anilist_id))
+            AiringSourceStore().clear_configured(anilist_id)
     except PersistenceError as e:
         logger.error(f"Failed to clear AniList mappings: {e}")
 
@@ -199,6 +270,8 @@ def persist_anime_choice(
     """Save the resolved anime choice (title, source, URLs) for next time."""
     anime_url = None
     anime_urls: dict[str, str] = {}
+    selected_params: dict | None = None
+    source_candidates: list[AiringSourceCandidate] = []
 
     repo_title = selected_anime
     if selected_anime not in rep.anime_to_urls:
@@ -214,10 +287,13 @@ def persist_anime_choice(
                 repo_title = best_match
 
     if repo_title in rep.anime_to_urls:
-        for url, src, _params in rep.anime_to_urls[repo_title]:
-            anime_urls[src] = url
-            if anime_url is None and (source is None or src in source.split(",")):
-                anime_url = url
+        all_candidates = source_candidates_for(rep, repo_title)
+        source_candidates = source_candidates_for(rep, repo_title, source)
+        anime_urls = {candidate.source: candidate.anime_url for candidate in all_candidates}
+        if source_candidates:
+            primary = source_candidates[0]
+            anime_url = primary.anime_url
+            selected_params = primary.params
 
     save_anilist_mapping(
         anilist_id,
@@ -226,4 +302,6 @@ def persist_anime_choice(
         source=source,
         anime_url=anime_url,
         anime_urls=anime_urls,
+        params=selected_params,
+        source_candidates=source_candidates,
     )

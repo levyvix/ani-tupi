@@ -186,3 +186,52 @@ def test_aggregated_binding_merges_episodes_from_ordered_source_alternatives():
             {"slug": "alternative"},
         ),
     ]
+
+
+def test_refreshes_saved_title_search_before_fetching_source_episodes():
+    calls = []
+
+    class Plugin:
+        def __init__(self, source):
+            self.source = source
+
+        def search_episodes(self, title, url, params):
+            calls.append(self.source)
+            return [
+                ScrapedEpisodes(
+                    titles=["Episode 5"],
+                    urls=[f"https://{self.source}.test/episode-5"],
+                    source=self.source,
+                    season=1,
+                )
+            ]
+
+    class Repository:
+        def __init__(self):
+            self.sources = {"source-a": Plugin("source-a"), "source-b": Plugin("source-b")}
+            self.anime_to_urls = {}
+
+        def clear_search_results(self):
+            self.anime_to_urls = {}
+
+        def search_anime(self, title, verbose=False):
+            self.anime_to_urls[title] = [
+                ("https://source-a.test/anime", "source-a", {"source": "a"}),
+                ("https://source-b.test/anime", "source-b", {"source": "b"}),
+            ]
+
+    binding = _binding()
+    repository = Repository()
+    saved = []
+    store = SimpleNamespace(
+        effective=lambda _id: SimpleNamespace(binding=binding),
+        save_binding=lambda anilist_id, refreshed: saved.append((anilist_id, refreshed)),
+    )
+    service = AiringDownloadsService(repository=repository, source_store=store)
+
+    selection = service.select_for_entry(_entry(progress=4))
+
+    assert [episode.source for episode in selection.episodes] == ["source-a"]
+    assert calls == ["source-a", "source-b"]
+    assert saved[0][0] == 7
+    assert [item.source for item in saved[0][1].alternatives] == ["source-b"]

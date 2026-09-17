@@ -138,7 +138,7 @@ def test_configure_predownload_play_local_then_refresh_online(tmp_path, monkeypa
     assert len(downloader_calls) == 1
     assert client.mutations == 0
 
-    assert source_store.effective(42).origin == "configured"
+    assert source_store.effective(42).origin == "binding"
     assert record_confirmed_remote_playback(
         42,
         "Example Anime",
@@ -152,9 +152,8 @@ def test_configure_predownload_play_local_then_refresh_online(tmp_path, monkeypa
     )
     source_store.clear_configured(42)
     effective = source_store.effective(42)
-    assert effective.origin == "last_played"
-    assert effective.binding is not None
-    assert effective.binding.source == "demo"
+    assert effective.origin == "missing"
+    assert effective.binding is None
 
     local = LocalAnimeService()
     record = local.find_episode(42, 2, season=1)

@@ -14,8 +14,13 @@ from typing import Any
 from models.download import AiringEpisodeCandidate, AiringSourceBinding
 from services.anilist.client import AiringWatchQueryResult, anilist_client
 from services.anime.airing_sources import EffectiveAiringSource, get_effective_source
+from services.anime.source_contexts import (
+    binding_from_source_candidates,
+    source_candidates_for,
+)
 from services.repository import rep
 from utils.logging import get_logger
+from utils.title_normalization import normalize_title_for_dedup
 
 __all__ = [
     "AiringDownloadSelectionError",
@@ -129,8 +134,6 @@ def select_published_episodes(
     A source list is treated as a set of explicit episode labels. Missing
     numbers remain missing; no positional fallback or range expansion is used.
     """
-    if binding.season is None:
-        raise AiringDownloadSelectionError("source season is ambiguous")
     media = entry.get("media")
     if not isinstance(media, dict) or media.get("status") != "RELEASING":
         return []
@@ -147,8 +150,6 @@ def select_published_episodes(
             raise AiringDownloadSelectionError(
                 f"linked source returned data labelled as {source!r}"
             )
-        if season != binding.season:
-            continue
         for title, url in zip(titles, urls):
             source_number = _episode_number(title)
             if source_number is None or not isinstance(url, str):
@@ -210,6 +211,68 @@ class AiringDownloadsService:
             return self.source_store.effective(anilist_id)
         return get_effective_source(anilist_id, self.source_store)
 
+    def _refresh_source_binding(
+        self, anilist_id: int, binding: AiringSourceBinding
+    ) -> AiringSourceBinding:
+        """Repeat the normal title search before resolving airing episodes."""
+        search_anime = getattr(self.repository, "search_anime", None)
+        if not callable(search_anime):
+            return binding
+
+        clear_search_results = getattr(self.repository, "clear_search_results", None)
+        try:
+            if callable(clear_search_results):
+                clear_search_results()
+            search_anime(binding.title, verbose=False)
+        except Exception as exc:
+            logger.info("Busca de fontes indisponível para %s: %s", binding.title, exc)
+            return binding
+
+        source_map = getattr(self.repository, "anime_to_urls", {})
+        if not isinstance(source_map, dict):
+            return binding
+        repository_title = next(
+            (
+                title
+                for title in source_map
+                if isinstance(title, str)
+                and normalize_title_for_dedup(title) == normalize_title_for_dedup(binding.title)
+            ),
+            None,
+        )
+        if repository_title is None:
+            return binding
+
+        candidates = source_candidates_for(self.repository, repository_title)
+        if len(candidates) < 1 + len(binding.alternatives):
+            return binding
+        refreshed = binding_from_source_candidates(
+            binding.title,
+            candidates,
+            preferred_source=binding.source,
+        )
+        if refreshed is None:
+            return binding
+
+        refreshed = refreshed.model_copy(
+            update={
+                "episode_number": binding.episode_number,
+                "episode_number_offset": binding.episode_number_offset,
+                "episode_mapping": binding.episode_mapping,
+                "recorded_at": binding.recorded_at,
+            }
+        )
+        if refreshed == binding:
+            return binding
+
+        save_binding = getattr(self.source_store, "save_binding", None)
+        if callable(save_binding):
+            try:
+                save_binding(anilist_id, refreshed)
+            except Exception as exc:
+                logger.info("Não foi possível atualizar fontes de %s: %s", binding.title, exc)
+        return refreshed
+
     def fetch_source_episodes(self, binding: AiringSourceBinding) -> list[Any]:
         """Refresh episodes from exactly the linked plugin and saved page."""
         sources = getattr(self.repository, "sources", {})
@@ -238,7 +301,6 @@ class AiringDownloadsService:
                         "anime_url": alternative.anime_url,
                         "params": alternative.params,
                         "variant": alternative.variant,
-                        "season": alternative.season,
                         "alternatives": [],
                     }
                 )
@@ -254,6 +316,13 @@ class AiringDownloadsService:
         source = self.effective_source(anilist_id)
         if source.binding is None:
             raise AiringDownloadSelectionError(source.reason or "no usable source binding")
+        refreshed_binding = self._refresh_source_binding(anilist_id, source.binding)
+        if refreshed_binding is not source.binding:
+            source = EffectiveAiringSource(
+                refreshed_binding,
+                getattr(source, "origin", "binding"),
+                getattr(source, "reason", None),
+            )
         merged: dict[int, list[AiringEpisodeCandidate]] = {}
         errors: list[AiringDownloadSelectionError] = []
         fetched_source = False

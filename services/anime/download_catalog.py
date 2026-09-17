@@ -357,7 +357,7 @@ def set_configured_source(
     with catalog_lock(source_path):
         records = load_source_records(source_path)
         record = records.setdefault(anilist_id, AiringSourceRecord())
-        record.configured = binding
+        record.binding = binding
         atomic_write_json(
             source_path,
             {str(key): value.model_dump(mode="json") for key, value in records.items()},
@@ -371,9 +371,7 @@ def remove_configured_source(anilist_id: int, path: Path | None = None) -> None:
         record = records.get(anilist_id)
         if record is None:
             return
-        record.configured = None
-        if record.last_played is None:
-            records.pop(anilist_id, None)
+        records.pop(anilist_id, None)
         atomic_write_json(
             source_path,
             {str(key): value.model_dump(mode="json") for key, value in records.items()},
@@ -387,11 +385,46 @@ def set_last_played_source(
     with catalog_lock(source_path):
         records = load_source_records(source_path)
         record = records.setdefault(anilist_id, AiringSourceRecord())
-        record.last_played = binding
+        record.binding = binding
         atomic_write_json(
             source_path,
             {str(key): value.model_dump(mode="json") for key, value in records.items()},
         )
+
+
+def _merge_confirmed_playback_binding(
+    existing: AiringSourceBinding | None,
+    confirmed: AiringSourceBinding,
+) -> AiringSourceBinding:
+    """Keep every saved source context when recording playback evidence."""
+    if existing is None:
+        return confirmed
+
+    contexts = [existing, *existing.alternatives]
+    confirmed_key = (confirmed.source, confirmed.anime_url)
+    has_confirmed_context = any(
+        (context.source, context.anime_url) == confirmed_key for context in contexts
+    )
+    alternatives = list(existing.alternatives)
+    if not has_confirmed_context:
+        alternatives.append(
+            {
+                "title": confirmed.title,
+                "source": confirmed.source,
+                "anime_url": confirmed.anime_url,
+                "params": confirmed.params,
+                "variant": confirmed.variant,
+            }
+        )
+    return existing.model_copy(
+        update={
+            "title": confirmed.title,
+            "episode_number": confirmed.episode_number,
+            "recorded_at": confirmed.recorded_at,
+            "variant": existing.variant or confirmed.variant,
+            "alternatives": alternatives,
+        }
+    )
 
 
 def record_confirmed_remote_playback(
@@ -417,14 +450,18 @@ def record_confirmed_remote_playback(
             anime_url=anime_url,
             params=params or {},
             variant=variant,
-            season=season,
             episode_number=episode_number,
             recorded_at=datetime.now(),
         )
     except ValueError:
         invalidate_last_played_source(anilist_id, path)
         return False
-    set_last_played_source(anilist_id, binding, path)
+    existing = get_source_record(anilist_id, path).binding
+    set_last_played_source(
+        anilist_id,
+        _merge_confirmed_playback_binding(existing, binding),
+        path,
+    )
     return True
 
 
@@ -435,9 +472,7 @@ def invalidate_last_played_source(anilist_id: int, path: Path | None = None) -> 
         record = records.get(anilist_id)
         if record is None:
             return
-        record.last_played = None
-        if record.configured is None:
-            records.pop(anilist_id, None)
+        records.pop(anilist_id, None)
         atomic_write_json(
             source_path,
             {str(key): value.model_dump(mode="json") for key, value in records.items()},
@@ -447,12 +482,10 @@ def invalidate_last_played_source(anilist_id: int, path: Path | None = None) -> 
 def effective_source(
     anilist_id: int, path: Path | None = None
 ) -> tuple[AiringSourceBinding | None, str | None]:
-    """Return configured source first, then proven last-played source."""
+    """Return the shared source binding."""
     record = get_source_record(anilist_id, path)
-    if record.configured is not None:
-        return record.configured, "configured"
-    if record.last_played is not None:
-        return record.last_played, "last_played"
+    if record.binding is not None:
+        return record.binding, "binding"
     return None, None
 
 
