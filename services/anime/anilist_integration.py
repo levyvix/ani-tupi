@@ -132,6 +132,7 @@ def load_episodes_from_cache_or_search(
         Tuple of (search_state, titles_with_sources).
         search_state is None on cache hit.
     """
+
     def search_title(title: str) -> tuple[Any, list[str]]:
         cache_data = get_scraper_cache(title)
         if cache_data:
