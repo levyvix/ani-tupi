@@ -84,6 +84,121 @@ class TestOtakulogiaScraper:
         assert sd.source == "otakulogia"
 
     @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_search_anime_falls_back_to_slug_catalog(self, mock_req):
+        def side_effect(method, url, **kwargs):
+            query = kwargs["json"]["query"]
+            if "SearchVideo" in query:
+                return _response({"SearchVideo": _wrapped([])})
+            if "AnimeBySlug" in query:
+                return _response(
+                    {
+                        "animeBySlug": {
+                            "upstreamCid": 35679,
+                            "name": "Tenkousaki no Seiso Karen na Bishoujo",
+                            "slug": "tenkousaki-no-seiso-karen-na-bishoujo",
+                        }
+                    }
+                )
+            if "AnimeCatalogDetail" in query:
+                return _response(
+                    {
+                        "animeCatalogDetail": {
+                            "seasons": [
+                                {
+                                    "upstreamTid": 7317,
+                                    "name": "Temporada 01 | Legendado",
+                                }
+                            ]
+                        }
+                    }
+                )
+            raise AssertionError(query)
+
+        mock_req.side_effect = side_effect
+
+        results = self.scraper.search_anime("Tenkousaki no Seiso Karen na Bishoujo")
+
+        assert len(results) == 1
+        result = results[0]
+        assert result.title == "Tenkousaki no Seiso Karen na Bishoujo"
+        assert result.url == "https://otakulogia.com/anime/tenkousaki-no-seiso-karen-na-bishoujo"
+        assert result.params == {
+            "cid": "35679",
+            "slug": "tenkousaki-no-seiso-karen-na-bishoujo",
+            "tid": 7317,
+            "season": 1,
+        }
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_long_search_skips_legacy_api_length_limit(self, mock_req):
+        operations = []
+
+        def side_effect(method, url, **kwargs):
+            query = kwargs["json"]["query"]
+            operations.append(query)
+            if "AnimeBySlug" in query:
+                return _response(
+                    {
+                        "animeBySlug": {
+                            "upstreamCid": 35679,
+                            "name": "Tenkousaki no Seiso Karen na Bishoujo ga",
+                            "slug": "tenkousaki-no-seiso-karen-na-bishoujo-ga",
+                        }
+                    }
+                )
+            if "AnimeCatalogDetail" in query:
+                return _response({"animeCatalogDetail": {"seasons": []}})
+            raise AssertionError(query)
+
+        mock_req.side_effect = side_effect
+        long_title = (
+            "Tenkousaki no Seiso Karen na Bishoujo ga, Mukashi Danshi to Omotte "
+            "Issho ni Asonda Osananajimi datta Ken"
+        )
+
+        results = self.scraper.search_anime(long_title)
+
+        assert len(results) == 1
+        assert all("SearchVideo" not in operation for operation in operations)
+        assert results[0].params == {
+            "cid": "35679",
+            "slug": "tenkousaki-no-seiso-karen-na-bishoujo-ga",
+        }
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_search_episodes_uses_slug_catalog_api(self, mock_req):
+        def side_effect(method, url, **kwargs):
+            query = kwargs["json"]["query"]
+            if "AnimeCatalogDetail" in query:
+                return _response(
+                    {
+                        "animeCatalogDetail": {
+                            "episodes": [
+                                {"upstreamId": 219243, "title": "T01 EP. 02 - Ep 2"},
+                                {"upstreamId": 219121, "title": "T01 EP. 01 - Ep 1"},
+                            ]
+                        }
+                    }
+                )
+            raise AssertionError(query)
+
+        mock_req.side_effect = side_effect
+
+        result = self.scraper.search_episodes(
+            "Tenkousaki",
+            "https://otakulogia.com/anime/tenkousaki-no-seiso",
+            {"cid": "35679", "slug": "tenkousaki-no-seiso", "tid": 7317, "season": 1},
+        )
+
+        assert len(result) == 1
+        assert result[0].titles == ["Episódio 1", "Episódio 2"]
+        assert result[0].urls == [
+            "https://otakulogia.com/watch/219121",
+            "https://otakulogia.com/watch/219243",
+        ]
+        assert result[0].season == 1
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
     def test_search_anime_expands_seasons(self, mock_req):
         seasons = {
             "has_temporada": True,
@@ -293,7 +408,12 @@ class TestOtakulogiaScraper:
 
     @patch("scrapers.plugins.otakulogia.http_request_with_retry")
     def test_search_anime_empty_returns_empty_list(self, mock_req):
-        mock_req.side_effect = _router({"SearchVideo": {"SearchVideo": _wrapped([])}})
+        mock_req.side_effect = _router(
+            {
+                "SearchVideo": {"SearchVideo": _wrapped([])},
+                "AnimeBySlug": {"animeBySlug": None},
+            }
+        )
 
         assert self.scraper.search_anime("nothing") == []
 

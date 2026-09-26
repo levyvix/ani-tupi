@@ -46,7 +46,7 @@ class Goyabu:
                 if title and link:
                     results.append(AnimeMetadata(title=title, url=link, source=self.name))
         except httpx.HTTPError as e:
-            logger.debug("goyabu search_anime falhou: %s", e)
+            logger.debug(f"goyabu search_anime falhou: {e}")
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:

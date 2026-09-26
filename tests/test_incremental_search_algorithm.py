@@ -127,6 +127,23 @@ def test_incremental_search_stops_at_20_results(incremental_search_env):
     assert state.get_current() is not None
 
 
+def test_incremental_search_retries_full_title_after_empty_first_word(incremental_search_env):
+    """A zero-result first token must not prevent exact-title scraper lookups."""
+    _repository, plugin = incremental_search_env
+    full_query = "tenkousaki no seiso karen na bishoujo"
+    plugin.set_results(
+        full_query,
+        ["Tenkousaki no Seiso Karen na Bishoujo ga Mukashi Danshi"],
+    )
+
+    state, results = incremental_search_anime("Tenkousaki no Seiso Karen na Bishoujo")
+
+    assert plugin.calls == ["tenkousaki", full_query]
+    assert results == ["Tenkousaki no Seiso Karen na Bishoujo ga Mukashi Danshi [testsource]"]
+    assert state.get_current() is not None
+    assert state.get_current().query == full_query
+
+
 def test_incremental_search_uses_all_words_if_needed(incremental_search_env):
     """Test that filtering uses all words if results still > 20.
 
@@ -151,12 +168,15 @@ def test_incremental_search_uses_all_words_if_needed(incremental_search_env):
 
     state, results = incremental_search_anime("attack on titan season 4")
 
-    # Should only search once (base 3-word search)
-    # Then filter for 4-word iteration instead of re-searching
-    assert len(plugin.calls) == 1  # Only base search, no re-search
+    # The first token misses, so the full-title retry starts repository search
+    # with the complete phrase; the repository then shortens it to the matching
+    # three-word query.
+    assert "attack on titan 4" in plugin.calls
+    assert "attack on titan" in plugin.calls
 
-    # Results should be from filtering, which may narrow results
+    # Results should come from the progressive full-title retry.
     assert state.get_current() is not None
+    assert len(results) == 21
 
 
 def test_incremental_search_starts_with_1_word_when_first_word_is_long_enough(
@@ -577,9 +597,11 @@ def test_incremental_search_filters_not_searches(incremental_search_env):
     # Filter base_results by "tate no yuusha no" -> no results match (titles don't contain all those words)
     # So should fall back to previous and not make another search call
 
-    # Key assertion: should only search once (initial), not re-search
-    # In the new implementation, after the initial search, we filter instead of searching
-    assert len(plugin.calls) == 1  # Only initial 3-word search
+    # The first token misses, so a full-title retry lets the repository shorten
+    # the query until the three-word source result is found.
+    assert "tate" in plugin.calls
+    assert "tate no yuusha no" in plugin.calls
+    assert "tate no yuusha" in plugin.calls
 
 
 def test_incremental_search_fallback_on_zero_filter(incremental_search_env):
@@ -629,7 +651,7 @@ def test_incremental_search_is_filtered_flag_set(incremental_search_env):
     _repository, plugin = incremental_search_env
 
     # Setup: return small result set so we can add more words
-    plugin.set_results("test anime", ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"])
+    plugin.set_results("test anime", titled_variants("test anime", 8))
     # Note: With new filtering approach, we won't search again
     # We'll filter the base results
 
@@ -638,12 +660,10 @@ def test_incremental_search_is_filtered_flag_set(incremental_search_env):
     # Check that initial search has is_filtered=False
     assert state.search_history[0].is_filtered is False
 
-    # Check that filtered iterations have is_filtered=True (if any exist)
-    # In this case, after 3-word search we have 8 results > 5, so we'd add another word
-    # But that would be filtered now, not searched
-    if len(state.search_history) > 1:
-        # If there's a second iteration, it should be marked as filtered
-        assert state.search_history[1].is_filtered is True
+    # The empty first-token result triggers a fresh full-title search.
+    assert state.search_history[-1].query == "test anime series long"
+    assert state.search_history[-1].is_filtered is False
+    assert len(results) == 8
 
 
 def test_incremental_search_small_base_results_stops(incremental_search_env):

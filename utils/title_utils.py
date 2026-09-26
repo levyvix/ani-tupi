@@ -59,7 +59,7 @@ def normalize_title_for_filter(text: str) -> str:
         "Jujutsu--Kaisen: Season 2!" -> "jujutsu kaisen season 2"
     """
     text = text.lower()
-    for char in ["-", ":", "(", ")", "!", "?", ".", "–", "—"]:
+    for char in ["-", ":", ",", "(", ")", "!", "?", ".", "–", "—"]:
         text = text.replace(char, " ")
     return " ".join(text.split())
 
