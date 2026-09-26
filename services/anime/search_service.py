@@ -588,8 +588,39 @@ def incremental_search_anime(
                     is_filtered=False,
                 )
 
-                # Check stopping condition
-                if len(current_results) <= INCREMENTAL_SEARCH_MAX_RESULTS:
+                if not current_results and current_word_count < len(words):
+                    # Repository search already tries progressively shorter
+                    # prefixes. Start that pass with the complete title so a
+                    # slug-based catalog can resolve the exact AniList name.
+                    full_query = " ".join(words)
+                    _debug_incremental_search(
+                        f"empty base results; retrying full title '{full_query}'"
+                    )
+                    with ui_bridge.loading(f"Buscando '{full_query}'..."):
+                        fallback_outcome = _perform_scraper_search(full_query)
+
+                    used_query = fallback_outcome.used_query
+                    if fallback_outcome.anilist_reference_title:
+                        anilist_reference_title = fallback_outcome.anilist_reference_title
+                    current_results = fallback_outcome.titles_with_sources
+                    current_word_count = len(words)
+                    state.add_result(
+                        len(words),
+                        full_query,
+                        current_results,
+                        _count_sources(current_results),
+                        used_query=used_query,
+                        is_filtered=False,
+                    )
+                    if current_results:
+                        base_results = current_results.copy()
+                    else:
+                        break
+
+                # Stop only after finding something. An empty first-word search
+                # must continue to more specific prefixes because some sources
+                # only return results for multi-word queries.
+                if current_results and len(current_results) <= INCREMENTAL_SEARCH_MAX_RESULTS:
                     # Good result set size - stop here
                     _debug_incremental_search(
                         f"stop: base results <= {INCREMENTAL_SEARCH_MAX_RESULTS}"
@@ -718,8 +749,9 @@ def incremental_search_anime(
             except Exception:
                 raise
 
-            # Check stopping condition
-            if len(current_results) <= INCREMENTAL_SEARCH_MAX_RESULTS:
+            # Check stopping condition only when results exist. Empty prefixes
+            # continue through the query so later words can match the title.
+            if current_results and len(current_results) <= INCREMENTAL_SEARCH_MAX_RESULTS:
                 # Good result set size - stop here
                 _debug_incremental_search(
                     f"stop: current results={len(current_results)} <= {INCREMENTAL_SEARCH_MAX_RESULTS}"

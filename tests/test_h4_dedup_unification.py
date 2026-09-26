@@ -23,6 +23,7 @@ class TestCanonicalFilterNormalization:
             "Re:Zero (Dublado)",
             "  Multiple    Spaces  ",
             "Question? Mark. Dash-Here",
+            "Tenkousaki no Seiso Karen na Bishoujo ga, Mukashi Danshi",
         ]
         for title in samples:
             assert SearchRepository._normalize_for_filter(title) == normalize_title_for_filter(
@@ -39,6 +40,14 @@ class TestCanonicalFilterNormalization:
         assert (
             normalize_title_for_filter("Hell's Paradise: Jigokuraku")
             == "hell's paradise jigokuraku"
+        )
+        assert (
+            normalize_title_for_filter("Tenkousaki no Seiso ga, Mukashi Danshi")
+            == "tenkousaki no seiso ga mukashi danshi"
+        )
+        assert SearchRepository._matches_filter_query(
+            "Tenkousaki no Seiso Karen na Bishoujo ga, Mukashi Danshi",
+            "tenkousaki no seiso karen na bishoujo ga mukashi danshi",
         )
 
     def test_formatter_still_uses_canonical_normalization(self):

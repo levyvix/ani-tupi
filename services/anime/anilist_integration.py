@@ -132,23 +132,40 @@ def load_episodes_from_cache_or_search(
         Tuple of (search_state, titles_with_sources).
         search_state is None on cache hit.
     """
-    cache_data = get_scraper_cache(query)
+    def search_title(title: str) -> tuple[Any, list[str]]:
+        cache_data = get_scraper_cache(title)
+        if cache_data:
+            logger.info(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
+            rep.load_from_cache(title, cache_data)
+            rep.search_anime(title, verbose=False)
+            cached_titles = rep.get_anime_titles_with_sources()
+            if not cached_titles:
+                cached_titles = [title]
+            return None, cached_titles
 
-    if cache_data:
-        logger.info(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
-        rep.load_from_cache(query, cache_data)
-        rep.search_anime(query, verbose=False)
-        titles_with_sources = rep.get_anime_titles_with_sources()
-        if not titles_with_sources:
-            titles_with_sources = [query]
-        return None, titles_with_sources
+        return incremental_search_anime(
+            title,
+            english_title=english_title,
+            romaji_title=romaji_title,
+        )
 
-    # Not in cache: use incremental search
-    search_state, titles_with_sources = incremental_search_anime(
-        query,
-        english_title=english_title,
-        romaji_title=romaji_title,
-    )
+    search_state, titles_with_sources = search_title(query)
+
+    # AniList aliases are often indexed differently by Portuguese sources.
+    # If the selected AniList title misses, try its other official title too.
+    query_key = query.strip().casefold()
+    if not titles_with_sources:
+        alternate_title = None
+        if english_title and query_key == english_title.strip().casefold():
+            alternate_title = romaji_title
+        elif romaji_title and query_key == romaji_title.strip().casefold():
+            alternate_title = english_title
+
+        if alternate_title and alternate_title.strip().casefold() != query_key:
+            logger.info(
+                f"🔎 Título sem resultados; tentando o outro título do AniList: {alternate_title}"
+            )
+            search_state, titles_with_sources = search_title(alternate_title)
 
     if titles_with_sources and romaji_title:
         titles_with_sources = rank_anime_results_by_reference(titles_with_sources, romaji_title)

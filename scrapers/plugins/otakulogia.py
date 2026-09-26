@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
@@ -38,6 +39,7 @@ BASE_URL = "https://otakulogia.com"
 API_URL = "https://api.otakulogia.com/graphql"
 REQUEST_TIMEOUT = 20
 MAX_PAGES = 30
+LEGACY_SEARCH_MAX_LENGTH = 100
 
 HEADERS = {
     **DEFAULT_HEADERS,
@@ -47,6 +49,21 @@ HEADERS = {
 }
 
 SEARCH_QUERY = "query SearchVideo($input: SearchInput!){ SearchVideo(input: $input) }"
+ANIME_BY_SLUG_QUERY = """query AnimeBySlug($slug: String!) {
+    animeBySlug(slug: $slug) {
+        id upstreamCid name slug nameEn year status synopsis posterUrl audioMix hasNewEpisode
+    }
+}"""
+ANIME_CATALOG_DETAIL_QUERY = """query AnimeCatalogDetail($upstreamCid: Int!, $upstreamTid: Int) {
+    animeCatalogDetail(upstreamCid: $upstreamCid, upstreamTid: $upstreamTid) {
+        anime { id upstreamCid name slug }
+        seasons { upstreamTid name slug audioType }
+        episodes {
+            id upstreamId title slug episodeNumber upstreamTempId
+            videoUrl videoUrlFhd videoUrlSd videoType audioType
+        }
+    }
+}"""
 TEMPORADA_QUERY = "query CheckTemporada($catId: String!){ CheckTemporada(catId: $catId) }"
 BYCAT_QUERY = "query VideoByCatId($input: VideoByCatInput!){ VideoByCatId(input: $input) }"
 SINGLE_QUERY = "query SingleVideo($input: SingleVideoInput!){ SingleVideo(input: $input) }"
@@ -160,6 +177,98 @@ def _temporada_entry(cid: str, category: str, temp: dict) -> AnimeMetadata:
     return AnimeMetadata(title=title, url=url, source=Otakulogia.name, params=params)
 
 
+def _slugify_title(title: str) -> str:
+    """Build the public anime route slug used by Otakulogia's current catalog."""
+    ascii_title = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", ascii_title.lower()).strip("-")
+
+
+def _metadata_from_slug_search(query: str) -> list[AnimeMetadata]:
+    """Resolve an exact title through the current slug-based catalog API.
+
+    The legacy ``SearchVideo`` operation no longer indexes every public anime
+    route. ``AnimeBySlug`` does, so use it when the legacy search has no hits.
+    """
+    slug = _slugify_title(query)
+    if not slug:
+        return []
+
+    try:
+        data = _gql(ANIME_BY_SLUG_QUERY, {"slug": slug})
+        anime = (data or {}).get("animeBySlug")
+        if not isinstance(anime, dict):
+            return []
+
+        cid = anime.get("upstreamCid")
+        title = str(anime.get("name") or "").strip()
+        anime_slug = str(anime.get("slug") or slug).strip()
+        if not cid or not title or not anime_slug:
+            return []
+
+        params_base = {"cid": str(cid), "slug": anime_slug}
+        try:
+            catalog_data = _gql(ANIME_CATALOG_DETAIL_QUERY, {"upstreamCid": int(cid)})
+        except httpx.HTTPError as exc:
+            logger.debug(f"Otakulogia season lookup failed for {query!r}: {exc}")
+            catalog_data = None
+        catalog = (catalog_data or {}).get("animeCatalogDetail")
+        seasons = catalog.get("seasons") if isinstance(catalog, dict) else None
+        if not isinstance(seasons, list) or not seasons:
+            return [
+                AnimeMetadata(
+                    title=title,
+                    url=f"{BASE_URL}/anime/{anime_slug}",
+                    source=Otakulogia.name,
+                    params=params_base,
+                )
+            ]
+
+        results = []
+        for season_data in seasons:
+            if not isinstance(season_data, dict):
+                continue
+            tid = season_data.get("upstreamTid")
+            name = str(season_data.get("name") or "").strip()
+            if tid is None:
+                continue
+
+            language = _language_of(name)
+            season = _effective_season(name)
+            if season is None:
+                display_title = name or title
+            elif season == 1 and language == "Legendado":
+                display_title = title
+            else:
+                display_title = f"{title} Temporada {season}"
+            if language and display_title != title:
+                display_title = f"{display_title} {language}"
+
+            results.append(
+                AnimeMetadata(
+                    title=display_title,
+                    url=f"{BASE_URL}/anime/{anime_slug}",
+                    source=Otakulogia.name,
+                    params={
+                        **params_base,
+                        "tid": int(tid),
+                        **({"season": season} if season else {}),
+                    },
+                )
+            )
+
+        return results or [
+            AnimeMetadata(
+                title=title,
+                url=f"{BASE_URL}/anime/{anime_slug}",
+                source=Otakulogia.name,
+                params=params_base,
+            )
+        ]
+    except httpx.HTTPError as exc:
+        logger.debug(f"Otakulogia slug search failed for {query!r}: {exc}")
+        return []
+
+
 class Otakulogia:
     name = "otakulogia"
     base_url = BASE_URL
@@ -186,42 +295,41 @@ class Otakulogia:
             return []
 
     def search_anime(self, query: str) -> list[AnimeMetadata]:
+        if len(query) > LEGACY_SEARCH_MAX_LENGTH:
+            return _metadata_from_slug_search(query)
+
         results: list[AnimeMetadata] = []
         try:
             data = _gql(SEARCH_QUERY, {"input": {"searchText": query}})
-            if not data:
-                return results
-
             catalogs: list[tuple[str, str]] = []
-            for entry in _unwrap(data.get("SearchVideo")):
+            for entry in _unwrap((data or {}).get("SearchVideo")):
                 cid = entry.get("cid")
                 title = (entry.get("category_name") or "").strip()
                 if cid and title:
                     catalogs.append((str(cid), title))
-            if not catalogs:
-                return results
 
-            with ThreadPoolExecutor(max_workers=min(len(catalogs), 8)) as executor:
-                temporada_lists = list(
-                    executor.map(lambda pair: self._fetch_temporadas(pair[0]), catalogs)
-                )
-
-            for (cid, title), temporadas in zip(catalogs, temporada_lists):
-                if not temporadas:
-                    results.append(
-                        AnimeMetadata(
-                            title=title,
-                            url=f"{BASE_URL}/anime/{cid}",
-                            source=self.name,
-                            params={"cid": str(cid)},
-                        )
+            if catalogs:
+                with ThreadPoolExecutor(max_workers=min(len(catalogs), 8)) as executor:
+                    temporada_lists = list(
+                        executor.map(lambda pair: self._fetch_temporadas(pair[0]), catalogs)
                     )
-                    continue
-                for temp in temporadas:
-                    results.append(_temporada_entry(cid, title, temp))
+
+                for (cid, title), temporadas in zip(catalogs, temporada_lists):
+                    if not temporadas:
+                        results.append(
+                            AnimeMetadata(
+                                title=title,
+                                url=f"{BASE_URL}/anime/{cid}",
+                                source=self.name,
+                                params={"cid": str(cid)},
+                            )
+                        )
+                        continue
+                    for temp in temporadas:
+                        results.append(_temporada_entry(cid, title, temp))
         except httpx.HTTPError as exc:
             logger.debug(f"Otakulogia search_anime failed for {query!r}: {exc}")
-        return results
+        return results or _metadata_from_slug_search(query)
 
     def _pick_temporada(self, cid: str, requested_season: int | None) -> tuple[int | None, int]:
         """Return ``(tid, season)`` for the catalog, honoring a requested season.
@@ -261,6 +369,9 @@ class Otakulogia:
         if not cid:
             logger.debug(f"Otakulogia: could not resolve cid from {url!r}")
             return []
+
+        if isinstance(params, dict) and params.get("slug"):
+            return self._search_slug_catalog_episodes(anime, cid, params)
 
         requested_season = None
         tid_param = None
@@ -305,6 +416,44 @@ class Otakulogia:
             return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name, season=season)]
         except httpx.HTTPError as exc:
             logger.debug(f"Otakulogia search_episodes failed for {anime!r}: {exc}")
+            return []
+
+    def _search_slug_catalog_episodes(
+        self, anime: str, cid: str, params: dict
+    ) -> list[ScrapedEpisodes]:
+        """Load episode URLs from the current catalog API for slug-based results."""
+        try:
+            variables = {"upstreamCid": int(cid)}
+            tid = params.get("tid")
+            if tid is not None:
+                variables["upstreamTid"] = int(tid)
+            data = _gql(ANIME_CATALOG_DETAIL_QUERY, variables)
+            catalog = (data or {}).get("animeCatalogDetail")
+            if not isinstance(catalog, dict):
+                return []
+
+            episodes_by_number: dict[int, str] = {}
+            for index, episode in enumerate(catalog.get("episodes") or []):
+                if not isinstance(episode, dict):
+                    continue
+                video_id = episode.get("upstreamId")
+                title = str(episode.get("title") or episode.get("video_ep") or "")
+                if video_id is None:
+                    continue
+                number = _episode_number({"video_ep": title}, fallback=index + 1)
+                episodes_by_number.setdefault(number, f"{BASE_URL}/watch/{video_id}")
+
+            if not episodes_by_number:
+                return []
+
+            ordered = sorted(episodes_by_number.items())
+            offset = ordered[0][0] - 1
+            titles = [f"Episódio {number - offset}" for number, _ in ordered]
+            urls = [episode_url for _, episode_url in ordered]
+            season = int(params.get("season") or 1)
+            return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name, season=season)]
+        except (httpx.HTTPError, TypeError, ValueError) as exc:
+            logger.debug(f"Otakulogia catalog episode fetch failed for {anime!r}: {exc}")
             return []
 
     def search_player_src(self, url: str, container: list, event) -> None:
