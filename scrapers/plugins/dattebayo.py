@@ -226,7 +226,8 @@ def _parse_anime_items(soup: BeautifulSoup) -> list[AnimeMetadata]:
     seen: set[str] = set()
 
     for item in soup.select(".ultimosAnimesHomeItem"):
-        anchor = item.select_one("a[href*='/animes/']")
+        # Dattebayo serves dubbed catalog entries under a separate route.
+        anchor = item.select_one("a[href*='/animes/'], a[href*='/anime-dublado/']")
         if not anchor:
             continue
         href = _absolute_url(str(anchor.get("href", "")))
