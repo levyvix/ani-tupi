@@ -443,8 +443,12 @@ def _search_and_add_anime(is_logged_in: bool) -> tuple[str, int] | None:
         None if going back
 
     """
-    # Get search query
-    query = input("\n🔍 Digite o nome do anime: ").strip()
+    # Get search query. Ctrl+C cancels the prompt and returns to the AniList menu.
+    try:
+        query = input("\n🔍 Digite o nome do anime (Ctrl+C para voltar): ").strip()
+    except KeyboardInterrupt:
+        logger.info("Busca cancelada.")
+        return anilist_main_menu()
 
     if not query:
         return anilist_main_menu()
