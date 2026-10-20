@@ -1114,7 +1114,17 @@ def search_anime_flow(args):
     # (Repository is singleton, so it keeps data between calls)
     rep.clear_search_results()
 
-    query = ui_bridge.prompt("\n🔍 Pesquise anime: ") if not args.query else args.query
+    if args.query:
+        query = args.query
+    else:
+        try:
+            query = ui_bridge.prompt("\n🔍 Pesquise anime (Enter para voltar): ").strip()
+        except KeyboardInterrupt:
+            # Treat Ctrl+C at the search prompt as navigation back to the main menu.
+            return None, None, None
+
+        if not query:
+            return None, None, None
 
     source = None
     resolution = _resolve_search_query(query)
