@@ -20,6 +20,7 @@ from typing import Iterator
 from models.config import get_data_path, settings
 from models.download import (
     AiringSourceBinding,
+    AiringSourceCandidate,
     AiringSourceRecord,
     AnimeDownloadDatabase,
     AnimeDownloadHistory,
@@ -408,13 +409,13 @@ def _merge_confirmed_playback_binding(
     alternatives = list(existing.alternatives)
     if not has_confirmed_context:
         alternatives.append(
-            {
-                "title": confirmed.title,
-                "source": confirmed.source,
-                "anime_url": confirmed.anime_url,
-                "params": confirmed.params,
-                "variant": confirmed.variant,
-            }
+            AiringSourceCandidate(
+                title=confirmed.title,
+                source=confirmed.source,
+                anime_url=confirmed.anime_url,
+                params=confirmed.params,
+                variant=confirmed.variant,
+            )
         )
     return existing.model_copy(
         update={

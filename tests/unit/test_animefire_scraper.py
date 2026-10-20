@@ -6,16 +6,32 @@ from unittest.mock import MagicMock, call, patch
 from scrapers.plugins.animefire import AnimeFire
 
 
-SEARCH_HTML = """
-<html><body>
-  <div class="col-6.col-sm-4.col-md-3.col-lg-2.mb-1.minWDanime.divCardUltimosEps">
-    <div class="col-6 col-sm-4 col-md-3 col-lg-2 mb-1 minWDanime divCardUltimosEps">
-      <article><a href="https://animefire.plus/animes/mao">link</a></article>
-    </div>
-  </div>
-  <h3 class="animeTitle">Mao</h3>
-</body></html>
-"""
+SEARCH_PAYLOAD = {
+    "data": [
+        {
+            "id": "mao-id",
+            "titles": {"BR": "Mao"},
+            "audio": "Legendado",
+        }
+    ]
+}
+
+ANIME_PAYLOAD = {
+    "data": {
+        "seasons": [{"number": 1}, {"number": 2}],
+        "episodes": [],
+    }
+}
+
+ANIME_WITH_EPISODES_PAYLOAD = {
+    "data": {
+        "seasons": [{"number": 1}, {"number": 2}],
+        "episodes": [
+            {"id": "mao-1", "number": 1, "season": 1, "title": "First"},
+            {"id": "mao-2", "number": 1, "season": 2, "title": "Second"},
+        ],
+    }
+}
 
 EPISODES_HTML = """
 <html><body>
@@ -104,22 +120,40 @@ class TestAnimeFireScraper:
 
     @patch("scrapers.plugins.animefire.http_get_with_retry")
     def test_search_anime_returns_results(self, mock_get):
-        mock_get.return_value = _Response(SEARCH_HTML)
+        mock_get.side_effect = [
+            _Response(json.dumps(SEARCH_PAYLOAD)),
+            _Response(json.dumps(ANIME_PAYLOAD)),
+        ]
 
         results = self.scraper.search_anime("mao")
 
-        assert len(results) == 1
-        assert results[0].title == "Mao"
-        assert results[0].url == "https://animefire.plus/animes/mao"
-        mock_get.assert_called_once()
+        assert [result.title for result in results] == ["Mao", "Mao 2"]
+        assert all(result.url == "https://animefire.one/anime/mao-id" for result in results)
+        assert [result.params["season"] for result in results] == [1, 2]
+        assert mock_get.call_count == 2
 
     @patch("scrapers.plugins.animefire.http_get_with_retry")
     def test_search_anime_returns_empty_without_cards(self, mock_get):
-        mock_get.return_value = _Response("<html></html>")
+        mock_get.return_value = _Response(json.dumps({"data": []}))
 
         results = self.scraper.search_anime("nothing")
 
         assert results == []
+
+    @patch("scrapers.plugins.animefire.http_get_with_retry")
+    def test_search_episodes_returns_only_requested_season(self, mock_get):
+        mock_get.return_value = _Response(json.dumps(ANIME_WITH_EPISODES_PAYLOAD))
+
+        result = self.scraper.search_episodes(
+            "Mao 2",
+            "https://animefire.one/anime/mao-id",
+            {"anime_id": "mao-id", "season": 2},
+        )
+
+        assert len(result) == 1
+        assert result[0].season == 2
+        assert result[0].titles == ["Episódio 1 - Second"]
+        assert result[0].urls == ["https://api.animefire.one/episode/mao-2"]
 
     @patch("scrapers.plugins.animefire.http_get_with_retry")
     def test_search_episodes_returns_episode_list(self, mock_get):

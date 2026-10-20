@@ -90,6 +90,12 @@ class SearchRepository:
         self._sig_idx = {}
         self._populated = False
 
+    def clear_search_cache(self, query: str) -> bool:
+        """Remove one persistent search result entry for ``query``."""
+        from utils.cache import get_cache
+
+        return get_cache().delete(normalize_search_cache_key(query))
+
     def _build_search_results(self, query: str) -> SearchResults:
         results = []
         for title, sources_list in self.anime_to_urls.items():
