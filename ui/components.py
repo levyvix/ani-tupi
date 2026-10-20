@@ -170,6 +170,7 @@ def menu_navigate(
     search_state=None,
     alternative_language_available: bool = False,
     alternative_language_label: str | None = None,
+    refresh_search_available: bool = False,
 ) -> str | None:
     """Display interactive menu for navigation (returns None instead of exit).
 
@@ -180,10 +181,11 @@ def menu_navigate(
         search_state: Optional IncrementalSearchState for navigation between result sets
         alternative_language_available: Whether language toggle button should be shown
         alternative_language_label: Label for language toggle button (e.g., "🔄 Re-buscar em Inglês")
+        refresh_search_available: Whether to show an action to repeat the current search
 
     Returns:
         Selected option, special navigation commands ("__nav_previous__", "__nav_next__", "__research_language__"),
-        or None if user cancels
+        "__refresh_search__", or None if user cancels
 
     Behavior:
         - Adds navigation buttons: "← Voltar" (back), "Sair" (exit)
@@ -231,6 +233,11 @@ def menu_navigate(
         if not (search_state or enable_search):
             opts_copy.append("─" * 30)
         opts_copy.append(alternative_language_label)
+
+    if refresh_search_available:
+        if not (search_state or enable_search or alternative_language_available):
+            opts_copy.append("─" * 30)
+        opts_copy.append("🔄 Refazer busca")
 
     if not enable_search and not search_state and not alternative_language_available:
         opts_copy.append("─" * 30)
@@ -306,6 +313,9 @@ def menu_navigate(
     # Handle language toggle
     if alternative_language_available and answer == alternative_language_label:
         return "__research_language__"
+
+    if refresh_search_available and answer == "🔄 Refazer busca":
+        return "__refresh_search__"
 
     # Return selection (filter out the added options)
     return answer

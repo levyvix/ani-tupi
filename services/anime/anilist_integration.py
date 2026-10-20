@@ -265,6 +265,7 @@ def select_anime_from_results(
             search_state=search_state,
             alternative_language_available=can_toggle_language,
             alternative_language_label=alt_label,
+            refresh_search_available=True,
         )
 
         if not selected_anime_with_source:
@@ -289,6 +290,33 @@ def select_anime_from_results(
                 current_result_set = search_state.get_current()
                 if current_result_set:
                     used_query = current_result_set.query
+
+            continue
+
+        if selected_anime_with_source == "__refresh_search__":
+            if search_state:
+                base_result = (
+                    search_state.search_history[0] if search_state.search_history else None
+                )
+                cache_query = base_result.used_query or base_result.query if base_result else query
+                refresh_query = search_state.current_title or query
+            else:
+                cache_query = used_query or query
+                refresh_query = used_query or query
+
+            if cache_query and cache_query.strip():
+                rep.clear_search_cache(cache_query)
+
+            rep.clear_search_results()
+            search_state, titles_with_sources = incremental_search_anime(
+                refresh_query,
+                english_title=english_title,
+                romaji_title=romaji_title,
+            )
+
+            current_result_set = search_state.get_current() if search_state else None
+            if current_result_set:
+                used_query = current_result_set.query
 
             continue
 

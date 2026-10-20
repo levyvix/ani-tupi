@@ -80,6 +80,10 @@ class Repository:
         """Clear all search results."""
         self._search_repo.clear_search_results()
 
+    def clear_search_cache(self, query: str) -> bool:
+        """Remove cached search results for one query."""
+        return self._search_repo.clear_search_cache(query)
+
     def search_anime(self, query: str, verbose: bool = True):
         """Search for anime across all registered sources."""
         return self._search_repo.search_anime(query, verbose)
