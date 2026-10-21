@@ -34,6 +34,32 @@ def _raise_for_cloudflare_challenge(response: httpx.Response, method: str, url: 
     )
 
 
+def log_scraper_http_failure(
+    logger, plugin_name: str, operation: str, error: httpx.HTTPError
+) -> None:
+    """Log Cloudflare denials visibly while keeping transient HTTP errors debug-only."""
+    response = getattr(error, "response", None)
+    headers = response.headers if response is not None else {}
+    is_cloudflare_denial = (
+        response is not None
+        and response.status_code == 403
+        and (
+            "cloudflare" in headers.get("server", "").lower()
+            or "cf-ray" in headers
+            or "cf-mitigated" in headers
+        )
+    )
+
+    if is_cloudflare_denial:
+        logger.warning(
+            f"{plugin_name} {operation} was denied by Cloudflare (HTTP 403); "
+            "the source is unavailable from this network"
+        )
+        return
+
+    logger.debug(f"{plugin_name} {operation} failed: {error}")
+
+
 def http_request_with_retry(
     method: str,
     url: str,

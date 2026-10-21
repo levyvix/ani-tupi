@@ -11,6 +11,7 @@ from scrapers.plugins.utils import (
     DEFAULT_HEADERS,
     http_get_with_retry,
     load_plugin,
+    log_scraper_http_failure,
     store_player_source,
 )
 from models.models import AnimeMetadata, ScrapedEpisodes
@@ -53,7 +54,7 @@ class AnRoll:
                 if title and href:
                     results.append(AnimeMetadata(title=title, url=href, source=self.name))
         except httpx.HTTPError as e:
-            logger.debug("anroll search_anime falhou: %s", e)
+            log_scraper_http_failure(logger, "AnRoll", "search_anime", e)
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
@@ -83,7 +84,7 @@ class AnRoll:
                 return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
             return []
         except httpx.HTTPError as e:
-            logger.debug("anroll search_episodes falhou: %s", e)
+            log_scraper_http_failure(logger, "AnRoll", "search_episodes", e)
             return []
 
     def _find_first_episode_url(self, soup: BeautifulSoup) -> str | None:

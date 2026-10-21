@@ -11,6 +11,7 @@ from scrapers.plugins.utils import (
     DEFAULT_HEADERS,
     http_get_with_retry,
     load_plugin,
+    log_scraper_http_failure,
     store_player_source,
 )
 from models.models import AnimeMetadata, ScrapedEpisodes
@@ -46,7 +47,7 @@ class Goyabu:
                 if title and link:
                     results.append(AnimeMetadata(title=title, url=link, source=self.name))
         except httpx.HTTPError as e:
-            logger.debug(f"goyabu search_anime falhou: {e}")
+            log_scraper_http_failure(logger, "Goyabu", "search_anime", e)
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
@@ -77,7 +78,10 @@ class Goyabu:
             if titles and urls:
                 return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
             return []
-        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
+        except httpx.HTTPError as e:
+            log_scraper_http_failure(logger, "Goyabu", "search_episodes", e)
+            return []
+        except (json.JSONDecodeError, ValueError):
             return []
 
     def search_player_src(self, url: str, container: list, event) -> None:

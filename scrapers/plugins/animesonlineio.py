@@ -12,6 +12,7 @@ from scrapers.plugins.utils import (
     http_get_with_retry,
     http_request_with_retry,
     load_plugin,
+    log_scraper_http_failure,
     store_player_source,
 )
 from utils.logging import get_logger
@@ -52,7 +53,7 @@ class AnimesOnlineIO:
                 if title and link:
                     results.append(AnimeMetadata(title=title, url=link, source=self.name))
         except httpx.HTTPError as e:
-            logger.debug(f"AnimesOnlineIO search request failed for '{query}': {e}")
+            log_scraper_http_failure(logger, "AnimesOnlineIO", "search_anime", e)
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
@@ -93,7 +94,7 @@ class AnimesOnlineIO:
                 return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
             return []
         except httpx.HTTPError as e:
-            logger.debug(f"AnimesOnlineIO episode fetch failed for '{anime}': {e}")
+            log_scraper_http_failure(logger, "AnimesOnlineIO", "search_episodes", e)
             return []
 
     def search_player_src(self, url: str, container: list, event) -> None:
