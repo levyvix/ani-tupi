@@ -10,6 +10,7 @@ from models.models import AnimeMetadata, ScrapedEpisodes
 from scrapers.plugins.utils import (
     DEFAULT_HEADERS,
     http_get_with_retry,
+    http_request_with_retry,
     load_plugin,
     store_player_source,
 )
@@ -238,8 +239,13 @@ class AnimesOnlineIO:
         if "redirector.googlevideo.com" not in url:
             return url
         try:
-            r = http_get_with_retry(
-                url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=False
+            r = http_request_with_retry(
+                "GET",
+                url,
+                headers=HEADERS,
+                timeout=REQUEST_TIMEOUT,
+                follow_redirects=False,
+                expected_status_codes={301, 302, 303, 307, 308},
             )
             location = r.headers.get("location", "")
             return location if location.startswith("http") else url

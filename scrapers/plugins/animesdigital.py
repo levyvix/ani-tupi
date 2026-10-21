@@ -173,13 +173,7 @@ class AnimesDigital:
                 if href and not href.startswith("http"):
                     href = f"https://animesdigital.org{href}"
                 return href
-        except (
-            httpx.TimeoutException,
-            httpx.ConnectError,
-            AttributeError,
-            KeyError,
-            ValueError,
-        ) as e:
+        except (httpx.HTTPError, AttributeError, KeyError, ValueError) as e:
             logger.debug(f"Failed to extract series URL from {episode_url}: {e}")
         return None
 
@@ -632,8 +626,8 @@ class AnimesDigital:
             )
             return result
 
-        except httpx.TimeoutException:
-            logger.debug("AnimesDigital homepage fetch timed out")
+        except httpx.HTTPError as e:
+            logger.debug("AnimesDigital homepage fetch failed: %s", e)
             return []
         except (AttributeError, KeyError, ValueError, IndexError) as e:
             logger.debug(f"Error searching AnimesDigital homepage: {e}")

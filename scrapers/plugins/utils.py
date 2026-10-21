@@ -46,6 +46,7 @@ def http_request_with_retry(
     follow_redirects: bool = True,
     max_retries: int = 3,
     backoff_base: float = 0.5,
+    expected_status_codes: set[int] | None = None,
     client: httpx.Client | None = None,
 ) -> httpx.Response:
     """Perform an HTTP request with retry/backoff for transient failures.
@@ -66,6 +67,9 @@ def http_request_with_retry(
         follow_redirects: Whether to follow redirects.
         max_retries: Maximum number of retry attempts after the first request.
         backoff_base: Base seconds for exponential backoff.
+        expected_status_codes: Additional response status codes to return without
+            calling ``raise_for_status``. Useful when the caller needs to inspect a
+            redirect response directly.
         client: Optional ``httpx.Client`` to use.
 
     Returns:
@@ -132,6 +136,9 @@ def http_request_with_retry(
             )
             time.sleep(delay)
             continue
+
+        if status in (expected_status_codes or set()):
+            return response
 
         response.raise_for_status()
         return response

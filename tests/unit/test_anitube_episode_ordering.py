@@ -113,6 +113,13 @@ class TestAnitubeEpisodeOrdering:
             assert result[0].urls == ["https://www.anitube.zip/video/1054054/"]
             assert result[0].source == "anitube"
 
+    def test_no_episode_links_returns_empty_list(self):
+        scraper = AniTube()
+
+        with patch("scrapers.plugins.anitube.http_get_with_retry") as mock_get:
+            mock_get.return_value = _response("<html><body>No episodes</body></html>")
+            assert scraper.search_episodes("Test Anime", "https://anitube.test/anime", None) == []
+
 
 class TestAnitubeSearchAnimeAndPlayer:
     def setup_method(self):
@@ -131,6 +138,27 @@ class TestAnitubeSearchAnimeAndPlayer:
 
         assert any(r.title == "Mao" for r in results)
         assert all(r.source == "anitube" for r in results)
+
+    @patch("scrapers.plugins.anitube.http_get_with_retry")
+    def test_search_anime_skips_invalid_json_payload(self, mock_get):
+        response = MagicMock()
+        response.json.side_effect = ValueError("not JSON")
+        mock_get.return_value = response
+
+        assert self.scraper.search_anime("mao") == []
+
+    @patch("scrapers.plugins.anitube.http_get_with_retry")
+    def test_search_anime_skips_malformed_post_entries(self, mock_get):
+        response = MagicMock()
+        response.json.return_value = [
+            None,
+            {"title": {"rendered": "Mao"}, "link": "https://anitube.test/mao"},
+        ]
+        mock_get.return_value = response
+
+        results = self.scraper.search_anime("mao")
+
+        assert any(result.title == "Mao" for result in results)
 
     @patch("scrapers.plugins.anitube.http_get_with_retry")
     def test_search_player_src_extracts_hls_url(self, mock_get):

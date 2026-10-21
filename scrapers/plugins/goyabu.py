@@ -100,8 +100,11 @@ class Goyabu:
 
                 if token:
                     video_url = resolve_blogger_token(token)
-                    if store_player_source(container, event, video_url):
-                        return
+                    if video_url:
+                        store_player_source(container, event, video_url)
+
+            if container:
+                return
 
             raise ValueError("No playable video source found in Goyabu episode")
         except Exception as e:

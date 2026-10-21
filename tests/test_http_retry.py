@@ -154,6 +154,23 @@ def test_404_raises_immediately_no_retry(monkeypatch, no_sleep):
     assert no_sleep == []
 
 
+def test_expected_redirect_status_is_returned_for_location_inspection(monkeypatch):
+    calls = _patch_request(
+        monkeypatch, [_Resp(302, headers={"Location": "https://cdn.test/v.mp4"})]
+    )
+
+    response = http_request_with_retry(
+        "GET",
+        "https://redirector.test/video",
+        follow_redirects=False,
+        expected_status_codes={302},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "https://cdn.test/v.mp4"
+    assert calls["count"] == 1
+
+
 def test_cloudflare_challenge_raises_clear_error_without_retry(monkeypatch, no_sleep):
     request = httpx.Request("GET", "https://protected.example")
     response = httpx.Response(

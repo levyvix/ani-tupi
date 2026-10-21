@@ -32,11 +32,18 @@ class AniTube:
                 url = f"{self.base_url}/wp-json/wp/v2/posts?search={urllib.parse.quote(q)}&per_page=20"
                 response = http_get_with_retry(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 posts = response.json()
-            except httpx.HTTPError as e:
+            except (httpx.HTTPError, ValueError) as e:
                 logger.debug(f"AniTube search request failed for '{q}': {e}")
                 return
+            if not isinstance(posts, list):
+                logger.debug(f"AniTube returned unexpected search payload for '{q}'")
+                return
             for post in posts:
+                if not isinstance(post, dict):
+                    continue
                 title = post.get("title", {}).get("rendered", "")
+                if not isinstance(title, str):
+                    title = ""
                 link = post.get("link", "")
                 if title and link:
                     lower_title = title.lower()
@@ -75,6 +82,8 @@ class AniTube:
                     titles.append(title.strip())
                     urls.append(href)
 
+            if not titles:
+                return []
             return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
         except httpx.HTTPError as e:
             logger.debug(f"AniTube episode fetch failed for '{anime}': {e}")

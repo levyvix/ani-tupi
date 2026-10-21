@@ -2,6 +2,7 @@ import html
 from utils.logging import get_logger
 import re
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 from bs4 import BeautifulSoup
@@ -156,49 +157,62 @@ class SushiAnimes:
         return BeautifulSoup(response.text, "html.parser")
 
     def search_anime(self, query: str) -> list[AnimeMetadata]:
-        results = []
         try:
             soup = self._search_page(query)
             anime_items = soup.select("#animes .list-movie")
+            if not anime_items:
+                return []
 
-            for item in anime_items:
-                anchor = item.select_one("a.list-title") or item.select_one("a.list-media")
-                if not anchor:
-                    continue
-
-                title = anchor.get_text(strip=True)
-                href = anchor.get("href")
-                if not title or not href:
-                    continue
-
-                anime_url = _normalize_url(href)
-                anime_page = self._fetch_anime_page(anime_url)
-                season_panes = anime_page.select(".episodes.tab-content .tab-pane[id^='season-']")
-
-                if len(season_panes) <= 1:
-                    results.append(
-                        AnimeMetadata(
-                            title=_build_result_title(title, 1),
-                            url=anime_url,
-                            source=self.name,
-                            params={"season": 1},
-                        )
-                    )
-                    continue
-
-                for pane in season_panes:
-                    season_id = pane.get("id", "season-1")
-                    season = _extract_season_number(season_id)
-                    results.append(
-                        AnimeMetadata(
-                            title=_build_result_title(title, season),
-                            url=anime_url,
-                            source=self.name,
-                            params={"season": season},
-                        )
-                    )
+            # Fetch card details concurrently, while preserving search result order.
+            # A failed details page degrades to one season-1 result instead of
+            # discarding every result after it.
+            with ThreadPoolExecutor(max_workers=min(4, len(anime_items))) as executor:
+                result_groups = list(executor.map(self._parse_anime_item, anime_items))
+            return [result for group in result_groups for result in group]
         except httpx.HTTPError as e:
             logger.debug("sushianimes search_anime falhou: %s", e)
+            return []
+
+    def _parse_anime_item(self, item) -> list[AnimeMetadata]:
+        anchor = item.select_one("a.list-title") or item.select_one("a.list-media")
+        if not anchor:
+            return []
+
+        title = anchor.get_text(strip=True)
+        href = anchor.get("href")
+        if not title or not href:
+            return []
+
+        anime_url = _normalize_url(href)
+        try:
+            anime_page = self._fetch_anime_page(anime_url)
+            season_panes = anime_page.select(".episodes.tab-content .tab-pane[id^='season-']")
+        except httpx.HTTPError as e:
+            logger.debug("sushianimes anime page failed for %s: %s", anime_url, e)
+            season_panes = []
+
+        if len(season_panes) <= 1:
+            return [
+                AnimeMetadata(
+                    title=_build_result_title(title, 1),
+                    url=anime_url,
+                    source=self.name,
+                    params={"season": 1},
+                )
+            ]
+
+        results = []
+        for pane in season_panes:
+            season_id = pane.get("id", "season-1")
+            season = _extract_season_number(season_id)
+            results.append(
+                AnimeMetadata(
+                    title=_build_result_title(title, season),
+                    url=anime_url,
+                    source=self.name,
+                    params={"season": season},
+                )
+            )
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
@@ -215,8 +229,6 @@ class SushiAnimes:
                 season = _extract_season_number(anime)
 
             season_pane = soup.select_one(f".episodes.tab-content .tab-pane#season-{season}")
-            if season_pane is None:
-                season_pane = soup.select_one(".episodes.tab-content .tab-pane")
             if season_pane is None:
                 return []
 
@@ -260,6 +272,7 @@ class SushiAnimes:
                 "Referer": url,
             }
 
+            found = False
             for embed_id in embed_ids:
                 try:
                     embed_response = http_request_with_retry(
@@ -273,11 +286,12 @@ class SushiAnimes:
                     player_url = _extract_player_url(embed_response.text)
                     if player_url:
                         store_player_source(container, event, player_url)
-                        return
+                        found = True
                 except httpx.HTTPError as e:
                     logger.debug("sushianimes embed %s falhou: %s", embed_id, e)
 
-            raise ValueError(f"No player URL found in any SushiAnimes embed for: {url}")
+            if not found:
+                raise ValueError(f"No player URL found in any SushiAnimes embed for: {url}")
         except httpx.HTTPError as e:
             logger.debug("sushianimes search_player_src falhou: %s", e)
 
