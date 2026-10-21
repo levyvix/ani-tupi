@@ -138,6 +138,28 @@ class TestAnimesOnlineCCScraper:
         assert container == ["https://video.example.com/mao.mp4"]
         mock_resolve.assert_called_once_with("ABC123")
 
+    @patch("scrapers.plugins.animesonlinecc.resolve_blogger_token")
+    @patch("scrapers.plugins.animesonlinecc.http_get_with_retry")
+    def test_search_player_src_collects_all_resolved_iframes(self, mock_get, mock_resolve):
+        mock_get.return_value = _html_response(
+            '<iframe src="https://www.blogger.com/video.g?token=ONE"></iframe>'
+            '<iframe src="https://www.blogger.com/video.g?token=TWO"></iframe>'
+        )
+        mock_resolve.side_effect = [
+            "https://video.example.com/one.mp4",
+            "https://video.example.com/two.mp4",
+        ]
+        container = []
+
+        self.scraper.search_player_src(
+            "https://animesonlinecc.to/episodio/mao-episodio-1/", container, _event()
+        )
+
+        assert container == [
+            "https://video.example.com/one.mp4",
+            "https://video.example.com/two.mp4",
+        ]
+
     @patch("scrapers.plugins.animesonlinecc.http_get_with_retry")
     def test_search_player_src_no_source_raises(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")

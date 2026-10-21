@@ -101,6 +101,28 @@ class TestGoyabuScraper:
         assert container == ["https://video.example.com/mao.mp4"]
         mock_resolve.assert_called_once_with("XYZ789")
 
+    @patch("scrapers.plugins.goyabu.resolve_blogger_token")
+    @patch("scrapers.plugins.goyabu.http_get_with_retry")
+    def test_search_player_src_collects_all_resolved_players(self, mock_get, mock_resolve):
+        mock_get.return_value = _html_response(
+            "<script>var playersData = ["
+            '{"url":"https://www.blogger.com/video.g?token=FIRST"},'
+            '{"url":"https://www.blogger.com/video.g?token=SECOND"}'
+            "]; </script>"
+        )
+        mock_resolve.side_effect = [
+            "https://video.example.com/first.mp4",
+            "https://video.example.com/second.mp4",
+        ]
+        container = []
+
+        self.scraper.search_player_src("https://goyabu.io/ep/mao-1/", container, _event())
+
+        assert container == [
+            "https://video.example.com/first.mp4",
+            "https://video.example.com/second.mp4",
+        ]
+
     @patch("scrapers.plugins.goyabu.http_get_with_retry")
     def test_search_player_src_no_source_raises(self, mock_get):
         mock_get.return_value = _html_response("<html></html>")

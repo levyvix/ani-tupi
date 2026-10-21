@@ -124,6 +124,43 @@ class TestSushiAnimesScraper:
         assert results[1].params == {"season": 2}
 
     @patch("scrapers.plugins.sushianimes.http_get_with_retry")
+    def test_search_anime_keeps_other_results_when_details_request_fails(self, mock_get):
+        def response_for(url, **_kwargs):
+            if url.endswith("/search/dorohedoro"):
+                return _response(
+                    '<div id="animes">'
+                    '<div class="list-movie"><a class="list-title" '
+                    'href="https://sushianimes.com.br/anime/broken">Broken</a></div>'
+                    '<div class="list-movie"><a class="list-title" '
+                    'href="https://sushianimes.com.br/anime/ok">OK</a></div>'
+                    "</div>"
+                )
+            if url.endswith("/anime/broken"):
+                raise httpx.HTTPStatusError(
+                    "404", request=MagicMock(), response=MagicMock(status_code=404)
+                )
+            return _response(ANIME_PAGE_HTML)
+
+        mock_get.side_effect = response_for
+
+        results = self.scraper.search_anime("dorohedoro")
+
+        assert any(result.title == "Broken" for result in results)
+        assert any(result.title.startswith("OK") for result in results)
+
+    @patch("scrapers.plugins.sushianimes.http_get_with_retry")
+    def test_search_episodes_does_not_substitute_first_season(self, mock_get):
+        mock_get.return_value = _response(ANIME_PAGE_HTML)
+
+        result = self.scraper.search_episodes(
+            "Dorohedoro 3 - Dublado",
+            "https://sushianimes.com.br/anime/dorohedoro-dublado-963",
+            {"season": 3},
+        )
+
+        assert result == []
+
+    @patch("scrapers.plugins.sushianimes.http_get_with_retry")
     def test_search_episodes_uses_requested_season(self, mock_get):
         mock_get.return_value = _response(ANIME_PAGE_HTML)
 
@@ -193,6 +230,25 @@ class TestSushiAnimesScraper:
 
         assert container == [
             "https://cdn-s01.pixel-sus-4k-image.com/stream/d/dorohedoro-dublado/01.mp4"
+        ]
+
+    @patch("scrapers.plugins.sushianimes.http_request_with_retry")
+    @patch("scrapers.plugins.sushianimes.http_get_with_retry")
+    def test_search_player_src_collects_multiple_embed_candidates(self, mock_get, mock_post):
+        mock_get.return_value = _response('<a data-embed="1"></a><a data-embed="2"></a>')
+        mock_post.side_effect = [
+            _response('var playerEmbed = "https://cdn.example.com/one.mp4";'),
+            _response('var playerEmbed = "https://cdn.example.com/two.mp4";'),
+        ]
+        container = []
+
+        self.scraper.search_player_src(
+            "https://sushianimes.com.br/anime/dorohedoro-1-episode", container, _event()
+        )
+
+        assert container == [
+            "https://cdn.example.com/one.mp4",
+            "https://cdn.example.com/two.mp4",
         ]
 
 

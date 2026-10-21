@@ -96,3 +96,24 @@ class TestEmbedResolve:
         assert container == ["https://static.anidrive.click/x.m3u8"]
         embed_headers = mock_get.call_args_list[1].kwargs["headers"]
         assert embed_headers["Referer"] == "https://animesonline.io/66875/"
+
+    @patch("scrapers.plugins.animesonlineio.http_request_with_retry")
+    def test_follow_redirector_accepts_redirect_status_to_read_location(self, mock_request):
+        response = MagicMock()
+        response.headers = {"location": "https://cdn.example.com/video.mp4"}
+        mock_request.return_value = response
+
+        resolved = self.scraper._follow_redirector("https://redirector.googlevideo.com/video")
+
+        assert resolved == "https://cdn.example.com/video.mp4"
+        assert mock_request.call_args.args == (
+            "GET",
+            "https://redirector.googlevideo.com/video",
+        )
+        assert mock_request.call_args.kwargs["expected_status_codes"] == {
+            301,
+            302,
+            303,
+            307,
+            308,
+        }

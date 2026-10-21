@@ -72,6 +72,14 @@ class TestAnimesDigitalFallbackLogging:
         assert result == []
         assert "Error searching AnimesDigital homepage" not in caplog.text
 
+    @patch("scrapers.plugins.animesdigital.http_get_with_retry")
+    def test_homepage_status_error_returns_empty(self, mock_get):
+        mock_get.side_effect = httpx.HTTPStatusError(
+            "403", request=MagicMock(), response=MagicMock(status_code=403)
+        )
+
+        assert self.scraper.search_homepage_incremental("Liar Game") == []
+
     @patch.object(AnimesDigital, "search_homepage_incremental", return_value=[])
     @patch.object(AnimesDigital, "_scrape_series_page", return_value=([], []))
     def test_search_episodes_uses_silent_fallback_logs(
@@ -127,6 +135,14 @@ class TestAnimesDigitalFallbackLogging:
         )
         assert titles == []
         assert urls == []
+
+    @patch("scrapers.plugins.animesdigital.http_get_with_retry")
+    def test_series_url_http_status_error_degrades_to_no_series_url(self, mock_get):
+        mock_get.side_effect = httpx.HTTPStatusError(
+            "404", request=MagicMock(), response=MagicMock(status_code=404)
+        )
+
+        assert self.scraper._extract_series_url("https://animesdigital.org/video/missing") is None
 
 
 IFRAME_PLAYER_HTML = """

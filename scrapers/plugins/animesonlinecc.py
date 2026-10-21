@@ -136,8 +136,10 @@ class AnimesOnlineCC:
                 except Exception as e:
                     logger.debug(f"AnimesOnlineCC blogger token resolve failed, trying next: {e}")
                     continue
-                if store_player_source(container, event, video_url):
-                    return
+                store_player_source(container, event, video_url)
+
+            if container:
+                return
 
             raise ValueError("No playable blogger source in AnimesOnlineCC episode page")
         except Exception as e:
