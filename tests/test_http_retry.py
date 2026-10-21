@@ -9,6 +9,7 @@ from scrapers.plugins.utils import (
     http_get_with_retry,
     http_request_with_retry,
     http_head_with_fallback,
+    log_scraper_http_failure,
 )
 
 
@@ -185,6 +186,57 @@ def test_cloudflare_challenge_raises_clear_error_without_retry(monkeypatch, no_s
 
     assert calls["count"] == 1
     assert no_sleep == []
+
+
+def test_cloudflare_403_is_logged_as_visible_source_block():
+    request = httpx.Request("GET", "https://source.example")
+    response = httpx.Response(
+        403,
+        request=request,
+        headers={"server": "cloudflare", "cf-ray": "test-ray"},
+    )
+    error = httpx.HTTPStatusError("403 Forbidden", request=request, response=response)
+
+    class CapturingLogger:
+        warnings = []
+        debug_messages = []
+
+        def warning(self, message):
+            self.warnings.append(message)
+
+        def debug(self, message):
+            self.debug_messages.append(message)
+
+    logger = CapturingLogger()
+    log_scraper_http_failure(logger, "Example", "search", error)
+
+    assert logger.warnings == [
+        "Example search was denied by Cloudflare (HTTP 403); "
+        "the source is unavailable from this network"
+    ]
+    assert logger.debug_messages == []
+
+
+def test_non_cloudflare_http_error_stays_debug_only():
+    request = httpx.Request("GET", "https://source.example")
+    response = httpx.Response(403, request=request)
+    error = httpx.HTTPStatusError("403 Forbidden", request=request, response=response)
+
+    class CapturingLogger:
+        warnings = []
+        debug_messages = []
+
+        def warning(self, message):
+            self.warnings.append(message)
+
+        def debug(self, message):
+            self.debug_messages.append(message)
+
+    logger = CapturingLogger()
+    log_scraper_http_failure(logger, "Example", "search", error)
+
+    assert logger.warnings == []
+    assert logger.debug_messages == ["Example search failed: 403 Forbidden"]
 
 
 # Tests for http_request_with_retry (POST support)

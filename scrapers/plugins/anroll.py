@@ -1,29 +1,35 @@
 from utils.logging import get_logger
+import base64
+import json
 import re
 import time
 import urllib.parse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
 
 from scrapers.core.selenium_driver import SeleniumWebDriver
+from scrapers.core.blogger_resolver import resolve_blogger_token
 from scrapers.plugins.utils import (
     DEFAULT_HEADERS,
     http_get_with_retry,
     load_plugin,
+    log_scraper_http_failure,
     store_player_source,
 )
 from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
-BASE_URL = "https://anroll.io"
+BASE_URL = "https://anroll.cc"
 HEADERS = DEFAULT_HEADERS
 REQUEST_TIMEOUT = 15
 
 _TITLE_DUB_HD_RE = re.compile(r"^(DUB|LEG)HD")
 _TITLE_YEAR_RE = re.compile(r"\s*\d{4}$")
 _TITLE_LEG_RE = re.compile(r"\s*\(?Legendado\)?\s*$", re.IGNORECASE)
+_EPISODE_NUMBER_RE = re.compile(r"(?:epis[oó]dio|ep\.?)[\s-]*(\d+)", re.IGNORECASE)
 
 
 class AnRoll:
@@ -38,22 +44,34 @@ class AnRoll:
                 url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
             )
             soup = BeautifulSoup(response.text, "html.parser")
-            for article in soup.select("article.anime-card"):
-                a = article.find("a", href=True)
+            cards = soup.select("article.anime-card")
+            if cards:
+                links = [card.find("a", href=True) for card in cards]
+            else:
+                # The current AnRoll site uses Dooplay's /animes/ routes and
+                # puts the title link inside a div.title rather than an article
+                # with the old anime-card class.
+                links = soup.select("div.title a[href*='/animes/']")
+
+            seen: set[str] = set()
+            for a in links:
                 if not a:
                     continue
-                href = str(a.get("href", ""))
-                if "/anime/" not in href or "episodio" in href:
+                href = urljoin(BASE_URL, str(a.get("href", "")))
+                if not any(path in href for path in ("/anime/", "/animes/")):
                     continue
+                if href in seen:
+                    continue
+                seen.add(href)
                 img = a.find("img")
-                title = img.get("alt", "").strip() if img else a.get_text(strip=True)
+                title = img.get("alt", "").strip() if img else a.get_text(" ", strip=True)
                 title = _TITLE_DUB_HD_RE.sub("", title).strip()
                 title = _TITLE_YEAR_RE.sub("", title).strip()
                 title = _TITLE_LEG_RE.sub("", title).strip()
                 if title and href:
                     results.append(AnimeMetadata(title=title, url=href, source=self.name))
         except httpx.HTTPError as e:
-            logger.debug("anroll search_anime falhou: %s", e)
+            log_scraper_http_failure(logger, "AnRoll", "search_anime", e)
         return results
 
     def search_episodes(self, anime: str, url: str, params: dict | None) -> list[ScrapedEpisodes]:
@@ -76,6 +94,20 @@ class AnRoll:
                 titles.append(label)
                 urls.append(href)
             if not titles:
+                seen: set[str] = set()
+                for anchor in soup.select(".episodes a[href*='/episodios/']"):
+                    href = urljoin(BASE_URL, str(anchor.get("href", "")))
+                    if href in seen:
+                        continue
+                    match = _EPISODE_NUMBER_RE.search(anchor.get_text(" ", strip=True))
+                    if not match:
+                        match = re.search(r"-episodio-(\d+)/?$", urlparse(href).path, re.I)
+                    if not match:
+                        continue
+                    seen.add(href)
+                    titles.append(f"Episódio {int(match.group(1))}")
+                    urls.append(href)
+            if not titles:
                 first_ep_url = self._find_first_episode_url(soup)
                 if first_ep_url:
                     titles, urls = self._episodes_from_sidebar(first_ep_url)
@@ -83,7 +115,7 @@ class AnRoll:
                 return [ScrapedEpisodes(titles=titles, urls=urls, source=self.name)]
             return []
         except httpx.HTTPError as e:
-            logger.debug("anroll search_episodes falhou: %s", e)
+            log_scraper_http_failure(logger, "AnRoll", "search_episodes", e)
             return []
 
     def _find_first_episode_url(self, soup: BeautifulSoup) -> str | None:
@@ -120,7 +152,7 @@ class AnRoll:
         seen: set[str] = set()
         for anchor in sidebar.find_all("a", href=True):
             href = str(anchor["href"])
-            if not re.match(rf"{re.escape(BASE_URL)}/\d+/?$", href):
+            if not re.match(r"https://(?:anroll\.io|anroll\.cc)/\d+/?$", href):
                 continue
             if href in seen:
                 continue
@@ -136,6 +168,12 @@ class AnRoll:
         return titles, urls
 
     def search_player_src(self, url: str, container: list, event) -> None:
+        if urlparse(url).hostname == urlparse(BASE_URL).hostname:
+            self._search_dooplay_player_src(url, container, event)
+            if container:
+                return
+            raise ValueError("AnRoll: no playable Blogger source found")
+
         # The anidrive player serves a "Bot Detected" placeholder (pro.mp4) unless
         # the page is loaded inside the trusted anroll parent (passing the Cloudflare
         # challenge sets the cookies that unlock the real googlevideo sources).
@@ -185,6 +223,71 @@ class AnRoll:
             raise ValueError("Anroll: failed to store video source")
         except Exception as e:
             raise type(e)(f"Anroll: {e}") from e
+
+    def _search_dooplay_player_src(self, url: str, container: list, event) -> None:
+        """Resolve current AnRoll Dooplay player options without launching a browser."""
+        response = http_get_with_retry(
+            url, headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
+        )
+        soup = BeautifulSoup(response.text, "html.parser")
+        options = soup.select("#playeroptionsul li.dooplay_player_option")
+        for option in options:
+            if event.is_set():
+                return
+            post_id = option.get("data-post", "")
+            player_type = option.get("data-type", "")
+            source_number = option.get("data-nume", "")
+            if not (post_id.isdigit() and player_type and source_number.isdigit()):
+                continue
+
+            api_url = urljoin(
+                BASE_URL,
+                f"/wp-json/dooplayer/v2/{post_id}/{player_type}/{source_number}",
+            )
+            try:
+                api_response = http_get_with_retry(
+                    api_url,
+                    headers={**HEADERS, "Referer": url},
+                    timeout=REQUEST_TIMEOUT,
+                    follow_redirects=True,
+                )
+                player_data = api_response.json()
+                embed_url = player_data.get("embed_url", "")
+                if urlparse(embed_url).hostname != urlparse(BASE_URL).hostname:
+                    continue
+
+                embed_response = http_get_with_retry(
+                    embed_url,
+                    headers={**HEADERS, "Referer": url},
+                    timeout=REQUEST_TIMEOUT,
+                    follow_redirects=True,
+                )
+                player_soup = BeautifulSoup(embed_response.text, "html.parser")
+                player_script = next(
+                    (
+                        script.string or script.get_text()
+                        for script in player_soup.find_all("script")
+                        if "var jw" in (script.string or script.get_text())
+                    ),
+                    "",
+                )
+                config_match = re.search(r"var\s+jw\s*=\s*", player_script)
+                if not config_match:
+                    continue
+                config, _ = json.JSONDecoder().raw_decode(player_script[config_match.end() :])
+                encoded_token = config.get("file", "")
+                if not encoded_token:
+                    continue
+                decoded_token = base64.b64decode(encoded_token).decode("utf-8")[::-1]
+                video_url = resolve_blogger_token(decoded_token)
+            except (httpx.HTTPError, ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
+                logger.debug(f"AnRoll Dooplay player option could not be resolved: {e}")
+                continue
+            except Exception as e:
+                logger.debug(f"AnRoll Blogger source could not be resolved: {e}")
+                continue
+
+            store_player_source(container, event, video_url)
 
 
 def load(register) -> None:
