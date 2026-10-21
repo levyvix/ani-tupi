@@ -1,4 +1,6 @@
-"""Tests for AnRoll scraper episode list extraction."""
+"""Tests for the current and legacy AnRoll scraper flows."""
+
+import base64
 
 from unittest.mock import MagicMock, patch
 
@@ -99,6 +101,73 @@ class TestAnRollSearchAnimeAndPlayer:
         assert results[0].title == "Mao"
         assert results[0].url == "https://anroll.io/anime/mao/"
         assert results[0].source == "anroll"
+
+    @patch("scrapers.plugins.anroll.http_get_with_retry")
+    def test_search_anime_parses_current_anroll_domain(self, mock_get):
+        mock_get.return_value = _html_response(
+            """
+            <div class="title"><a href="https://anroll.cc/animes/one-piece/">One Piece</a></div>
+            <div class="title"><a href="https://anroll.cc/animes/one-piece-dublado/">One Piece Dublado</a></div>
+            <div class="title"><a href="https://anroll.cc/animes/one-piece/">One Piece</a></div>
+            """
+        )
+
+        results = self.scraper.search_anime("One Piece")
+
+        assert [(result.title, result.url) for result in results] == [
+            ("One Piece", "https://anroll.cc/animes/one-piece/"),
+            ("One Piece Dublado", "https://anroll.cc/animes/one-piece-dublado/"),
+        ]
+
+    @patch("scrapers.plugins.anroll.http_get_with_retry")
+    def test_search_episodes_parses_current_episode_routes(self, mock_get):
+        mock_get.return_value = _html_response(
+            """
+            <div class="episodes">
+              <div class="item"><a href="/episodios/one-piece-episodio-1/">Episódio 1</a></div>
+              <div class="item"><a href="/episodios/one-piece-episodio-2/">Episódio 2</a></div>
+              <div class="item"><a href="/episodios/one-piece-episodio-2/">Episódio 2</a></div>
+            </div>
+            """
+        )
+
+        batches = self.scraper.search_episodes(
+            "One Piece", "https://anroll.cc/animes/one-piece/", None
+        )
+
+        assert len(batches) == 1
+        assert batches[0].titles == ["Episódio 1", "Episódio 2"]
+        assert batches[0].urls == [
+            "https://anroll.cc/episodios/one-piece-episodio-1/",
+            "https://anroll.cc/episodios/one-piece-episodio-2/",
+        ]
+
+    @patch("scrapers.plugins.anroll.resolve_blogger_token")
+    @patch("scrapers.plugins.anroll.store_player_source")
+    @patch("scrapers.plugins.anroll.http_get_with_retry")
+    def test_current_player_api_resolves_real_video_url(self, mock_get, mock_store, mock_resolve):
+        encoded = base64.b64encode(b"blogger-token"[::-1]).decode("ascii")
+        episode_response = _html_response(
+            '<ul id="playeroptionsul"><li class="dooplay_player_option" '
+            'data-post="123" data-type="tv" data-nume="1"></li></ul>'
+        )
+        api_response = _html_response("")
+        api_response.json.return_value = {"embed_url": "https://anroll.cc/player/?id=123"}
+        player_response = _html_response(f'<script>var jw = {{"file":"{encoded}"}};</script>')
+        mock_get.side_effect = [episode_response, api_response, player_response]
+        mock_resolve.return_value = "https://video.example/episode.mp4"
+        mock_store.side_effect = lambda sources, _event, source: sources.append(source)
+        event = MagicMock()
+        event.is_set.return_value = False
+        container = []
+
+        self.scraper.search_player_src(
+            "https://anroll.cc/episodios/one-piece-episodio-1/", container, event
+        )
+
+        assert mock_get.call_count == 3
+        mock_resolve.assert_called_once_with("blogger-token")
+        assert container == ["https://video.example/episode.mp4"]
 
     @patch("scrapers.plugins.anroll.time.sleep")
     @patch("scrapers.plugins.anroll.store_player_source")
