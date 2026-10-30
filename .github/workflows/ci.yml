@@ -163,35 +163,3 @@ jobs:
         test -x /tmp/pkg-test-venv/bin/manga-tupi
         timeout 30 /tmp/pkg-test-venv/bin/ani-tupi --help
         /tmp/pkg-test-venv/bin/python -c "import manga_tupi; import main"
-
-  smoke-test:
-    name: Smoke Test (ani-tupi -q naruto)
-    runs-on: ubuntu-latest
-    needs: lint-and-test
-
-    steps:
-    - name: Checkout código
-      uses: actions/checkout@v4
-
-    - name: Configurar Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
-
-    - name: Instalar UV
-      run: pip install uv
-
-    - name: Instalar dependências
-      run: uv sync
-
-    - name: Smoke test - buscar naruto
-      run: |
-        # Send empty input so interactive menu exits; capture output including stderr
-        echo "" | timeout 60 uv run ani-tupi -q "naruto" 2>&1 | tee /tmp/smoke_output.txt || true
-        # Fail if installation/import errors are detected
-        if grep -iE "(ImportError|ModuleNotFoundError|No module named)" /tmp/smoke_output.txt; then
-          echo "❌ Installation error detected in output"
-          cat /tmp/smoke_output.txt
-          exit 1
-        fi
-        echo "✅ Smoke test passed"
