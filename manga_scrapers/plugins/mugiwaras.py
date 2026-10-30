@@ -17,6 +17,8 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+OPTIONAL_DEPENDENCIES = {"selenium": "browser-scrapers"}
+
 REQUEST_TIMEOUT = 15
 
 

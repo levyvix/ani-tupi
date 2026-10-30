@@ -15,7 +15,7 @@ Assista anime e leia mangá direto do terminal sem anúncios! Interface CLI em p
 - **Python 3.12+** (obrigatório)
 - **mpv** (player de vídeo)
 - **Zathura** (leitor de PDF para mangá - recomendado)
-- **Chromium** (ou Google Chrome — necessário para os scrapers de mangá que usam Selenium)
+- **Chromium** ou Google Chrome (opcional; necessário para fontes que usam navegador)
 - **git** (opcional — só necessário para clonar o repositório ou usar `install.sh`)
 
 ### Instalando dependências
@@ -63,22 +63,40 @@ Instale o pacote Python com **uv** ou **pip** a partir do [PyPI](https://pypi.or
 # Recomendado: instala ani-tupi e manga-tupi como ferramentas globais
 uv tool install ani-tupi
 
+# Opcional: inclui as fontes de anime e mangá que usam navegador
+uv tool install 'ani-tupi[browser-scrapers]'
+
 # Alternativa: uv em um venv
 uv venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 uv pip install ani-tupi
+# Para incluir fontes que usam navegador no venv:
+uv pip install 'ani-tupi[browser-scrapers]'
 
 # Alternativa: pip (dentro de um venv)
 pip install ani-tupi
+# Para incluir fontes que usam navegador:
+pip install 'ani-tupi[browser-scrapers]'
 ```
+
+Selenium não é instalado na instalação básica. As fontes que usam navegador
+(AnRoll, AnimesDigital, Mugiwaras e MangaLivre) são ignoradas com um aviso
+explicando como habilitar o extra. Para usá-las, instale
+`ani-tupi[browser-scrapers]` e tenha Chrome ou Chromium disponível no sistema.
+As fontes que usam apenas HTTP continuam carregando sem esse extra.
 
 Atualizar para a versão mais recente:
 
 ```bash
 uv tool install --upgrade ani-tupi
+# ou, se você instalou as fontes de navegador:
+uv tool install --upgrade 'ani-tupi[browser-scrapers]'
 # ou, dentro do venv:
 uv pip install --upgrade ani-tupi
+# ou, dentro do venv com fontes de navegador:
+uv pip install --upgrade 'ani-tupi[browser-scrapers]'
 # ou: pip install --upgrade ani-tupi
+# ou com pip e fontes de navegador: pip install --upgrade 'ani-tupi[browser-scrapers]'
 ```
 
 ### Via Homebrew (macOS e Linux)

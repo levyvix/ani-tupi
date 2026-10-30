@@ -9,12 +9,6 @@ import time
 import weakref
 
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.common.exceptions import WebDriverException
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 
 USER_AGENTS = [
@@ -69,6 +63,9 @@ class SeleniumWebDriver:
 
     def _init_driver(self, headless: bool, user_agent: str | None = None) -> None:
         """Initialize Chrome WebDriver with stealth options."""
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+
         options = Options()
 
         # Headless mode
@@ -126,7 +123,10 @@ class SeleniumWebDriver:
         Raises:
             Exception: If page load fails after all retries or element wait fails
         """
-        from selenium.common.exceptions import TimeoutException
+        from selenium.common.exceptions import TimeoutException, WebDriverException
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
 
         for attempt in range(max_retries + 1):
             try:
