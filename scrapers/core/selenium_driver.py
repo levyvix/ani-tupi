@@ -9,6 +9,12 @@ import time
 import weakref
 
 from bs4 import BeautifulSoup
+from scrapers.core.search_deadline import (
+    SearchDeadlineExceeded,
+    bounded_timeout,
+    remaining_search_time,
+    sleep_with_search_deadline,
+)
 
 
 USER_AGENTS = [
@@ -20,6 +26,32 @@ USER_AGENTS = [
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
 ]
+
+
+def __getattr__(name: str):
+    """Expose Selenium's webdriver module lazily for compatibility.
+
+    Keeping this import lazy lets HTTP-only scraper installations import this
+    module without installing Selenium, while preserving patchability for
+    callers and tests that target ``selenium_driver.webdriver.Chrome``.
+    """
+    if name == "webdriver":
+        from selenium import webdriver
+
+        return webdriver
+    if name == "WebDriverWait":
+        from selenium.webdriver.support.ui import WebDriverWait
+
+        return WebDriverWait
+    if name == "By":
+        from selenium.webdriver.common.by import By
+
+        return By
+    if name == "EC":
+        from selenium.webdriver.support import expected_conditions as EC
+
+        return EC
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _quit_driver(driver) -> None:
@@ -124,16 +156,18 @@ class SeleniumWebDriver:
             Exception: If page load fails after all retries or element wait fails
         """
         from selenium.common.exceptions import TimeoutException, WebDriverException
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
+
+        WebDriverWait = globals().get("WebDriverWait") or __getattr__("WebDriverWait")
+        By = globals().get("By") or __getattr__("By")
+        EC = globals().get("EC") or __getattr__("EC")
 
         for attempt in range(max_retries + 1):
             try:
+                self.driver.set_page_load_timeout(bounded_timeout(self.timeout))
                 self.driver.get(url)
 
                 # Add small random delay to mimic human browsing
-                time.sleep(random.uniform(0.5, 1.5))
+                sleep_with_search_deadline(random.uniform(0.5, 1.5))
 
                 # Wait for Cloudflare challenge to clear if present (up to 15s)
                 self._wait_for_cloudflare_challenge()
@@ -141,9 +175,12 @@ class SeleniumWebDriver:
                 # Wait for specific element if provided
                 if wait_selector:
                     try:
-                        WebDriverWait(self.driver, self.timeout).until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector))
-                        )
+                        wait_timeout = bounded_timeout(self.timeout)
+                        WebDriverWait(
+                            self.driver,
+                            wait_timeout,
+                            poll_frequency=min(0.1, wait_timeout),
+                        ).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
                     except WebDriverException as e:
                         raise Exception(f"Failed to find element '{wait_selector}': {e}")
 
@@ -152,9 +189,13 @@ class SeleniumWebDriver:
                 return BeautifulSoup(html, "html.parser")
 
             except TimeoutException as e:
+                try:
+                    remaining_search_time()
+                except SearchDeadlineExceeded:
+                    raise
                 if attempt < max_retries:
                     wait_time = 2**attempt  # Exponential backoff: 1s, 2s, 4s
-                    time.sleep(wait_time)
+                    sleep_with_search_deadline(wait_time)
                     continue
                 else:
                     raise Exception(
@@ -167,20 +208,23 @@ class SeleniumWebDriver:
         Cloudflare renders a 'Just a moment...' page with Turnstile widget.
         This polls the page title and DOM for challenge indicators.
         """
-        end = time.time() + max_wait
-        while time.time() < end:
+        end = time.monotonic() + max_wait
+        while time.monotonic() < end:
+            remaining_search_time()
             try:
                 title = (self.driver.title or "").lower()
                 html = (self.driver.page_source or "").lower()
                 # Detect challenge page
                 if "just a moment" in title or "cf-challenge" in html or "cf-turnstile" in html:
-                    time.sleep(1.0)
+                    sleep_with_search_deadline(min(1.0, end - time.monotonic()))
                     continue
                 # Also detect cf-mitigated overlay - wait for it to disappear
                 if "checking if the site connection is secure" in html:
-                    time.sleep(1.0)
+                    sleep_with_search_deadline(min(1.0, end - time.monotonic()))
                     continue
                 break
+            except SearchDeadlineExceeded:
+                raise
             except Exception:
                 break
 
@@ -194,8 +238,9 @@ class SeleniumWebDriver:
 
         if referer:
             try:
+                self.driver.set_page_load_timeout(bounded_timeout(self.timeout))
                 self.driver.get(referer)
-                time.sleep(random.uniform(0.5, 1.0))
+                sleep_with_search_deadline(random.uniform(0.5, 1.0))
                 self._wait_for_cloudflare_challenge()
             except Exception:
                 pass
@@ -210,7 +255,7 @@ class SeleniumWebDriver:
                 .catch(function(e){ callback({status: 0, text: '', error: e.toString()}); });
         """
         try:
-            self.driver.set_script_timeout(self.timeout)
+            self.driver.set_script_timeout(bounded_timeout(self.timeout))
             result = self.driver.execute_async_script(script, url)
             if not result or result.get("status") != 200:
                 return None

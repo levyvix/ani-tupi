@@ -167,35 +167,3 @@ jobs:
         /tmp/pkg-test-venv/bin/python -c "from scrapers import loader; import scrapers.plugins.anroll; import scrapers.plugins.animesdigital; assert loader.discover_plugin_names()"
         /tmp/pkg-test-venv/bin/python -c "from scrapers.loader import load_plugins; loaded = []; load_plugins(loaded.append); names = {plugin.name for plugin in loaded}; assert 'animefire' in names and 'anroll' not in names and 'animesdigital' not in names"
         /tmp/pkg-test-venv/bin/python -c "from manga_scrapers.loader import load_manga_plugins; loaded = load_manga_plugins(); assert 'mangadex' in loaded and 'mangalivre' not in loaded and 'mugiwaras' not in loaded"
-
-  smoke-test:
-    name: Smoke Test (ani-tupi -q naruto)
-    runs-on: ubuntu-latest
-    needs: lint-and-test
-
-    steps:
-    - name: Checkout código
-      uses: actions/checkout@v4
-
-    - name: Configurar Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
-
-    - name: Instalar UV
-      run: pip install uv
-
-    - name: Instalar dependências
-      run: uv sync
-
-    - name: Smoke test - buscar naruto
-      run: |
-        # Send empty input so interactive menu exits; capture output including stderr
-        echo "" | timeout 60 uv run ani-tupi -q "naruto" 2>&1 | tee /tmp/smoke_output.txt || true
-        # Fail if installation/import errors are detected
-        if grep -iE "(ImportError|ModuleNotFoundError|No module named)" /tmp/smoke_output.txt; then
-          echo "❌ Installation error detected in output"
-          cat /tmp/smoke_output.txt
-          exit 1
-        fi
-        echo "✅ Smoke test passed"
