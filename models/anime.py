@@ -157,6 +157,9 @@ class SearchMetadata(BaseModel):
     scraper_sources: list[str] = Field(
         default_factory=list, description="List of scrapers that provided results"
     )
+    timed_out_sources: list[str] = Field(
+        default_factory=list, description="Scrapers that exceeded the search deadline"
+    )
     cache_check_time_ms: int = Field(
         default=0, ge=0, description="Cache check time in milliseconds"
     )

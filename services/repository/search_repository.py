@@ -6,9 +6,11 @@ import threading
 from collections import defaultdict
 from os import cpu_count
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
+from dataclasses import dataclass
 
 from models.config import settings
 from models.models import SearchResults, SearchMetadata, AnimeSearchResult
+from scrapers.core.search_deadline import SearchDeadlineExceeded, use_search_deadline
 from utils.title_normalization import (
     dedup_signature,
     get_compact_normalized_title_key,
@@ -22,6 +24,13 @@ from utils.title_utils import normalize_title_for_filter
 __all__ = ["SearchRepository"]
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class _SourceSearchOutcome:
+    results: list
+    completed_at: float
+    error: Exception | None = None
 
 
 class SearchRepository:
@@ -274,47 +283,75 @@ class SearchRepository:
             sources.sort(key=lambda x: x[0])
         return sources
 
-    def _search_with_incremental_results(self, query: str, verbose: bool = True) -> None:
+    @staticmethod
+    def _search_source(plugin, query: str, deadline: float) -> _SourceSearchOutcome:
+        """Run one scraper under a cooperative deadline without mutating the repository."""
+        try:
+            with use_search_deadline(deadline):
+                results = plugin.search_anime(query)
+            if not isinstance(results, list):
+                raise TypeError(f"{plugin.name} search_anime() must return a list")
+            return _SourceSearchOutcome(results or [], time.monotonic())
+        except Exception as exc:
+            return _SourceSearchOutcome([], time.monotonic(), error=exc)
+
+    def _search_with_incremental_results(self, query: str, verbose: bool = True) -> list[str]:
         """Search anime with incremental results respecting configured priority order."""
         if verbose:
             logger.info(f"⠼ Buscando '{query}'...")
 
         n_cpu = cpu_count() or 10
         executor = ThreadPoolExecutor(max_workers=min(len(self.sources), n_cpu))
+        has_pending_sources = False
+        timed_out_sources: list[str] = []
+        sources = self._sorted_sources()
+        timeout = settings.performance.http_timeout * 6
+        deadline = time.monotonic() + timeout
 
         try:
             future_to_source = {
-                executor.submit(plugin.search_anime, query): name
-                for name, plugin in self._sorted_sources()
+                executor.submit(self._search_source, plugin, query, deadline): name
+                for name, plugin in sources
             }
 
-            timeout = settings.performance.http_timeout * 6
             done, not_done = wait(
-                future_to_source.keys(), timeout=timeout, return_when=ALL_COMPLETED
+                future_to_source.keys(),
+                timeout=max(0.0, deadline - time.monotonic()),
+                return_when=ALL_COMPLETED,
             )
 
             if not_done:
-                timed_out = [future_to_source[f] for f in not_done]
+                has_pending_sources = True
+                timed_out_sources.extend(future_to_source[future] for future in not_done)
                 if verbose:
-                    logger.info(
-                        f"\n⚠️  Timeout em {len(timed_out)} fonte(s): {', '.join(timed_out)}"
-                    )
                     logger.info(f"   Usando resultados parciais de {len(done)} fonte(s)")
                 for future in not_done:
                     future.cancel()
 
-            for future in done:
-                source = future_to_source[future]
-                try:
-                    scraper_results = future.result()
-                    if scraper_results:
-                        for anime in scraper_results:
-                            self.add_anime(anime.title, anime.url, anime.source, anime.params)
-                    if verbose and len(self.sources) > 1:
-                        logger.info(f"✓ {source} ({len(self.anime_to_urls)} resultados)", end="\r")
-                except Exception as e:
+            for future, source in future_to_source.items():
+                if future not in done:
+                    continue
+                outcome = future.result()
+                if outcome.completed_at >= deadline or isinstance(
+                    outcome.error, SearchDeadlineExceeded
+                ):
+                    timed_out_sources.append(source)
+                    continue
+                if outcome.error is not None:
                     if verbose:
-                        logger.info(f"❌ Erro em {source}: {e}")
+                        logger.info(f"❌ Erro em {source}: {outcome.error}")
+                    continue
+
+                for anime in outcome.results:
+                    self.add_anime(anime.title, anime.url, anime.source, anime.params)
+                if verbose and len(self.sources) > 1:
+                    logger.info(f"✓ {source} ({len(self.anime_to_urls)} resultados)", end="\r")
+
+            timed_out_sources = list(dict.fromkeys(timed_out_sources))
+            if timed_out_sources:
+                logger.warning(
+                    "Timeout ao buscar fontes de anime: {}", ", ".join(timed_out_sources)
+                )
 
             if verbose and len(self.sources) > 1:
                 logger.info(" " * 70 + "\r", end="")
@@ -325,7 +362,9 @@ class SearchRepository:
                 if total > 1 and count > 0:
                     logger.info(f"✓ {count} resultado(s) de {total} fonte(s)")
         finally:
-            executor.shutdown(wait=True)
+            executor.shutdown(wait=not has_pending_sources, cancel_futures=has_pending_sources)
+
+        return timed_out_sources
 
     def _try_cache(self, query: str, verbose: bool) -> tuple[dict | None, int]:
         """Check cache for query. Returns (cached_data, check_time_ms)."""
@@ -428,6 +467,7 @@ class SearchRepository:
                 "cache_hit": True,
                 "cache_age_seconds": 0,
                 "scraper_sources": [],
+                "timed_out_sources": [],
                 "cache_check_time_ms": cache_check_ms,
                 "scraper_execution_time_ms": 0,
                 "total_execution_time_ms": total_ms,
@@ -437,13 +477,20 @@ class SearchRepository:
         words = query.split()
         min_words = settings.search.progressive_search_min_words
         scraper_start = time.time()
+        timed_out_sources: list[str] = []
+        found_results = False
+        last_used_query = query
+        last_used_words = len(words)
 
         for num_words in range(len(words), min_words - 1, -1):
             partial_query = " ".join(words[:num_words])
+            last_used_query = partial_query
+            last_used_words = num_words
             self.clear_search_results()
-            self._search_with_incremental_results(partial_query, verbose=False)
+            timed_out_sources = self._search_with_incremental_results(partial_query, verbose=False)
 
             if len(self.anime_to_urls) > 0:
+                found_results = True
                 if verbose and num_words < len(words):
                     logger.info(
                         f"ℹ️  Busca com: '{partial_query}' ({num_words}/{len(words)} palavras)"
@@ -458,6 +505,7 @@ class SearchRepository:
                     "cache_hit": False,
                     "cache_age_seconds": None,
                     "scraper_sources": self._collect_scraper_sources(),
+                    "timed_out_sources": timed_out_sources,
                     "cache_check_time_ms": cache_check_ms,
                     "scraper_execution_time_ms": int((time.time() - scraper_start) * 1000),
                     "total_execution_time_ms": int((time.time() - search_start) * 1000),
@@ -470,6 +518,23 @@ class SearchRepository:
 
         if len(self.anime_to_urls) > 0:
             self._save_cache(query, verbose)
+
+        if not found_results:
+            self._last_search_metadata = {
+                "original_query": query,
+                "used_query": last_used_query,
+                "used_words": last_used_words,
+                "total_words": len(words),
+                "min_words": settings.search.progressive_search_min_words,
+                "source": "scraper",
+                "cache_hit": False,
+                "cache_age_seconds": None,
+                "scraper_sources": self._collect_scraper_sources(),
+                "timed_out_sources": timed_out_sources,
+                "cache_check_time_ms": cache_check_ms,
+                "scraper_execution_time_ms": int((time.time() - scraper_start) * 1000),
+                "total_execution_time_ms": int((time.time() - search_start) * 1000),
+            }
 
         # A search ran (correct ordering) even if it found nothing — mark
         # populated so readers do not warn about an out-of-order call.
@@ -500,7 +565,8 @@ class SearchRepository:
         }
 
         self.clear_search_results()
-        self._search_with_incremental_results(limited_query, verbose)
+        timed_out_sources = self._search_with_incremental_results(limited_query, verbose)
+        self._last_search_metadata["timed_out_sources"] = timed_out_sources
         # A search ran (correct ordering) even if it found nothing.
         self._populated = True
         return self._build_search_results(query)
@@ -518,6 +584,7 @@ class SearchRepository:
                 variant_index=None,
                 total_variants=None,
                 source=None,
+                timed_out_sources=[],
             )
         return SearchMetadata.model_validate(self._last_search_metadata)
 

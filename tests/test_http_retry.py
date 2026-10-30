@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from scrapers.plugins import utils
+from scrapers.core import search_deadline
 from scrapers.plugins.utils import (
     CloudflareChallengeError,
     http_get_with_retry,
@@ -11,6 +12,7 @@ from scrapers.plugins.utils import (
     http_head_with_fallback,
     log_scraper_http_failure,
 )
+from scrapers.core.search_deadline import SearchDeadlineExceeded, use_search_deadline
 
 
 class _Resp:
@@ -34,7 +36,7 @@ class _Resp:
 def no_sleep(monkeypatch):
     """Patch time.sleep so tests are fast, recording the delays requested."""
     slept: list[float] = []
-    monkeypatch.setattr(utils.time, "sleep", lambda d: slept.append(d))
+    monkeypatch.setattr(search_deadline, "sleep", lambda d: slept.append(d))
     return slept
 
 
@@ -74,6 +76,36 @@ def test_success_first_try_no_retry(monkeypatch, no_sleep):
     assert calls["args"][0]["headers"] == {"X": "1"}
     assert calls["args"][0]["timeout"] == 15
     assert calls["args"][0]["follow_redirects"] is True
+
+
+def test_request_timeout_is_bounded_by_remaining_search_time(monkeypatch, no_sleep):
+    calls = _patch_request(monkeypatch, [_Resp(200)])
+    monkeypatch.setattr(search_deadline, "monotonic", lambda: 10.0)
+
+    with use_search_deadline(12.5):
+        response = http_get_with_retry("https://example.test", timeout=20)
+
+    assert response.status_code == 200
+    assert calls["args"][0]["timeout"] == 2.5
+
+
+def test_retry_backoff_is_cut_short_when_deadline_would_expire(monkeypatch):
+    now = [10.0]
+    slept = []
+    monkeypatch.setattr(search_deadline, "monotonic", lambda: now[0])
+
+    def record_sleep(delay):
+        slept.append(delay)
+        now[0] += delay
+
+    monkeypatch.setattr(search_deadline, "sleep", record_sleep)
+    calls = _patch_request(monkeypatch, [_Resp(503), _Resp(200)])
+
+    with use_search_deadline(10.25), pytest.raises(SearchDeadlineExceeded):
+        http_get_with_retry("https://example.test", backoff_base=0.5)
+
+    assert calls["count"] == 1
+    assert slept == [0.25]
 
 
 def test_429_with_retry_after_then_success(monkeypatch, no_sleep):
