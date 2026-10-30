@@ -1,7 +1,7 @@
 import re
-import time
 
 import httpx
+from scrapers.core.search_deadline import bounded_timeout, sleep_with_search_deadline
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -103,6 +103,7 @@ def http_request_with_retry(
     """
 
     def _do_request() -> httpx.Response:
+        request_timeout = bounded_timeout(timeout)
         if client is not None:
             return client.request(
                 method,
@@ -111,7 +112,7 @@ def http_request_with_retry(
                 json=json,
                 data=data,
                 params=params,
-                timeout=timeout,
+                timeout=request_timeout,
                 follow_redirects=follow_redirects,
             )
         return httpx.request(
@@ -121,7 +122,7 @@ def http_request_with_retry(
             json=json,
             data=data,
             params=params,
-            timeout=timeout,
+            timeout=request_timeout,
             follow_redirects=follow_redirects,
         )
 
@@ -138,7 +139,7 @@ def http_request_with_retry(
                 f"http_request_with_retry retry {attempt + 1}/{max_retries} for {method} {url} "
                 f"(reason: {type(exc).__name__}), sleeping {delay:.2f}s"
             )
-            time.sleep(delay)
+            sleep_with_search_deadline(delay)
             continue
 
         _raise_for_cloudflare_challenge(response, method, url)
@@ -160,7 +161,7 @@ def http_request_with_retry(
                 f"http_request_with_retry retry {attempt + 1}/{max_retries} for {method} {url} "
                 f"(reason: HTTP {status}), sleeping {delay:.2f}s"
             )
-            time.sleep(delay)
+            sleep_with_search_deadline(delay)
             continue
 
         if status in (expected_status_codes or set()):

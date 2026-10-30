@@ -3,13 +3,14 @@
 import time
 import re
 import threading
-from dataclasses import dataclass, field
 from collections import defaultdict
 from os import cpu_count
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
+from dataclasses import dataclass, field
 
 from models.config import settings
 from models.models import SearchResults, SearchMetadata, AnimeSearchResult
+from scrapers.core.search_deadline import SearchDeadlineExceeded, use_search_deadline
 from utils.title_normalization import (
     dedup_signature,
     get_compact_normalized_title_key,
@@ -25,9 +26,16 @@ __all__ = ["SearchRepository"]
 logger = get_logger(__name__)
 
 
+@dataclass(frozen=True)
+class _SourceSearchOutcome:
+    results: list
+    completed_at: float
+    error: Exception | None = None
+
+
 @dataclass
 class _SearchState:
-    """Mutable working state owned by one search or by the legacy view."""
+    """Mutable working state owned by one search or by the compatibility view."""
 
     anime_to_urls: defaultdict[str, list] = field(default_factory=lambda: defaultdict(list))
     norm_titles: dict[str, str] = field(default_factory=dict)
@@ -92,7 +100,7 @@ class SearchRepository:
 
     @property
     def anime_to_urls(self):
-        """Legacy view of the most recently completed (or manually populated) search."""
+        """Legacy view of the latest completed or manually populated search."""
         return self._visible_state.anime_to_urls
 
     @anime_to_urls.setter
@@ -101,12 +109,19 @@ class SearchRepository:
 
     @property
     def norm_titles(self):
-        """Normalized titles in the legacy view."""
         return self._visible_state.norm_titles
 
     @norm_titles.setter
     def norm_titles(self, value) -> None:
         self._visible_state.norm_titles = dict(value or {})
+
+    @property
+    def _sig_idx(self):
+        return self._visible_state.signatures
+
+    @_sig_idx.setter
+    def _sig_idx(self, value) -> None:
+        self._visible_state.signatures = dict(value or {})
 
     @property
     def _last_search_metadata(self):
@@ -125,7 +140,7 @@ class SearchRepository:
         self._visible_state.populated = bool(value)
 
     def clear_search_results(self) -> None:
-        """Clear the legacy/manual view without touching searches in progress."""
+        """Clear the compatibility view without touching searches in progress."""
         with self._snapshot_lock:
             self._visible_state = _SearchState()
 
@@ -314,9 +329,21 @@ class SearchRepository:
             sources.sort(key=lambda x: x[0])
         return sources
 
+    @staticmethod
+    def _search_source(plugin, query: str, deadline: float) -> _SourceSearchOutcome:
+        """Run one scraper under a cooperative deadline without mutating the repository."""
+        try:
+            with use_search_deadline(deadline):
+                results = plugin.search_anime(query)
+            if not isinstance(results, list):
+                raise TypeError(f"{plugin.name} search_anime() must return a list")
+            return _SourceSearchOutcome(results or [], time.monotonic())
+        except Exception as exc:
+            return _SourceSearchOutcome([], time.monotonic(), error=exc)
+
     def _search_with_incremental_results(
         self, query: str, verbose: bool = True, state: _SearchState | None = None
-    ) -> None:
+    ) -> list[str]:
         """Search anime with incremental results respecting configured priority order."""
         state = state or self._visible_state
         if verbose:
@@ -324,42 +351,58 @@ class SearchRepository:
 
         n_cpu = cpu_count() or 10
         executor = ThreadPoolExecutor(max_workers=min(len(self.sources), n_cpu))
+        has_pending_sources = False
+        timed_out_sources: list[str] = []
+        sources = self._sorted_sources()
+        timeout = settings.performance.http_timeout * 6
+        deadline = time.monotonic() + timeout
 
         try:
             future_to_source = {
-                executor.submit(plugin.search_anime, query): name
-                for name, plugin in self._sorted_sources()
+                executor.submit(self._search_source, plugin, query, deadline): name
+                for name, plugin in sources
             }
 
-            timeout = settings.performance.http_timeout * 6
             done, not_done = wait(
-                future_to_source.keys(), timeout=timeout, return_when=ALL_COMPLETED
+                future_to_source.keys(),
+                timeout=max(0.0, deadline - time.monotonic()),
+                return_when=ALL_COMPLETED,
             )
 
             if not_done:
-                timed_out = [future_to_source[f] for f in not_done]
+                has_pending_sources = True
+                timed_out_sources.extend(future_to_source[future] for future in not_done)
                 if verbose:
-                    logger.info(
-                        f"\n⚠️  Timeout em {len(timed_out)} fonte(s): {', '.join(timed_out)}"
-                    )
                     logger.info(f"   Usando resultados parciais de {len(done)} fonte(s)")
                 for future in not_done:
                     future.cancel()
 
-            for future in done:
-                source = future_to_source[future]
-                try:
-                    scraper_results = future.result()
-                    if scraper_results:
-                        for anime in scraper_results:
-                            self._add_anime_to_state(
-                                state, anime.title, anime.url, anime.source, anime.params
-                            )
-                    if verbose and len(self.sources) > 1:
-                        logger.info(f"✓ {source} ({len(state.anime_to_urls)} resultados)", end="\r")
-                except Exception as e:
+            for future, source in future_to_source.items():
+                if future not in done:
+                    continue
+                outcome = future.result()
+                if outcome.completed_at >= deadline or isinstance(
+                    outcome.error, SearchDeadlineExceeded
+                ):
+                    timed_out_sources.append(source)
+                    continue
+                if outcome.error is not None:
                     if verbose:
-                        logger.info(f"❌ Erro em {source}: {e}")
+                        logger.info(f"❌ Erro em {source}: {outcome.error}")
+                    continue
+
+                for anime in outcome.results:
+                    self._add_anime_to_state(
+                        state, anime.title, anime.url, anime.source, anime.params
+                    )
+                if verbose and len(self.sources) > 1:
+                    logger.info(f"✓ {source} ({len(state.anime_to_urls)} resultados)", end="\r")
+
+            timed_out_sources = list(dict.fromkeys(timed_out_sources))
+            if timed_out_sources:
+                logger.warning(
+                    "Timeout ao buscar fontes de anime: {}", ", ".join(timed_out_sources)
+                )
 
             if verbose and len(self.sources) > 1:
                 logger.info(" " * 70 + "\r", end="")
@@ -370,7 +413,9 @@ class SearchRepository:
                 if total > 1 and count > 0:
                     logger.info(f"✓ {count} resultado(s) de {total} fonte(s)")
         finally:
-            executor.shutdown(wait=True)
+            executor.shutdown(wait=not has_pending_sources, cancel_futures=has_pending_sources)
+
+        return timed_out_sources
 
     def _try_cache(self, query: str, verbose: bool) -> tuple[dict | None, int]:
         """Check cache for query. Returns (cached_data, check_time_ms)."""
@@ -412,7 +457,7 @@ class SearchRepository:
     def _add_anime_to_state(
         state: _SearchState, title: str, url: str, source: str, params: dict | None = None
     ) -> None:
-        """Add an anime result to one state with multi-source deduplication."""
+        """Add a result to one state using normalized-title deduplication."""
         with state.lock:
             state.populated = True
             params = params or {}
@@ -445,17 +490,17 @@ class SearchRepository:
             state.signatures[signature] = title
             state.anime_to_urls[title].append((url, source, params))
 
+    def _publish_state(self, state: _SearchState) -> None:
+        """Publish the complete latest search for compatibility readers."""
+        with self._snapshot_lock:
+            self._visible_state = state
+
     def _guard_sources(self, query: str) -> SearchResults | None:
         if not self.sources:
             logger.info("\n❌ Erro: Nenhum plugin carregado!")
             logger.info("Verifique se os plugins estão instalados em plugins/")
             return SearchResults(query=query, results=(), metadata={})
         return None
-
-    def _publish_state(self, state: _SearchState) -> None:
-        """Atomically replace the compatibility view after a search completes."""
-        with self._snapshot_lock:
-            self._visible_state = state
 
     def search_anime(self, query: str, verbose: bool = True) -> SearchResults:
         """Search for anime across all registered sources.
@@ -492,6 +537,7 @@ class SearchRepository:
                 "cache_hit": True,
                 "cache_age_seconds": 0,
                 "scraper_sources": [],
+                "timed_out_sources": [],
                 "cache_check_time_ms": cache_check_ms,
                 "scraper_execution_time_ms": 0,
                 "total_execution_time_ms": total_ms,
@@ -503,12 +549,19 @@ class SearchRepository:
         words = query.split()
         min_words = settings.search.progressive_search_min_words
         scraper_start = time.time()
+        timed_out_sources: list[str] = []
+        last_used_query = query
+        last_used_words = len(words)
         state = _SearchState()
 
         for num_words in range(len(words), min_words - 1, -1):
             partial_query = " ".join(words[:num_words])
+            last_used_query = partial_query
+            last_used_words = num_words
             attempt_state = _SearchState()
-            self._search_with_incremental_results(partial_query, verbose=False, state=attempt_state)
+            timed_out_sources = self._search_with_incremental_results(
+                partial_query, verbose=False, state=attempt_state
+            )
             state = attempt_state
 
             if len(state.anime_to_urls) > 0:
@@ -516,44 +569,30 @@ class SearchRepository:
                     logger.info(
                         f"ℹ️  Busca com: '{partial_query}' ({num_words}/{len(words)} palavras)"
                     )
-                state.metadata = {
-                    "original_query": query,
-                    "used_query": partial_query,
-                    "used_words": num_words,
-                    "total_words": len(words),
-                    "min_words": min_words,
-                    "source": "scraper",
-                    "cache_hit": False,
-                    "cache_age_seconds": None,
-                    "scraper_sources": self._collect_scraper_sources(state),
-                    "cache_check_time_ms": cache_check_ms,
-                    "scraper_execution_time_ms": int((time.time() - scraper_start) * 1000),
-                    "total_execution_time_ms": int((time.time() - search_start) * 1000),
-                }
                 break
             elif verbose and num_words < len(words):
                 logger.info(
                     f"ℹ️  0 resultados com '{partial_query}' ({num_words} palavras) → tentando com menos..."
                 )
 
-        if len(state.anime_to_urls) > 0:
+        if state.anime_to_urls:
             self._save_cache(query, verbose, state)
 
-        if not state.metadata:
-            state.metadata = {
-                "original_query": query,
-                "used_query": partial_query if words else query,
-                "used_words": len(partial_query.split()) if words else 0,
-                "total_words": len(words),
-                "min_words": min_words,
-                "source": "scraper",
-                "cache_hit": False,
-                "cache_age_seconds": None,
-                "scraper_sources": self._collect_scraper_sources(state),
-                "cache_check_time_ms": cache_check_ms,
-                "scraper_execution_time_ms": int((time.time() - scraper_start) * 1000),
-                "total_execution_time_ms": int((time.time() - search_start) * 1000),
-            }
+        state.metadata = {
+            "original_query": query,
+            "used_query": last_used_query,
+            "used_words": last_used_words,
+            "total_words": len(words),
+            "min_words": min_words,
+            "source": "scraper",
+            "cache_hit": False,
+            "cache_age_seconds": None,
+            "scraper_sources": self._collect_scraper_sources(state),
+            "timed_out_sources": timed_out_sources,
+            "cache_check_time_ms": cache_check_ms,
+            "scraper_execution_time_ms": int((time.time() - scraper_start) * 1000),
+            "total_execution_time_ms": int((time.time() - search_start) * 1000),
+        }
         state.populated = True
         result = self._build_search_results(query, state)
         self._publish_state(state)
@@ -587,7 +626,8 @@ class SearchRepository:
             "min_words": min_words,
         }
 
-        self._search_with_incremental_results(limited_query, verbose, state)
+        timed_out_sources = self._search_with_incremental_results(limited_query, verbose, state)
+        state.metadata["timed_out_sources"] = timed_out_sources
         # A search ran (correct ordering) even if it found nothing.
         state.populated = True
         result = self._build_search_results(query, state)
@@ -610,6 +650,7 @@ class SearchRepository:
                 variant_index=None,
                 total_variants=None,
                 source=None,
+                timed_out_sources=[],
             )
         return SearchMetadata.model_validate(metadata)
 
@@ -665,9 +706,10 @@ class SearchRepository:
         state = self._visible_state
         if search_results is None:
             self._warn_if_unpopulated("get_anime_titles_with_sources")
+        result_items = search_results.results if search_results is not None else None
         titles = (
-            search_results.get_anime_titles()
-            if search_results is not None
+            [anime.title for anime in result_items]
+            if result_items is not None
             else list(state.anime_to_urls.keys())
         )
 
@@ -679,8 +721,8 @@ class SearchRepository:
         result = []
         for title in titles:
             source_entries = (
-                search_results.get_sources_for_title(title)
-                if search_results is not None
+                next((anime.sources for anime in result_items if anime.title == title), ())
+                if result_items is not None
                 else state.anime_to_urls[title]
             )
             sources = {src for _, src, _ in source_entries if src != "cache"}
