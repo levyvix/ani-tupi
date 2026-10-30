@@ -8,7 +8,7 @@ resolution-markers = [
 
 [[package]]
 name = "ani-tupi"
-version = "2.16.9"
+version = "2.16.8"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -20,14 +20,10 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "rich" },
+    { name = "selenium" },
     { name = "thefuzz" },
     { name = "tqdm" },
     { name = "yt-dlp" },
-]
-
-[package.optional-dependencies]
-browser-scrapers = [
-    { name = "selenium" },
 ]
 
 [package.dev-dependencies]
@@ -53,12 +49,11 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pydantic-settings", specifier = ">=2.7.0" },
     { name = "rich", specifier = ">=14.2.0" },
-    { name = "selenium", marker = "extra == 'browser-scrapers'", specifier = ">=4.0.0" },
+    { name = "selenium", specifier = ">=4.0.0" },
     { name = "thefuzz", specifier = ">=0.22.1" },
     { name = "tqdm", specifier = ">=4.67.0" },
     { name = "yt-dlp", specifier = ">=2026.1.31" },
 ]
-provides-extras = ["browser-scrapers"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -32,8 +32,6 @@ from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
-OPTIONAL_DEPENDENCIES = {"selenium": "browser-scrapers"}
-
 REQUEST_TIMEOUT = 30
 API_URL = "https://animesdigital.org/func/listanime"
 API_TOKEN = "c1deb78cd4"

@@ -9,6 +9,12 @@ import time
 import weakref
 
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from scrapers.core.search_deadline import (
     SearchDeadlineExceeded,
     bounded_timeout,
@@ -26,32 +32,6 @@ USER_AGENTS = [
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
 ]
-
-
-def __getattr__(name: str):
-    """Expose Selenium's webdriver module lazily for compatibility.
-
-    Keeping this import lazy lets HTTP-only scraper installations import this
-    module without installing Selenium, while preserving patchability for
-    callers and tests that target ``selenium_driver.webdriver.Chrome``.
-    """
-    if name == "webdriver":
-        from selenium import webdriver
-
-        return webdriver
-    if name == "WebDriverWait":
-        from selenium.webdriver.support.ui import WebDriverWait
-
-        return WebDriverWait
-    if name == "By":
-        from selenium.webdriver.common.by import By
-
-        return By
-    if name == "EC":
-        from selenium.webdriver.support import expected_conditions as EC
-
-        return EC
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _quit_driver(driver) -> None:
@@ -95,9 +75,6 @@ class SeleniumWebDriver:
 
     def _init_driver(self, headless: bool, user_agent: str | None = None) -> None:
         """Initialize Chrome WebDriver with stealth options."""
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options
-
         options = Options()
 
         # Headless mode
@@ -155,11 +132,7 @@ class SeleniumWebDriver:
         Raises:
             Exception: If page load fails after all retries or element wait fails
         """
-        from selenium.common.exceptions import TimeoutException, WebDriverException
-
-        WebDriverWait = globals().get("WebDriverWait") or __getattr__("WebDriverWait")
-        By = globals().get("By") or __getattr__("By")
-        EC = globals().get("EC") or __getattr__("EC")
+        from selenium.common.exceptions import TimeoutException
 
         for attempt in range(max_retries + 1):
             try:

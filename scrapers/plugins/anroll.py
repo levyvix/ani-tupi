@@ -22,8 +22,6 @@ from models.models import AnimeMetadata, ScrapedEpisodes
 
 logger = get_logger(__name__)
 
-OPTIONAL_DEPENDENCIES = {"selenium": "browser-scrapers"}
-
 BASE_URL = "https://anroll.cc"
 HEADERS = DEFAULT_HEADERS
 REQUEST_TIMEOUT = 15
