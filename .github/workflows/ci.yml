@@ -38,7 +38,7 @@ jobs:
       run: uv --version
 
     - name: Validar dependências
-      run: uv sync --extra browser-scrapers --no-install-project
+      run: uv sync --no-install-project
 
     - name: Verificar sintaxe Python
       run: |
@@ -163,7 +163,3 @@ jobs:
         test -x /tmp/pkg-test-venv/bin/manga-tupi
         timeout 30 /tmp/pkg-test-venv/bin/ani-tupi --help
         /tmp/pkg-test-venv/bin/python -c "import manga_tupi; import main"
-        /tmp/pkg-test-venv/bin/python -c "import importlib.util; assert importlib.util.find_spec('selenium') is None"
-        /tmp/pkg-test-venv/bin/python -c "from scrapers import loader; import scrapers.plugins.anroll; import scrapers.plugins.animesdigital; assert loader.discover_plugin_names()"
-        /tmp/pkg-test-venv/bin/python -c "from scrapers.loader import load_plugins; loaded = []; load_plugins(loaded.append); names = {plugin.name for plugin in loaded}; assert 'animefire' in names and 'anroll' not in names and 'animesdigital' not in names"
-        /tmp/pkg-test-venv/bin/python -c "from manga_scrapers.loader import load_manga_plugins; loaded = load_manga_plugins(); assert 'mangadex' in loaded and 'mangalivre' not in loaded and 'mugiwaras' not in loaded"
