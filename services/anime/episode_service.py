@@ -417,6 +417,7 @@ def load_episode_list(
     source_filter: str | None = None,
     season: int | None = None,
     saved_params: dict | None = None,
+    search_results=None,
 ) -> tuple[list | None, int]:
     """Load the episode list from cache or by scraping.
 
@@ -445,7 +446,10 @@ def load_episode_list(
 
     if cache_data and source_filter is None:
         logger.info(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
-        rep.search_episodes(selected_anime)
+        if search_results is None:
+            rep.search_episodes(selected_anime)
+        else:
+            rep.search_episodes(selected_anime, search_results=search_results)
         return cache_data.episode_urls, cache_data.episode_count
 
     if selected_anime == saved_title and not saved_bindings:
@@ -462,7 +466,12 @@ def load_episode_list(
                 rep.add_anime(selected_anime, url, src)
 
     with ui_bridge.loading("Carregando episódios..."):
-        rep.search_episodes(selected_anime, source_filter=source_filter)
+        if search_results is None:
+            rep.search_episodes(selected_anime, source_filter=source_filter)
+        else:
+            rep.search_episodes(
+                selected_anime, search_results=search_results, source_filter=source_filter
+            )
     episode_list = rep.get_episode_list(selected_anime, season=season)
     scraper_episode_count = len(episode_list)
 

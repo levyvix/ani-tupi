@@ -60,7 +60,7 @@ def test_search_repository_uses_deadline_aware_http_and_selenium(monkeypatch):
         ),
     )
     monkeypatch.setattr(repo, "_try_cache", lambda _query, _verbose: (None, 0))
-    monkeypatch.setattr(repo, "_save_cache", lambda _query, _verbose: None)
+    monkeypatch.setattr(repo, "_save_cache", lambda _query, _verbose, _state=None: None)
     response = httpx.Response(
         200,
         request=httpx.Request("GET", "https://http.example/search"),

@@ -3,6 +3,8 @@
 import time
 from dataclasses import dataclass, field
 
+from models.models import SearchResults
+
 
 @dataclass
 class SearchResultSet:
@@ -19,6 +21,7 @@ class SearchResultSet:
     used_query: str | None = None  # Normalized query that was actually used for search
     timestamp: float = field(default_factory=time.time)
     source_counts: dict[str, int] = field(default_factory=dict)
+    search_results: SearchResults | None = None
 
     def __post_init__(self):
         if self.word_count <= 0:
@@ -59,6 +62,7 @@ class IncrementalSearchState:
         source_counts: dict[str, int] | None = None,
         used_query: str | None = None,
         is_filtered: bool = False,
+        search_results: SearchResults | None = None,
     ) -> None:
         """Add a new search result set to the history.
 
@@ -77,6 +81,7 @@ class IncrementalSearchState:
             is_filtered=is_filtered,
             used_query=used_query or query,
             source_counts=source_counts or {},
+            search_results=search_results,
         )
         # If we've navigated backward, discard forward history
         if self.current_index < len(self.search_history) - 1:

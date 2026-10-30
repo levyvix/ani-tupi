@@ -159,10 +159,12 @@ class TestCountSources:
 
 
 class TestPerformScraperSearch:
-    def test_clears_searches_and_ranks(self):
+    def test_searches_and_ranks_from_invocation_snapshot(self):
         from services.anime import search_service as scraper_search
 
         mock_rep = Mock()
+        search_results = Mock()
+        mock_rep.search_anime.return_value = search_results
         mock_rep.get_search_metadata.return_value = Mock(used_query="naruto")
         mock_rep.get_anime_titles_with_sources.return_value = ["Naruto [animefire]"]
 
@@ -175,8 +177,13 @@ class TestPerformScraperSearch:
         ):
             outcome = scraper_search._perform_scraper_search("naruto")
 
-        mock_rep.clear_search_results.assert_called_once()
+        mock_rep.clear_search_results.assert_not_called()
         mock_rep.search_anime.assert_called_once_with("naruto", verbose=True)
+        mock_rep.get_search_metadata.assert_called_once_with(search_results=search_results)
+        assert (
+            mock_rep.get_anime_titles_with_sources.call_args.kwargs["search_results"]
+            is search_results
+        )
         assert outcome.used_query == "naruto"
         assert outcome.titles_with_sources == ["Naruto [animefire]"]
         assert outcome.anilist_reference_title is None

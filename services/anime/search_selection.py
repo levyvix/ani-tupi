@@ -30,6 +30,7 @@ def select_manual_search_results(
                 source=None,
                 was_cancelled=False,
                 search_query_used=query,
+                search_results=current_result.search_results if current_result else None,
             )
 
         filtered_titles = titles_with_sources
@@ -76,6 +77,7 @@ def select_manual_search_results(
                 source=None,
                 was_cancelled=True,
                 search_query_used=used_query,
+                search_results=current_result.search_results if current_result else None,
             )
 
         if selected_anime_with_source == continue_button:
@@ -93,6 +95,7 @@ def select_manual_search_results(
             source=source,
             was_cancelled=False,
             search_query_used=used_query,
+            search_results=current_result.search_results if current_result else None,
         )
 
 
@@ -104,6 +107,7 @@ def select_dual_search_results(
     """Show both user-query and official-title results in one menu."""
     options: list[str] = []
     seen_titles: set[str] = set()
+    title_snapshots = {}
 
     def add_group(label: str, results: ContextualSearchResults) -> None:
         if not results.titles_with_sources:
@@ -114,6 +118,7 @@ def select_dual_search_results(
                 continue
             seen_titles.add(title)
             options.append(title)
+            title_snapshots[title.split(" [")[0]] = results.search_results
 
     add_group(f"Sua busca: {dual_results.user_query}", dual_results.user_results)
     add_group(f"Nome oficial/romaji: {dual_results.official_query}", dual_results.official_results)
@@ -140,6 +145,7 @@ def select_dual_search_results(
         was_cancelled=False,
         search_query_used=dual_results.official_results.used_query
         or dual_results.user_results.used_query,
+        search_results=title_snapshots.get(selected_anime),
     )
 
 

@@ -129,15 +129,14 @@ class TestSourceSwitchingCache:
         # Verify incremental_search_anime was called with normalized version
         mocks["incremental"].assert_called()
 
-    def test_clears_search_results_before_new_search(self, setup_mocks):
-        """Should clear previous search results before starting new search."""
+    def test_preserves_published_results_while_switch_search_runs(self, setup_mocks):
+        """Source switching should keep the last completed snapshot visible."""
         mocks = setup_mocks
 
         # Call switch_anime_source
         switch_anime_source("Current Anime", Mock())
 
-        # Verify clear_search_results was called
-        mocks["rep"].clear_search_results.assert_called()
+        mocks["rep"].clear_search_results.assert_not_called()
 
     def test_returns_selected_anime_and_episode_idx(self, setup_mocks):
         """Should return the selected anime title and episode index."""

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from models.models import SearchResults
 from services.anime.search_state import IncrementalSearchState
 
 
@@ -13,6 +14,7 @@ class ManualSearchSelection:
     source: str | None
     was_cancelled: bool = False
     search_query_used: str | None = None
+    search_results: SearchResults | None = None
 
     @property
     def found(self) -> bool:
@@ -26,6 +28,7 @@ class ContextualSearchResults:
     state: "IncrementalSearchState"
     titles_with_sources: list[str]
     used_query: str | None
+    search_results: SearchResults | None = None
 
 
 @dataclass(frozen=True)

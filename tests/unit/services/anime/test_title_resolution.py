@@ -205,7 +205,9 @@ def test_search_anime_flow_cache_hit_prefers_original_query_before_jikan_resolut
         result = search_anime_flow(build_args("Dandadan"))
 
     assert result == ("Dandadan", 0, "animefire")
-    mock_rep.search_episodes.assert_called_once_with("Dandadan")
+    mock_rep.search_episodes.assert_called_once_with(
+        "Dandadan", search_results=mock_rep.search_anime.return_value
+    )
     mock_resolve_query.assert_called_once_with("Dandadan")
 
 

@@ -55,7 +55,7 @@ def test_search_returns_partial_results_and_discards_late_source(monkeypatch):
     monkeypatch.setattr(
         repo,
         "_save_cache",
-        lambda _query, _verbose: cached_snapshots.append(dict(repo.anime_to_urls)),
+        lambda _query, _verbose, state: cached_snapshots.append(dict(state.anime_to_urls)),
     )
 
     try:
@@ -118,7 +118,7 @@ def test_completed_source_results_keep_configured_priority_order(monkeypatch):
         ),
     )
     monkeypatch.setattr(repo, "_try_cache", lambda _query, _verbose: (None, 0))
-    monkeypatch.setattr(repo, "_save_cache", lambda _query, _verbose: None)
+    monkeypatch.setattr(repo, "_save_cache", lambda _query, _verbose, _state=None: None)
 
     try:
         repo.search_anime("priority-check", verbose=False)

@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from models.models import SearchResults
+
 
 @dataclass
 class ScraperSearchOutcome:
@@ -10,6 +12,7 @@ class ScraperSearchOutcome:
     titles_with_sources: list[str]
     used_query: str
     anilist_reference_title: str | None
+    search_results: SearchResults
 
 
 def perform_scraper_search(
@@ -21,10 +24,9 @@ def perform_scraper_search(
     ranking, and returns the ranked titles-with-sources plus the query actually
     used and any AniList reference title discovered.
     """
-    repository.clear_search_results()
-    repository.search_anime(partial_query, verbose=True)
+    search_results = repository.search_anime(partial_query, verbose=True)
 
-    search_metadata = repository.get_search_metadata()
+    search_metadata = repository.get_search_metadata(search_results=search_results)
     used_query = search_metadata.used_query or partial_query
 
     ranking_query = used_query
@@ -42,12 +44,15 @@ def perform_scraper_search(
         filter_by_query=used_query,
         original_query=ranking_query,
         anilist_results=anilist_results,
+        search_results=search_results,
     )
 
     if anilist_reference_title:
         titles_with_sources = ranker(titles_with_sources, anilist_reference_title)
 
-    return ScraperSearchOutcome(titles_with_sources, used_query, anilist_reference_title)
+    return ScraperSearchOutcome(
+        titles_with_sources, used_query, anilist_reference_title, search_results
+    )
 
 
 __all__ = ["ScraperSearchOutcome", "perform_scraper_search"]

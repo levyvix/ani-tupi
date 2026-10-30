@@ -93,7 +93,7 @@ def _validate_anime_sources(
     for aw in search_results.get_anime_titles_with_sources():
         title = aw.rsplit(" [", 1)[0] if " [" in aw else aw
         with progress(f"Verificando '{title}'..."):
-            rep.search_episodes(title)
+            rep.search_episodes(title, search_results=search_results)
         eps = rep.get_episode_list(title)
         if eps:
             valid[aw] = len(eps)
@@ -157,7 +157,6 @@ def _find_episodes(
         return anilist_title or anime, [], False, False
 
     search_title = clean_title_for_display(anime)
-    rep.clear_search_results()
     with progress(f"Buscando '{search_title}'..."):
         search_results = rep.search_anime(search_title)
 
@@ -169,10 +168,10 @@ def _find_episodes(
         t = anime_titles[0]
         if saved_source:
             with progress(f"Carregando episódios de {saved_source}..."):
-                rep.search_episodes(t, source_filter=saved_source)
+                rep.search_episodes(t, search_results=search_results, source_filter=saved_source)
         else:
             with progress("Carregando episódios..."):
-                rep.search_episodes(t)
+                rep.search_episodes(t, search_results=search_results)
         return t, rep.get_episode_list(t) or [], True, True
 
     t, ep_list = _validate_anime_sources(search_results, menu=menu, progress=progress)
@@ -317,7 +316,6 @@ def load_history(
                 if not manual_query:
                     continue
 
-                rep.clear_search_results()
                 with progress(f"Buscando '{manual_query}'..."):
                     search_results = rep.search_anime(manual_query)
 
@@ -340,7 +338,7 @@ def load_history(
                     selected_title = selected.rsplit(" [", 1)[0]
 
                 with progress("Carregando episódios..."):
-                    rep.search_episodes(selected_title)
+                    rep.search_episodes(selected_title, search_results=search_results)
                 episode_list = rep.get_episode_list(selected_title)
 
                 if not episode_list:
