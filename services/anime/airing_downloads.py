@@ -219,31 +219,28 @@ class AiringDownloadsService:
         if not callable(search_anime):
             return binding
 
-        clear_search_results = getattr(self.repository, "clear_search_results", None)
         try:
-            if callable(clear_search_results):
-                clear_search_results()
-            search_anime(binding.title, verbose=False)
+            search_results = search_anime(binding.title, verbose=False)
         except Exception as exc:
             logger.info("Busca de fontes indisponível para %s: %s", binding.title, exc)
             return binding
 
-        source_map = getattr(self.repository, "anime_to_urls", {})
-        if not isinstance(source_map, dict):
-            return binding
         repository_title = next(
             (
-                title
-                for title in source_map
-                if isinstance(title, str)
-                and normalize_title_for_dedup(title) == normalize_title_for_dedup(binding.title)
+                result.title
+                for result in getattr(search_results, "results", ())
+                if isinstance(getattr(result, "title", None), str)
+                and normalize_title_for_dedup(result.title)
+                == normalize_title_for_dedup(binding.title)
             ),
             None,
         )
         if repository_title is None:
             return binding
 
-        candidates = source_candidates_for(self.repository, repository_title)
+        candidates = source_candidates_for(
+            self.repository, repository_title, search_results=search_results
+        )
         if len(candidates) < 1 + len(binding.alternatives):
             return binding
         refreshed = binding_from_source_candidates(

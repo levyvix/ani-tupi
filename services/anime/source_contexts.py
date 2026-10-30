@@ -23,10 +23,14 @@ def source_candidates_for(
     repository: Any,
     repository_title: str,
     selected_source: str | None = None,
+    search_results: Any | None = None,
 ) -> list[AiringSourceCandidate]:
     """Convert repository search results into ordered source contexts."""
-    source_map = getattr(repository, "anime_to_urls", {})
-    entries = source_map.get(repository_title, ()) if isinstance(source_map, dict) else ()
+    if search_results is not None:
+        entries = search_results.get_sources_for_title(repository_title)
+    else:
+        source_map = getattr(repository, "anime_to_urls", {})
+        entries = source_map.get(repository_title, ()) if isinstance(source_map, dict) else ()
     allowed = (
         {part.strip() for part in selected_source.split(",") if part.strip()}
         if selected_source

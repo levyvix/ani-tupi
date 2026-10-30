@@ -138,8 +138,8 @@ def load_episodes_from_cache_or_search(
         if cache_data:
             logger.info(f"ℹ️  Usando cache ({cache_data.episode_count} eps disponíveis)")
             rep.load_from_cache(title, cache_data)
-            rep.search_anime(title, verbose=False)
-            cached_titles = rep.get_anime_titles_with_sources()
+            search_results = rep.search_anime(title, verbose=False)
+            cached_titles = search_results.get_anime_titles_with_sources()
             if not cached_titles:
                 cached_titles = [title]
             return None, cached_titles
@@ -276,7 +276,6 @@ def select_anime_from_results(
             new_lang = search_state.toggle_language()
             new_title = english_title if new_lang == "english" else romaji_title
 
-            rep.clear_search_results()
             if anilist_id:
                 rep.anime_to_anilist_id[new_title] = anilist_id
 
@@ -307,7 +306,6 @@ def select_anime_from_results(
             if cache_query and cache_query.strip():
                 rep.clear_search_cache(cache_query)
 
-            rep.clear_search_results()
             search_state, titles_with_sources = incremental_search_anime(
                 refresh_query,
                 english_title=english_title,
@@ -980,7 +978,6 @@ def anilist_anime_flow(
     english_title, romaji_title = _get_anilist_titles(anilist_id)
 
     loader.load_plugins(rep.register)
-    rep.clear_search_results()
 
     if anilist_id:
         rep.anime_to_anilist_id[anime_title] = anilist_id
@@ -1027,6 +1024,11 @@ def anilist_anime_flow(
         )
         if selected_anime is None:
             return  # User cancelled or nothing found
+        # Capture the chosen page URLs from this search result set. The legacy
+        # repository view may have been replaced by another concurrent search.
+        search_results = rep.search_anime(selected_anime, verbose=False)
+    else:
+        search_results = None
 
     use_configured_source = (
         configured_binding is not None
@@ -1047,7 +1049,12 @@ def anilist_anime_flow(
 
     # 2. Persist the resolved choice for next time.
     if anilist_id:
-        persist_anime_choice(anilist_id, selected_anime, anime_title, source)
+        if search_results is None:
+            persist_anime_choice(anilist_id, selected_anime, anime_title, source)
+        else:
+            persist_anime_choice(
+                anilist_id, selected_anime, anime_title, source, search_results=search_results
+            )
         shared_binding = AiringSourceStore().effective(anilist_id).binding
         if (
             shared_binding is not None
@@ -1057,15 +1064,20 @@ def anilist_anime_flow(
             configured_binding = shared_binding
 
     # 3. Load the episode list (cache-first).
+    episode_load_options = {
+        "source_filter": source_filter,
+        "season": playback_season,
+        "saved_params": saved_params,
+    }
+    if search_results is not None and selected_anime != saved_title:
+        episode_load_options["search_results"] = search_results
     episode_list, scraper_episode_count = load_episode_list(
         selected_anime,
         saved_title,
         saved_source,
         saved_url,
         anilist_id,
-        source_filter=source_filter,
-        season=playback_season,
-        saved_params=saved_params,
+        **episode_load_options,
     )
     if episode_list is None:
         return

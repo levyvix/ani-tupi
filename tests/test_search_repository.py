@@ -1,10 +1,13 @@
 """Tests for SearchRepository."""
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from unittest.mock import Mock, patch
 
 import pytest
 
 from services.repository.search_repository import SearchRepository
+from services.repository.repository import Repository
 from models.models import AnimeMetadata
 from models.models import AniListSearchResult
 from utils.logging import _base_logger
@@ -17,11 +20,17 @@ class MockPlugin:
         self.name = name
         self.results = results or []
 
-    def search_anime(self, query: str) -> None:
-        """Mock search that adds results to SearchRepository."""
-        repo = SearchRepository()
-        for anime in self.results:
-            repo.add_anime(anime.title, anime.url, self.name, {})
+    def search_anime(self, query: str) -> list[AnimeMetadata]:
+        """Return results using the scraper contract."""
+        return [
+            AnimeMetadata(
+                title=anime.title,
+                url=anime.url,
+                source=self.name,
+                params=anime.params,
+            )
+            for anime in self.results
+        ]
 
 
 class TestSearchRepository:
@@ -29,11 +38,12 @@ class TestSearchRepository:
 
     def setup_method(self):
         """Reset singleton before each test."""
-        SearchRepository.reset_singleton()
+        Repository.reset_singleton()
 
     def teardown_method(self):
         """Clean up after each test."""
         SearchRepository.reset_singleton()
+        Repository.reset_singleton()
 
     def test_singleton_pattern(self):
         """SearchRepository should be a singleton."""
@@ -386,6 +396,221 @@ class TestSearchRepository:
         assert results.query == "query"
         assert len(results.results) == 1
         assert results.results[0].title == "Anime A"
+
+    def test_concurrent_searches_return_isolated_snapshots_and_legacy_view(self):
+        repo = SearchRepository()
+        alpha_started = Event()
+        beta_started = Event()
+        release_alpha = Event()
+        release_beta = Event()
+
+        class InterleavedPlugin:
+            name = "interleaved"
+
+            def search_anime(self, query: str) -> list[AnimeMetadata]:
+                started, release, title = (
+                    (alpha_started, release_alpha, "Alpha Anime")
+                    if query == "alpha"
+                    else (beta_started, release_beta, "Beta Anime")
+                )
+                started.set()
+                assert release.wait(timeout=5)
+                return [
+                    AnimeMetadata(
+                        title=title,
+                        url=f"https://example.test/{query}",
+                        source=self.name,
+                    )
+                ]
+
+        repo.register(InterleavedPlugin())
+        with patch.object(repo, "_try_cache", return_value=(None, 0)):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                alpha = executor.submit(repo.search_anime, "alpha", False)
+                beta = executor.submit(repo.search_anime, "beta", False)
+                assert alpha_started.wait(timeout=5)
+                assert beta_started.wait(timeout=5)
+
+                release_alpha.set()
+                alpha_results = alpha.result(timeout=5)
+                assert repo.get_anime_titles() == ["Alpha Anime"]
+
+                release_beta.set()
+                beta_results = beta.result(timeout=5)
+
+        assert alpha_results.get_anime_titles() == ["Alpha Anime"]
+        assert alpha_results.get_sources_for_title("Alpha Anime") == [
+            ("https://example.test/alpha", "interleaved", {})
+        ]
+        assert beta_results.get_anime_titles() == ["Beta Anime"]
+        assert beta_results.get_sources_for_title("Beta Anime") == [
+            ("https://example.test/beta", "interleaved", {})
+        ]
+        assert repo.get_anime_titles() == ["Beta Anime"]
+
+    def test_manual_clear_and_add_do_not_change_active_search_state(self):
+        repo = SearchRepository()
+        started = Event()
+        release = Event()
+
+        class BlockingPlugin:
+            name = "blocking"
+
+            def search_anime(self, _query: str) -> list[AnimeMetadata]:
+                started.set()
+                assert release.wait(timeout=5)
+                return [
+                    AnimeMetadata(
+                        title="Scraped Anime",
+                        url="https://example.test/scraped",
+                        source=self.name,
+                    )
+                ]
+
+        repo.register(BlockingPlugin())
+        with patch.object(repo, "_try_cache", return_value=(None, 0)):
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                search = executor.submit(repo.search_anime, "scraped", False)
+                assert started.wait(timeout=5)
+                repo.clear_search_results()
+                repo.add_anime("Manual Anime", "https://example.test/manual", "manual")
+                assert repo.get_anime_titles() == ["Manual Anime"]
+                release.set()
+                result = search.result(timeout=5)
+
+        assert result.get_anime_titles() == ["Scraped Anime"]
+        assert "Manual Anime" not in result.get_anime_titles()
+        assert repo.get_anime_titles() == ["Scraped Anime"]
+
+    def test_search_results_include_invocation_metadata_for_scraper_and_cache(self):
+        repo = SearchRepository()
+        plugin = MockPlugin(
+            "source",
+            [
+                AnimeMetadata(
+                    title="Scraped Anime", url="https://example.test/scraped", source="source"
+                )
+            ],
+        )
+        repo.register(plugin)
+
+        with patch.object(repo, "_try_cache", return_value=(None, 2)):
+            scraper_results = repo.search_anime("Scraped Anime", verbose=False)
+
+        scraper_metadata = repo.get_search_metadata(search_results=scraper_results)
+        assert scraper_results.metadata["source"] == "scraper"
+        assert scraper_results.metadata["original_query"] == "Scraped Anime"
+        assert scraper_metadata.used_query == "Scraped Anime"
+        assert scraper_metadata.scraper_sources == ["source"]
+
+        cached_payload = {
+            "Cached Anime": [("https://example.test/cached", "source", {"cached": True})]
+        }
+        with patch.object(repo, "_try_cache", return_value=(cached_payload, 1)):
+            cache_results = repo.search_anime("Cached Anime", verbose=False)
+
+        cache_metadata = repo.get_search_metadata(search_results=cache_results)
+        assert cache_results.get_anime_titles() == ["Cached Anime"]
+        assert cache_results.get_sources_for_title("Cached Anime") == [
+            ("https://example.test/cached", "source", {"cached": True})
+        ]
+        assert cache_results.metadata["source"] == "cache"
+        assert cache_results.metadata["cache_hit"] is True
+        assert cache_metadata.original_query == "Cached Anime"
+        assert scraper_results.get_anime_titles() == ["Scraped Anime"]
+
+    def test_cached_search_does_not_change_an_in_progress_scraper_snapshot(self):
+        repo = SearchRepository()
+        started = Event()
+        release = Event()
+
+        class BlockingPlugin:
+            name = "source"
+
+            def search_anime(self, _query: str) -> list[AnimeMetadata]:
+                started.set()
+                assert release.wait(timeout=5)
+                return [
+                    AnimeMetadata(
+                        title="Slow Anime",
+                        url="https://example.test/slow",
+                        source=self.name,
+                    )
+                ]
+
+        repo.register(BlockingPlugin())
+        with patch.object(
+            repo,
+            "_try_cache",
+            side_effect=[
+                (None, 0),
+                ({"Cached Anime": [("https://example.test/cached", "source", {})]}, 1),
+            ],
+        ):
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                slow = executor.submit(repo.search_anime, "Slow Anime", False)
+                assert started.wait(timeout=5)
+                cached = repo.search_anime("Cached Anime", False)
+                assert cached.get_anime_titles() == ["Cached Anime"]
+                assert repo.get_anime_titles() == ["Cached Anime"]
+                release.set()
+                slow_results = slow.result(timeout=5)
+
+        assert slow_results.get_anime_titles() == ["Slow Anime"]
+        assert cached.get_anime_titles() == ["Cached Anime"]
+        assert repo.get_anime_titles() == ["Slow Anime"]
+
+    def test_episode_selection_uses_the_selected_search_snapshot(self):
+        repository = Repository()
+        loaded_sources: list[str] = []
+
+        class SourcePlugin:
+            def __init__(self, name: str):
+                self.name = name
+
+            def search_anime(self, query: str) -> list[AnimeMetadata]:
+                if query != self.name:
+                    return []
+                return [
+                    AnimeMetadata(
+                        title="Shared Anime",
+                        url=f"https://example.test/{self.name}",
+                        source=self.name,
+                    )
+                ]
+
+            def search_episodes(self, _title: str, url: str, _params: dict | None):
+                loaded_sources.append(self.name)
+                return [
+                    type(
+                        "Episodes",
+                        (),
+                        {
+                            "titles": ["Episode 1"],
+                            "urls": [f"{url}/episode-1"],
+                            "source": self.name,
+                            "season": 1,
+                        },
+                    )()
+                ]
+
+        repository.register(SourcePlugin("alpha"))
+        repository.register(SourcePlugin("beta"))
+        with patch.object(repository._search_repo, "_try_cache", return_value=(None, 0)):
+            selected_results = repository.search_anime("alpha", verbose=False)
+            repository.search_anime("beta", verbose=False)
+
+        repository.search_episodes("Shared Anime", search_results=selected_results)
+
+        assert loaded_sources == ["alpha"]
+        assert repository.get_all_episode_sources("Shared Anime", 1) == [
+            ("https://example.test/alpha/episode-1", "alpha")
+        ]
+
+        # Legacy callers remain bound to the published latest search.
+        repository._episode_repo.clear_episode_state("Shared Anime")
+        repository.search_episodes("Shared Anime")
+        assert loaded_sources == ["alpha", "beta"]
 
     @patch("services.repository.search_repository.logger")
     def test_search_anime_no_plugins(self, mock_logger):

@@ -183,7 +183,14 @@ def test_default_repository_uses_hierarchical_search(monkeypatch):
 
     def hierarchical_search(query, reference_title):
         called.append((query, reference_title))
-        return SimpleNamespace(titles_with_sources=["Liar Game [source-a]"])
+        return SimpleNamespace(
+            titles_with_sources=["Liar Game [source-a]"],
+            search_results=SimpleNamespace(
+                get_sources_for_title=lambda _title: (
+                    ("https://source-a.example/anime", "source-a", {}),
+                )
+            ),
+        )
 
     monkeypatch.setattr(configuration_module, "rep", repository)
     monkeypatch.setattr(

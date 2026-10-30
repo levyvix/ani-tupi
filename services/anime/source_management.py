@@ -68,7 +68,6 @@ def switch_anime_source(
         search_query = normalized_variations[0]
 
     # 2. Perform INCREMENTAL search (same as search_anime_flow)
-    rep.clear_search_results()
     state, search_results = incremental_search_anime(search_query)
 
     # If no results at all
@@ -167,8 +166,12 @@ def switch_anime_source(
     selected_anime = normalized_to_original.get(normalized_selected, normalized_selected)
 
     # 5. Load episodes from new source
+    current_result_set = state.get_current()
     with progress("Carregando episódios..."):
-        rep.search_episodes(selected_anime)
+        if current_result_set and current_result_set.search_results is not None:
+            rep.search_episodes(selected_anime, search_results=current_result_set.search_results)
+        else:
+            rep.search_episodes(selected_anime)
 
     # 6. Get episode list from new source
     episode_list = rep.get_episode_list(selected_anime)

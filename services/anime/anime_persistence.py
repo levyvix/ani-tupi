@@ -266,6 +266,7 @@ def persist_anime_choice(
     selected_anime: str,
     search_title: str,
     source: str | None,
+    search_results=None,
 ) -> None:
     """Save the resolved anime choice (title, source, URLs) for next time."""
     anime_url = None
@@ -274,10 +275,12 @@ def persist_anime_choice(
     source_candidates: list[AiringSourceCandidate] = []
 
     repo_title = selected_anime
-    if selected_anime not in rep.anime_to_urls:
+    repo_titles = (
+        search_results.get_anime_titles() if search_results is not None else list(rep.anime_to_urls)
+    )
+    if selected_anime not in repo_titles:
         from thefuzz import fuzz
 
-        repo_titles = list(rep.anime_to_urls.keys())
         if repo_titles:
             best_match = max(
                 repo_titles,
@@ -286,9 +289,11 @@ def persist_anime_choice(
             if fuzz.token_sort_ratio(selected_anime.lower(), best_match.lower()) >= 50:
                 repo_title = best_match
 
-    if repo_title in rep.anime_to_urls:
-        all_candidates = source_candidates_for(rep, repo_title)
-        source_candidates = source_candidates_for(rep, repo_title, source)
+    if repo_title in repo_titles:
+        all_candidates = source_candidates_for(rep, repo_title, search_results=search_results)
+        source_candidates = source_candidates_for(
+            rep, repo_title, source, search_results=search_results
+        )
         anime_urls = {candidate.source: candidate.anime_url for candidate in all_candidates}
         if source_candidates:
             primary = source_candidates[0]

@@ -432,7 +432,11 @@ class EpisodeRepository:
         cls._instance = None
 
     def search_episodes(
-        self, anime: str, anime_to_urls: dict, source_filter: str | None = None
+        self,
+        anime: str,
+        anime_to_urls: dict,
+        source_filter: str | None = None,
+        source_entries: list[tuple[str, str, dict]] | None = None,
     ) -> None:
         """Search for episodes from all sources or a specific source.
 
@@ -440,8 +444,11 @@ class EpisodeRepository:
             anime: Anime title to search episodes for
             anime_to_urls: Dict mapping anime titles to (url, source, params) tuples
             source_filter: Optional source name to search only that source (e.g., "animefire")
+            source_entries: Optional entries taken from one SearchResults snapshot.
         """
-        urls_and_scrapers = anime_to_urls.get(anime, [])
+        urls_and_scrapers = (
+            list(source_entries) if source_entries is not None else anime_to_urls.get(anime, [])
+        )
         self.last_search_failures[anime] = []
 
         # Filter by source if specified

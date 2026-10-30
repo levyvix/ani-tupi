@@ -73,7 +73,7 @@ def _episode_seasons(repository: Any, title: str, source: str, url: str, params:
 def _source_items_from_hierarchical_search(
     repository: Any, title: str
 ) -> list[tuple[str, tuple]] | None:
-    """Reuse the normal hierarchical search and its populated source URLs."""
+    """Reuse the normal hierarchical search and its isolated source snapshot."""
     if repository is not rep:
         return None
     try:
@@ -84,13 +84,13 @@ def _source_items_from_hierarchical_search(
         logger.info("Busca hierárquica indisponível para %s: %s", title, exc)
         return None
 
-    anime_to_urls = getattr(repository, "anime_to_urls", {})
-    if not isinstance(anime_to_urls, dict):
+    snapshot = getattr(search, "search_results", None)
+    if snapshot is None:
         return None
     source_items: list[tuple[str, tuple]] = []
     for displayed_title in getattr(search, "titles_with_sources", ()):
         result_title = displayed_title.rsplit(" [", 1)[0]
-        sources = anime_to_urls.get(result_title)
+        sources = snapshot.get_sources_for_title(result_title)
         if sources:
             source_items.append((result_title, tuple(sources)))
     return source_items
@@ -167,7 +167,6 @@ class AiringDownloadConfigurationService:
             self.source_store.save_binding(anilist_id, choice.binding)
 
     def _search_choices(self, anime_title: str) -> list[_SourceChoice]:
-        self.repository.clear_search_results()
         try:
             with self.progress(f"Buscando '{anime_title}'..."):
                 source_items = _source_items_from_hierarchical_search(self.repository, anime_title)

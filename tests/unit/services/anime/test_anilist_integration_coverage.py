@@ -762,7 +762,7 @@ class TestLoadEpisodesFromCacheOrSearch:
         cache_data = SimpleNamespace(episode_count=12, episode_urls=list(range(12)))
         monkeypatch.setattr(mod, "get_scraper_cache", lambda q: cache_data)
         rep = MagicMock()
-        rep.get_anime_titles_with_sources.return_value = ["Anime [src]"]
+        rep.search_anime.return_value.get_anime_titles_with_sources.return_value = ["Anime [src]"]
         monkeypatch.setattr(mod, "rep", rep)
         state, titles = mod.load_episodes_from_cache_or_search("Test", 1, "English", "Romaji")
         assert state is None
@@ -774,7 +774,7 @@ class TestLoadEpisodesFromCacheOrSearch:
         cache_data = SimpleNamespace(episode_count=0, episode_urls=[])
         monkeypatch.setattr(mod, "get_scraper_cache", lambda q: cache_data)
         rep = MagicMock()
-        rep.get_anime_titles_with_sources.return_value = []
+        rep.search_anime.return_value.get_anime_titles_with_sources.return_value = []
         monkeypatch.setattr(mod, "rep", rep)
         state, titles = mod.load_episodes_from_cache_or_search("Test Query", 1, "English", "Romaji")
         assert state is None
@@ -1624,7 +1624,13 @@ class TestAnilistAnimeFlow:
 
         mod.anilist_anime_flow("AniList Title", 42, _make_args())
 
-        persist.assert_called_once_with(42, "Test Anime", "Romaji", "src")
+        persist.assert_called_once_with(
+            42,
+            "Test Anime",
+            "Romaji",
+            "src",
+            search_results=rep_mock.search_anime.return_value,
+        )
 
     def test_no_episode_list_returns_early(self, monkeypatch):
         mod = _mod()

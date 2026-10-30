@@ -252,6 +252,13 @@ class SearchResults(BaseModel, frozen=True):
             result_list.append(f"{anime.title} [{sources_str}]")
         return result_list
 
+    def get_sources_for_title(self, title: str) -> list[tuple[str, str, dict]]:
+        """Return the URL/source/params entries from this snapshot for one title."""
+        for anime in self.results:
+            if anime.title == title:
+                return list(anime.sources)
+        return []
+
 
 class HistoryEntry(BaseModel):
     """Watch history entry. Serializes as list for JSON backward compat.

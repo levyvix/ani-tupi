@@ -127,8 +127,8 @@ class RandomAnimeService:
             PlaybackContext or None if not found
         """
         with progress(f"Buscando {anime_title}..."):
-            rep.search_anime(anime_title, verbose=False)
-            titles = rep.get_anime_titles(anime_title)
+            search_results = rep.search_anime(anime_title, verbose=False)
+            titles = search_results.get_anime_titles()
 
         if not titles:
             return None
@@ -136,7 +136,7 @@ class RandomAnimeService:
         selected = titles[0]
 
         with progress("Carregando episódios..."):
-            rep.search_episodes(selected)
+            rep.search_episodes(selected, search_results=search_results)
 
         ctx = prepare_playback_from_search(selected, episode_idx=start_episode, source=None)
 

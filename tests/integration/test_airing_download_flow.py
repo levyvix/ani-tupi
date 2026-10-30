@@ -46,13 +46,15 @@ class _Repository:
 
     def search_anime(self, _query, verbose=False):
         result = self.sources["demo"].search_anime(_query)[0]
+        source_entry = (result.url, result.source, result.params)
         return SimpleNamespace(
             results=(
                 SimpleNamespace(
                     title=result.title,
                     sources=((result.url, result.source, result.params),),
                 ),
-            )
+            ),
+            get_sources_for_title=lambda title: source_entry if title == result.title else (),
         )
 
     def get_active_sources(self):

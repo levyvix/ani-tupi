@@ -215,10 +215,14 @@ def test_refreshes_saved_title_search_before_fetching_source_episodes():
             self.anime_to_urls = {}
 
         def search_anime(self, title, verbose=False):
-            self.anime_to_urls[title] = [
+            entries = (
                 ("https://source-a.test/anime", "source-a", {"source": "a"}),
                 ("https://source-b.test/anime", "source-b", {"source": "b"}),
-            ]
+            )
+            return SimpleNamespace(
+                results=[SimpleNamespace(title=title)],
+                get_sources_for_title=lambda _title: entries,
+            )
 
     binding = _binding()
     repository = Repository()

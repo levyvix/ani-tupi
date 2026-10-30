@@ -17,7 +17,7 @@ from concurrent.futures import FIRST_EXCEPTION, ProcessPoolExecutor, wait
 from dataclasses import dataclass, field
 
 from models.config import settings
-from models.models import AnimeTitleResolution
+from models.models import AnimeTitleResolution, SearchResults
 from services.anilist.anilist_service import get_scraper_cache
 from utils.title_normalization import normalize_anime_title
 from services.anime.title_resolution import AnimeTitleResolver
@@ -62,6 +62,7 @@ class SearchResultSet:
     used_query: str | None = None  # Normalized query that was actually used for search
     timestamp: float = field(default_factory=time.time)
     source_counts: dict[str, int] = field(default_factory=dict)
+    search_results: SearchResults | None = None
 
     def __post_init__(self):
         if self.word_count <= 0:
@@ -105,6 +106,7 @@ class IncrementalSearchState:
         source_counts: dict[str, int] | None = None,
         used_query: str | None = None,
         is_filtered: bool = False,
+        search_results: SearchResults | None = None,
     ) -> None:
         """Add a new search result set to the history.
 
@@ -123,6 +125,7 @@ class IncrementalSearchState:
             is_filtered=is_filtered,
             used_query=used_query or query,
             source_counts=source_counts or {},
+            search_results=search_results,
         )
         # If we've navigated backward, discard forward history
         if self.current_index < len(self.search_history) - 1:
@@ -362,15 +365,17 @@ class _ScraperSearchOutcome:
     titles_with_sources: list[str]
     used_query: str
     anilist_reference_title: str | None
+    search_results: SearchResults
 
 
 def _get_ranked_titles_with_sources(
-    *, filter_by_query: str | None, original_query: str | None, anilist_results
+    *, filter_by_query: str | None, original_query: str | None, anilist_results, search_results
 ) -> list[str]:
     return rep.get_anime_titles_with_sources(
         filter_by_query=filter_by_query,
         original_query=original_query,
         anilist_results=anilist_results,
+        search_results=search_results,
     )
 
 
@@ -381,10 +386,9 @@ def _perform_scraper_search(partial_query: str) -> _ScraperSearchOutcome:
     ranking, and returns the ranked titles-with-sources plus the query actually
     used and any AniList reference title discovered.
     """
-    rep.clear_search_results()
-    rep.search_anime(partial_query, verbose=True)
+    search_results = rep.search_anime(partial_query, verbose=True)
 
-    search_metadata = rep.get_search_metadata()
+    search_metadata = rep.get_search_metadata(search_results=search_results)
     used_query = search_metadata.used_query or partial_query
 
     ranking_query = used_query
@@ -404,6 +408,7 @@ def _perform_scraper_search(partial_query: str) -> _ScraperSearchOutcome:
         filter_by_query=used_query,
         original_query=ranking_query,
         anilist_results=anilist_results,
+        search_results=search_results,
     )
 
     if anilist_reference_title:
@@ -411,7 +416,9 @@ def _perform_scraper_search(partial_query: str) -> _ScraperSearchOutcome:
             titles_with_sources, anilist_reference_title
         )
 
-    return _ScraperSearchOutcome(titles_with_sources, used_query, anilist_reference_title)
+    return _ScraperSearchOutcome(
+        titles_with_sources, used_query, anilist_reference_title, search_results
+    )
 
 
 # === Fluxo de busca incremental ===
@@ -435,6 +442,7 @@ class ManualSearchSelection:
     source: str | None
     was_cancelled: bool = False
     search_query_used: str | None = None
+    search_results: SearchResults | None = None
 
     @property
     def found(self) -> bool:
@@ -448,6 +456,7 @@ class ContextualSearchResults:
     state: "IncrementalSearchState"
     titles_with_sources: list[str]
     used_query: str | None
+    search_results: SearchResults | None = None
 
 
 @dataclass(frozen=True)
@@ -586,6 +595,7 @@ def incremental_search_anime(
                     _count_sources(titles_with_sources),
                     used_query=used_query,
                     is_filtered=False,
+                    search_results=outcome.search_results,
                 )
 
                 if not current_results and current_word_count < len(words):
@@ -611,6 +621,7 @@ def incremental_search_anime(
                         _count_sources(current_results),
                         used_query=used_query,
                         is_filtered=False,
+                        search_results=fallback_outcome.search_results,
                     )
                     if current_results:
                         base_results = current_results.copy()
@@ -704,6 +715,7 @@ def incremental_search_anime(
                         _count_sources(titles_with_sources),
                         used_query=used_query,
                         is_filtered=False,  # This was a fresh search, not a filter
+                        search_results=outcome.search_results,
                     )
 
                 elif filtered:
@@ -724,6 +736,9 @@ def incremental_search_anime(
                         _count_sources(filtered),
                         used_query=partial_query,
                         is_filtered=True,
+                        search_results=(
+                            state.get_current().search_results if state.get_current() else None
+                        ),
                     )
                 else:
                     # Filtering reached 0 results, so keep the last valid state but continue
@@ -810,6 +825,7 @@ def contextual_incremental_search(
         state=search_state,
         titles_with_sources=titles_with_sources,
         used_query=used_query,
+        search_results=(current_result_set.search_results if current_result_set else None),
     )
 
 
@@ -822,12 +838,19 @@ def _parallel_contextual_search_worker(query: str, reference_title: str) -> dict
     return {
         "used_query": result.used_query,
         "titles_with_sources": result.titles_with_sources,
+        "search_results": (
+            result.search_results.model_dump(mode="python") if result.search_results else None
+        ),
     }
 
 
 def _search_results_from_serialized(query: str, payload: dict) -> ContextualSearchResults:
     """Rebuild minimal contextual results from a serialized worker payload."""
     used_query = payload.get("used_query") or query
+    search_results_payload = payload.get("search_results")
+    search_results = (
+        SearchResults.model_validate(search_results_payload) if search_results_payload else None
+    )
     state = IncrementalSearchState()
     if payload.get("titles_with_sources"):
         word_count = max(1, len(used_query.split()))
@@ -836,12 +859,35 @@ def _search_results_from_serialized(query: str, payload: dict) -> ContextualSear
             query=used_query,
             results=list(payload["titles_with_sources"]),
             used_query=used_query,
+            search_results=search_results,
         )
     return ContextualSearchResults(
         state=state,
         titles_with_sources=list(payload.get("titles_with_sources", [])),
         used_query=used_query,
+        search_results=search_results,
     )
+
+
+def _find_anime_search_results(selected_anime: str, *fallback_queries: str) -> SearchResults | None:
+    """Resolve scraper URLs from a result snapshot rather than the legacy view."""
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for query in (selected_anime, *fallback_queries):
+        cleaned = (query or "").strip()
+        if not cleaned:
+            continue
+        key = cleaned.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append(cleaned)
+
+    for candidate in candidates:
+        results = rep.search_anime(candidate, verbose=False)
+        if results.get_sources_for_title(selected_anime):
+            return results
+    return None
 
 
 def _ensure_anime_sources_in_repo(selected_anime: str, *fallback_queries: str) -> bool:
@@ -991,6 +1037,7 @@ def _select_from_manual_search_results(
             source=source,
             was_cancelled=False,
             search_query_used=used_query,
+            search_results=current_result.search_results if current_result else None,
         )
 
 
@@ -1000,6 +1047,7 @@ def _select_from_dual_search_results(
     """Show both user-query and official-title results in one menu."""
     options: list[str] = []
     seen_titles: set[str] = set()
+    title_snapshots: dict[str, SearchResults | None] = {}
 
     def add_group(label: str, results: ContextualSearchResults) -> None:
         if not results.titles_with_sources:
@@ -1009,6 +1057,7 @@ def _select_from_dual_search_results(
             if title in seen_titles:
                 continue
             seen_titles.add(title)
+            title_snapshots[title] = results.search_results
             options.append(title)
 
     add_group(f"Sua busca: {dual_results.user_query}", dual_results.user_results)
@@ -1036,6 +1085,7 @@ def _select_from_dual_search_results(
         was_cancelled=False,
         search_query_used=dual_results.official_results.used_query
         or dual_results.user_results.used_query,
+        search_results=title_snapshots.get(selected_anime_with_source),
     )
 
 
@@ -1085,7 +1135,9 @@ def _build_search_query_candidates(
     return candidates
 
 
-def _try_cache_hit(candidate_query: str) -> bool:
+def _try_cache_hit(
+    candidate_query: str, *, include_search_results: bool = False
+) -> bool | SearchResults:
     """Populate the repository from cache for ``candidate_query`` if present.
 
     Returns ``True`` when a cache entry was found and loaded (so the caller can
@@ -1098,8 +1150,8 @@ def _try_cache_hit(candidate_query: str) -> bool:
     logger.info(f"Usando cache ({cache_data.episode_count} eps disponíveis)")
     # Populate repository from cache and discover available sources (background search).
     rep.load_from_cache(candidate_query, cache_data)
-    rep.search_anime(candidate_query, verbose=False)
-    return True
+    search_results = rep.search_anime(candidate_query, verbose=False)
+    return search_results if include_search_results else True
 
 
 def search_anime_flow(args):
@@ -1110,10 +1162,6 @@ def search_anime_flow(args):
 
     Resolution-first: resolves the canonical title before cache and scraper search.
     """
-    # Clear previous search results to avoid accumulating data from previous calls
-    # (Repository is singleton, so it keeps data between calls)
-    rep.clear_search_results()
-
     if args.query:
         query = args.query
     else:
@@ -1134,6 +1182,7 @@ def search_anime_flow(args):
             logger.info(f"💡 Nome oficial/romaji encontrado: {official_title}")
 
     selected_anime = None
+    selected_search_results: SearchResults | None = None
     source = None
     search_query_used = query
     fallback_resolution = resolution
@@ -1147,13 +1196,16 @@ def search_anime_flow(args):
         if selection.found:
             selected_anime = selection.selected_anime
             source = selection.source
+            selected_search_results = selection.search_results
             if selection.search_query_used:
                 search_query_used = selection.search_query_used
 
     for candidate_query in [] if selected_anime else [query]:
         # Cache-first: Check if query is in cache before searching scrapers
-        if _try_cache_hit(candidate_query):
+        cache_results = _try_cache_hit(candidate_query, include_search_results=True)
+        if cache_results:
             selected_anime = candidate_query
+            selected_search_results = cache_results
             break
 
         search_result = _select_from_manual_search_results(
@@ -1170,6 +1222,7 @@ def search_anime_flow(args):
         if search_result.found:
             selected_anime = search_result.selected_anime
             source = search_result.source
+            selected_search_results = search_result.search_results
             break
 
     if not selected_anime:
@@ -1189,8 +1242,10 @@ def search_anime_flow(args):
                     f"{candidate_query}"
                 )
 
-            if _try_cache_hit(candidate_query):
+            cache_results = _try_cache_hit(candidate_query, include_search_results=True)
+            if cache_results:
                 selected_anime = candidate_query
+                selected_search_results = cache_results
                 break
 
             contextual_results = contextual_incremental_search(
@@ -1210,6 +1265,7 @@ def search_anime_flow(args):
             if search_result.found:
                 selected_anime = search_result.selected_anime
                 source = search_result.source
+                selected_search_results = search_result.search_results
                 break
 
     if not selected_anime:
@@ -1224,12 +1280,16 @@ def search_anime_flow(args):
         fallback_queries.append(fallback_resolution.resolved_title)
 
     with ui_bridge.loading("Carregando episódios..."):
-        if not _ensure_anime_sources_in_repo(selected_anime, *fallback_queries):
+        if selected_search_results is None:
+            selected_search_results = _find_anime_search_results(selected_anime, *fallback_queries)
+        if selected_search_results is None:
             logger.warning(
                 "Não foi possível localizar fontes para '%s' após a seleção.",
                 selected_anime,
             )
-        rep.search_episodes(selected_anime)
+            rep.search_episodes(selected_anime)
+        else:
+            rep.search_episodes(selected_anime, search_results=selected_search_results)
 
     # Handle season selection
     requested_season = None

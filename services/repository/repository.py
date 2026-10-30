@@ -9,6 +9,7 @@ Coordinates between specialized repositories:
 
 from services.repository.search_repository import SearchRepository
 from services.repository.episode_repository import EpisodeRepository
+from models.models import SearchResults
 from utils.logging import get_logger
 
 __all__ = ["Repository", "rep"]
@@ -92,29 +93,33 @@ class Repository:
         """Search anime with a word limit."""
         return self._search_repo.search_anime_with_word_limit(query, word_limit, verbose)
 
-    def get_search_metadata(self):
+    def get_search_metadata(self, search_results: SearchResults | None = None):
         """Get metadata about the last search."""
-        return self._search_repo.get_search_metadata()
+        return self._search_repo.get_search_metadata(search_results)
 
     def add_anime(self, title: str, url: str, source: str, params=None) -> None:
         """Add anime with deduplication."""
         self._search_repo.add_anime(title, url, source, params)
 
     def get_anime_titles(
-        self, filter_by_query: str | None = None, min_score: int | None = None
+        self,
+        filter_by_query: str | None = None,
+        min_score: int | None = None,
+        search_results: SearchResults | None = None,
     ) -> list[str]:
         """Get anime titles."""
-        return self._search_repo.get_anime_titles(filter_by_query, min_score)
+        return self._search_repo.get_anime_titles(filter_by_query, min_score, search_results)
 
     def get_anime_titles_with_sources(
         self,
         filter_by_query: str | None = None,
         original_query: str | None = None,
         anilist_results: list | None = None,
+        search_results: SearchResults | None = None,
     ) -> list[str]:
         """Get anime titles with sources."""
         return self._search_repo.get_anime_titles_with_sources(
-            filter_by_query, original_query, anilist_results
+            filter_by_query, original_query, anilist_results, search_results
         )
 
     # Episode Methods
@@ -197,9 +202,22 @@ class Repository:
         """Get next available episode."""
         return self._episode_repo.get_next_available_episode(anime, from_episode)
 
-    def search_episodes(self, anime: str, source_filter: str | None = None) -> None:
-        """Search for episodes."""
-        self._episode_repo.search_episodes(anime, self._search_repo.anime_to_urls, source_filter)
+    def search_episodes(
+        self,
+        anime: str,
+        source_filter: str | None = None,
+        search_results: SearchResults | None = None,
+    ) -> None:
+        """Search for episodes using one search snapshot or the legacy view."""
+        source_entries = (
+            search_results.get_sources_for_title(anime) if search_results is not None else None
+        )
+        self._episode_repo.search_episodes(
+            anime,
+            self._search_repo.anime_to_urls,
+            source_filter,
+            source_entries,
+        )
 
     # Playback Methods
     def _detect_source_from_url(self, url: str) -> str | None:
