@@ -2,6 +2,8 @@ import importlib
 from os import listdir
 from os.path import abspath, dirname, isfile, join
 
+from scrapers.core.plugin_dependencies import optional_dependencies_available
+
 
 def get_resource_path(relative_path: str) -> str:
     """Get the path to resources relative to this loader."""
@@ -61,4 +63,7 @@ def load_plugins(register, plugins: list[str] | None = None) -> None:
             plugins = enabled_plugins
 
     for plugin in plugins:
-        importlib.import_module(f"scrapers.plugins.{plugin}").load(register)
+        plugin_module = importlib.import_module(f"scrapers.plugins.{plugin}")
+        if not optional_dependencies_available(plugin_module, plugin):
+            continue
+        plugin_module.load(register)

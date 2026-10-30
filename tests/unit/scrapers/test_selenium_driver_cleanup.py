@@ -13,7 +13,7 @@ from scrapers.core.selenium_driver import SeleniumWebDriver
 
 def _make_driver():
     """Build a SeleniumWebDriver whose underlying handle is a MagicMock."""
-    with patch("scrapers.core.selenium_driver.webdriver.Chrome") as chrome_cls:
+    with patch("selenium.webdriver.Chrome") as chrome_cls:
         instance = MagicMock()
         chrome_cls.return_value = instance
         driver = SeleniumWebDriver()
@@ -57,7 +57,7 @@ def test_finalizer_quits_when_close_not_called():
 
 def test_context_manager_quits_on_exit():
     """Using the driver as a context manager quits the handle on exit."""
-    with patch("scrapers.core.selenium_driver.webdriver.Chrome") as chrome_cls:
+    with patch("selenium.webdriver.Chrome") as chrome_cls:
         handle = MagicMock()
         chrome_cls.return_value = handle
         with SeleniumWebDriver() as driver:

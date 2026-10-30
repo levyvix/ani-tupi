@@ -9,6 +9,7 @@ import importlib
 from os import listdir
 from os.path import abspath, dirname, isfile, join
 from typing import Protocol
+from scrapers.core.plugin_dependencies import optional_dependencies_available
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -106,12 +107,14 @@ def load_manga_plugins() -> dict[str, MangaScraperProtocol]:
     for plugin in all_plugin_files:
         try:
             plugin_module = importlib.import_module(f"manga_scrapers.plugins.{plugin}")
+            if not optional_dependencies_available(plugin_module, plugin):
+                continue
             # Call plugin's load function which returns plugin instance or None
             plugin_instance = plugin_module.load()
             if plugin_instance is not None:
                 plugins[plugin_instance.name] = plugin_instance
         except Exception as e:
-            logger.info(f"⚠️  Falha ao carregar plugin {plugin}: {e}")
+            logger.warning(f"⚠️  Falha ao carregar plugin {plugin}: {e}")
             continue
 
     return plugins

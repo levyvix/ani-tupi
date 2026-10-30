@@ -31,7 +31,6 @@ dependencies = [
     "httpx>=0.28.1",
     "pillow>=12.1.0",
     "yt-dlp>=2026.1.31",
-    "selenium>=4.0.0",
     "thefuzz>=0.22.1",
     "beautifulsoup4>=4.15.0",
 ]
@@ -44,6 +43,11 @@ dependencies = [
 [project.scripts]
 ani-tupi = "main:cli"
 manga-tupi = "manga_tupi:main"
+
+[project.optional-dependencies]
+browser-scrapers = [
+    "selenium>=4.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]
