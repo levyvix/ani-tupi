@@ -9,6 +9,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from scrapers.plugins.otakulogia import Otakulogia
+from scrapers.core.search_deadline import current_search_deadline, use_search_deadline
 
 
 def _wrapped(records: list[dict]) -> dict:
@@ -82,6 +83,22 @@ class TestOtakulogiaScraper:
         assert sd.url == "https://otakulogia.com/anime/8160"
         assert sd.params == {"cid": "8160"}
         assert sd.source == "otakulogia"
+
+    @patch("scrapers.plugins.otakulogia.http_request_with_retry")
+    def test_search_deadline_propagates_to_parallel_season_requests(self, mock_req):
+        mock_req.side_effect = _router({"SearchVideo": {"SearchVideo": _wrapped(SEARCH_RECORDS)}})
+        observed_deadlines = []
+
+        def fetch_temporadas(_cid):
+            observed_deadlines.append(current_search_deadline())
+            return []
+
+        with patch.object(self.scraper, "_fetch_temporadas", side_effect=fetch_temporadas):
+            with use_search_deadline(123.0):
+                results = self.scraper.search_anime("naruto")
+
+        assert len(results) == 2
+        assert observed_deadlines == [123.0, 123.0]
 
     @patch("scrapers.plugins.otakulogia.http_request_with_retry")
     def test_search_anime_falls_back_to_slug_catalog(self, mock_req):

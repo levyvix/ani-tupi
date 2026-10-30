@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
@@ -310,9 +311,13 @@ class Otakulogia:
 
             if catalogs:
                 with ThreadPoolExecutor(max_workers=min(len(catalogs), 8)) as executor:
-                    temporada_lists = list(
-                        executor.map(lambda pair: self._fetch_temporadas(pair[0]), catalogs)
-                    )
+                    futures = [
+                        executor.submit(context.run, self._fetch_temporadas, pair[0])
+                        for context, pair in zip(
+                            (copy_context() for _ in catalogs), catalogs, strict=True
+                        )
+                    ]
+                    temporada_lists = [future.result() for future in futures]
 
                 for (cid, title), temporadas in zip(catalogs, temporada_lists):
                     if not temporadas:

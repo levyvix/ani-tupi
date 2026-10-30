@@ -12,6 +12,7 @@ import base64
 import json
 from utils.logging import get_logger
 import re
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict
 
@@ -254,7 +255,9 @@ class AnimesDigital:
                             with SeleniumWebDriver() as driver:
                                 return driver.fetch(u)
 
-                        tree = loop.run_until_complete(loop.run_in_executor(executor, _fetch_url))
+                        tree = loop.run_until_complete(
+                            loop.run_in_executor(executor, copy_context().run, _fetch_url)
+                        )
                 except RuntimeError:
                     with SeleniumWebDriver() as driver:
                         tree = driver.fetch(url)
