@@ -35,6 +35,7 @@ def show_main_menu() -> str | None:
     """Display main menu with options."""
     options = [
         "🔍 Buscar Anime",
+        "✅ Marcar episódio como assistido",
         "▶️  Continuar Assistindo",
         "📂 Biblioteca Local",
         "📺 AniList",
@@ -51,6 +52,10 @@ def main_menu_flow(args) -> None:
 
         if choice == "🔍 Buscar Anime":
             anime_cmd(args)
+        elif choice == "✅ Marcar episódio como assistido":
+            mark_values = vars(args).copy()
+            mark_values["mark_watched"] = True
+            anime_cmd(argparse.Namespace(**mark_values))
         elif choice == "▶️  Continuar Assistindo":
             # Keep the menu's shared namespace immutable between handlers.
             continue_values = vars(args).copy()

@@ -37,6 +37,11 @@ class AiringEpisodesService:
         """Initialize service with AniList client."""
         self.client = anilist_client
 
+    def invalidate_watching_cache(self) -> None:
+        """Discard the cached airing list after AniList progress changes."""
+        cache_key = f"anilist:watching-airing:{self.client.user_id or 'anonymous'}"
+        get_cache().delete(cache_key)
+
     @staticmethod
     def _parse_end_date(end_date: dict | None) -> datetime | None:
         """Parse AniList endDate object to datetime using conservative fallback.
