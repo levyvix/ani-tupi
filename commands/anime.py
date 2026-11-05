@@ -17,7 +17,7 @@ from services.anime import (
     search_anime_flow,
     switch_anime_source,
 )
-from services.core.history_service import save_history
+from services.core.history_service import mark_episode_watched, save_history
 from services.repository import rep
 from services.anime.download_service import AnimeDownloadService
 from utils.logging import get_logger
@@ -370,6 +370,18 @@ def anime(args) -> None:
         ctx = prepare_playback_from_search(selected_anime, episode_idx, source)
         if ctx is None:
             return
+
+    if getattr(args, "mark_watched", False):
+        mark_episode_watched(
+            anime=ctx.anime_title,
+            episode_idx=ctx.episode_idx,
+            anilist_id=ctx.anilist_id,
+            source=ctx.source,
+            total_episodes=ctx.num_episodes,
+            total_episodes_anilist=ctx.total_episodes_anilist,
+        )
+        logger.info(f"✅ Episódio {ctx.episode_idx + 1} marcado como assistido.")
+        return
 
     # Display AniList discovery info if found
     if ctx.anilist_title:

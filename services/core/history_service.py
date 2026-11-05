@@ -15,6 +15,7 @@ from services.anime.anime_persistence import load_anilist_urls
 
 __all__ = [
     "load_history",
+    "mark_episode_watched",
     "reset_history",
     "save_history",
     "save_history_from_event",
@@ -440,6 +441,39 @@ def save_history(
         _history_store.set(anime, entry.to_list())
     except PersistenceError as e:
         logger.error(f"Failed to save history: {e}")
+
+
+def mark_episode_watched(
+    anime: str,
+    episode_idx: int,
+    anilist_id: int | None = None,
+    source: str | None = None,
+    total_episodes: int | None = None,
+    total_episodes_anilist: int | None = None,
+) -> None:
+    """Record an episode watched elsewhere and sync the furthest progress."""
+    try:
+        history_data = _history_store.load({})
+        existing = history_data.get(anime)
+        if existing:
+            previous = HistoryEntry.from_list(existing)
+            episode_idx = max(episode_idx, previous.episode_idx)
+            anilist_id = anilist_id or previous.anilist_id
+            source = source or previous.source
+    except (FileNotFoundError, PersistenceError) as exc:
+        logger.warning("Could not read existing history before marking watched: %s", exc)
+
+    save_history(anime, episode_idx, anilist_id, source, total_episodes)
+    if anilist_id:
+        from services.anime.playback_service import sync_progress_to_anilist
+
+        sync_progress_to_anilist(
+            anilist_id,
+            episode_idx + 1,
+            total_episodes,
+            anime,
+            total_episodes_anilist,
+        )
 
 
 def save_history_from_event(

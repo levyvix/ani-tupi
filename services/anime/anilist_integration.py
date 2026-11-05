@@ -13,7 +13,7 @@ from services.repository import rep
 from services.core import ui_bridge
 from services.anilist.anilist_service import get_scraper_cache
 from scrapers import loader
-from services.core.history_service import save_history
+from services.core.history_service import mark_episode_watched, save_history
 from utils.video_player import VideoPlayer
 from services.anime.source_management import switch_anime_source
 from utils.logging import get_logger
@@ -453,6 +453,7 @@ def _confirm_watch_or_download(
     source: str | None,
     *,
     anilist_id: int | None = None,
+    total_episodes_anilist: int | None = None,
     season: int | None = 1,
     variant: str | None = None,
 ) -> int | None:
@@ -466,7 +467,12 @@ def _confirm_watch_or_download(
     while True:
         episode_number = current_episode_idx + 1
         action = ui_bridge.menu_navigate(
-            ["▶️ Assistir agora", "📥 Baixar para assistir depois", "🔙 Voltar"],
+            [
+                "▶️ Assistir agora",
+                "✅ Marcar como assistido",
+                "📥 Baixar para assistir depois",
+                "🔙 Voltar",
+            ],
             msg=f"O que deseja fazer com o episódio {episode_number}?",
         )
 
@@ -487,6 +493,18 @@ def _confirm_watch_or_download(
                 season=season,
                 variant=variant,
             )
+            return None
+
+        if action == "✅ Marcar como assistido":
+            mark_episode_watched(
+                anime=selected_anime,
+                episode_idx=current_episode_idx,
+                anilist_id=anilist_id,
+                source=source,
+                total_episodes=num_episodes,
+                total_episodes_anilist=total_episodes_anilist,
+            )
+            logger.info(f"✅ Episódio {episode_number} marcado como assistido.")
             return None
 
         if action == "▶️ Assistir agora":
@@ -1127,6 +1145,7 @@ def anilist_anime_flow(
         len(episode_list),
         source,
         anilist_id=anilist_id,
+        total_episodes_anilist=total_episodes,
         season=playback_season,
         variant=playback_variant,
     )

@@ -1030,19 +1030,18 @@ def sync_progress_to_anilist(
             )
             return False
 
+        from services.anime.airing_episodes_service import AiringEpisodesService
+
+        AiringEpisodesService().invalidate_watching_cache()
+
         # Fetch entry once for log and completion check
         entry = anilist_client.get_media_list_entry(anilist_id)
         if entry and entry.status == "COMPLETED":
-            logger.info(
-                "Anime anime_id=%d is already COMPLETED on AniList",
-                anilist_id,
-            )
+            logger.info(f"Anime anime_id={anilist_id} is already COMPLETED on AniList")
             logger.info(f"✅ Anime já está marcado como COMPLETO no AniList (ID: {anilist_id})")
         else:
             logger.info(
-                "✅ Successfully synced anime_id=%d progress to episode %d",
-                anilist_id,
-                episode,
+                f"✅ Successfully synced anime_id={anilist_id} progress to episode {episode}"
             )
             logger.info(f"✅ Progresso sincronizado com AniList (ID: {anilist_id})")
 
