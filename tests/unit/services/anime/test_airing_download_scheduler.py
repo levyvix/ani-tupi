@@ -98,6 +98,31 @@ def test_cycle_lock_reports_active_without_running_client(tmp_path: Path):
     assert not (tmp_path / "state.json").exists()
 
 
+def test_state_write_failure_returns_failed_result_and_releases_lock(tmp_path: Path, monkeypatch):
+    scheduler = AiringDownloadScheduler(
+        client=FakeClient([]),
+        binding_resolver={},
+        state_path=tmp_path / "state.json",
+        lock_path=tmp_path / "lock",
+        log_path=tmp_path / "monitor.log",
+    )
+
+    def fail_write(_result):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(scheduler, "_write_state", fail_write)
+    result = scheduler.run_once()
+
+    assert result.exit_code == 1
+    assert result.status == "failed"
+    assert "disk unavailable" in result.error
+    assert "state persistence failed" in (tmp_path / "monitor.log").read_text()
+
+    lock = _CycleLock(tmp_path / "lock")
+    assert lock.acquire() is True
+    lock.release()
+
+
 def test_cycle_skips_non_releasing_and_unconfigured_anime(tmp_path: Path):
     scheduler = AiringDownloadScheduler(
         client=FakeClient([_entry(1, "Finished", "FINISHED"), _entry(2, "Missing")]),

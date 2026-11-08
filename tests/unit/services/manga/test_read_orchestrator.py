@@ -49,6 +49,12 @@ def _noop_progress(msg):
     return _ctx()
 
 
+def _successful_reader():
+    process = MagicMock()
+    process.wait.return_value = 0
+    return process
+
+
 class _FakeService:
     """Minimal stand-in for UnifiedMangaService."""
 
@@ -1138,6 +1144,38 @@ class TestProcessChapter:
                 )
         assert not open_calls
 
+    def test_reader_launch_failure_does_not_advance_history(self, tmp_path):
+        from services.manga.reading_service import _process_chapter
+
+        manga = _manga()
+        chapter = _chapter("1")
+        history = MagicMock()
+        pdf = tmp_path / "1.pdf"
+        pdf.write_bytes(b"pdf")
+
+        with (
+            patch("services.manga.reading_service._prepare_chapter_pdf", return_value=pdf),
+            patch("services.manga.reading_service.open_pdf_reader", return_value=None),
+            patch("services.manga.reading_service._sync_read_to_anilist") as sync,
+            patch("services.manga.reading_service.ui_bridge.show_warning"),
+        ):
+            _process_chapter(
+                _FakeService(),
+                manga,
+                chapter,
+                None,
+                "mangadex",
+                history,
+                [chapter],
+                ["Cap. 1"],
+                0,
+                menu=lambda _opts, _title: None,
+                progress=_noop_progress,
+            )
+
+        history.update.assert_not_called()
+        sync.assert_not_called()
+
     def test_selects_next_chapter(self, monkeypatch, tmp_path):
         from services.manga.reading_service import _process_chapter
 
@@ -1168,7 +1206,11 @@ class TestProcessChapter:
 
         with (
             patch("services.manga.reading_service._prepare_chapter_pdf", side_effect=_fake_prepare),
-            patch("services.manga.reading_service.open_pdf_reader"),
+            patch(
+                "services.manga.reading_service.open_pdf_reader",
+                return_value=_successful_reader(),
+            ),
+            patch("services.manga.reading_service.ui_bridge.prompt"),
             patch("services.manga.reading_service.is_zathura_running", return_value=False),
             patch("services.manga.reading_service._sync_read_to_anilist"),
         ):
@@ -1214,7 +1256,11 @@ class TestProcessChapter:
 
         with (
             patch("services.manga.reading_service._prepare_chapter_pdf", side_effect=_fake_prepare),
-            patch("services.manga.reading_service.open_pdf_reader"),
+            patch(
+                "services.manga.reading_service.open_pdf_reader",
+                return_value=_successful_reader(),
+            ),
+            patch("services.manga.reading_service.ui_bridge.prompt"),
             patch("services.manga.reading_service.is_zathura_running", return_value=False),
             patch("services.manga.reading_service._sync_read_to_anilist"),
         ):
@@ -1257,7 +1303,11 @@ class TestProcessChapter:
                 "services.manga.reading_service._prepare_chapter_pdf",
                 return_value=tmp_path / "1.pdf",
             ),
-            patch("services.manga.reading_service.open_pdf_reader"),
+            patch(
+                "services.manga.reading_service.open_pdf_reader",
+                return_value=_successful_reader(),
+            ),
+            patch("services.manga.reading_service.ui_bridge.prompt"),
             patch("services.manga.reading_service.is_zathura_running", return_value=False),
             patch("services.manga.reading_service._sync_read_to_anilist"),
             patch(
@@ -1305,7 +1355,11 @@ class TestProcessChapter:
                 "services.manga.reading_service._prepare_chapter_pdf",
                 return_value=tmp_path / "1.pdf",
             ),
-            patch("services.manga.reading_service.open_pdf_reader"),
+            patch(
+                "services.manga.reading_service.open_pdf_reader",
+                return_value=_successful_reader(),
+            ),
+            patch("services.manga.reading_service.ui_bridge.prompt"),
             patch("services.manga.reading_service.is_zathura_running", return_value=False),
             patch("services.manga.reading_service._sync_read_to_anilist"),
             patch(
@@ -1343,7 +1397,11 @@ class TestProcessChapter:
                 "services.manga.reading_service._prepare_chapter_pdf",
                 return_value=tmp_path / "1.pdf",
             ),
-            patch("services.manga.reading_service.open_pdf_reader"),
+            patch(
+                "services.manga.reading_service.open_pdf_reader",
+                return_value=_successful_reader(),
+            ),
+            patch("services.manga.reading_service.ui_bridge.prompt"),
             patch("services.manga.reading_service.is_zathura_running", return_value=False),
             patch("services.manga.reading_service._sync_read_to_anilist"),
         ):
@@ -1816,7 +1874,11 @@ class TestProcessChapterZathura:
 
         with (
             patch("services.manga.reading_service._prepare_chapter_pdf", return_value=pdf),
-            patch("services.manga.reading_service.open_pdf_reader"),
+            patch(
+                "services.manga.reading_service.open_pdf_reader",
+                return_value=_successful_reader(),
+            ),
+            patch("services.manga.reading_service.ui_bridge.prompt"),
             patch("services.manga.reading_service.is_zathura_running", side_effect=_fake_zathura),
             patch("services.manga.reading_service._sync_read_to_anilist"),
             patch(
@@ -1839,7 +1901,7 @@ class TestProcessChapterZathura:
                 progress=_noop_progress,
             )
 
-        assert any("Zathura fechado" in i for i in infos)
+        assert any("Leitor fechado" in i for i in infos)
 
 
 class TestContinueMangaFlowEdgeCases:

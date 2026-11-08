@@ -544,8 +544,8 @@ def anime(args) -> None:
             pause()
 
         # Save the URL that was played so next iteration can try pattern derivation
-        if exit_code in (0, 3) and sources:
-            current_player_url = sources[0][0]
+        if exit_code in (0, 3):
+            current_player_url = fallback_result.player_url
         else:
             current_player_url = None
 
