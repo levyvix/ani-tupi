@@ -369,6 +369,7 @@ class PlaybackFallbackResult(NamedTuple):
     source_used: str | None
     sources_tried: list[tuple[str, int]]
     all_failed: bool
+    player_url: str | None = None
 
 
 def _normalize_candidate_urls(urls: str | list[str] | None) -> list[str]:
@@ -523,6 +524,7 @@ def play_episode_with_fallback(
                     source_used=source,
                     sources_tried=sources_tried,
                     all_failed=False,
+                    player_url=url,
                 )
 
             logger.info(

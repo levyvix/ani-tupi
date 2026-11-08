@@ -199,7 +199,8 @@ def cli() -> None:
         if result["successful"] > 0 or result["failed"] > 0:
             logger.info(
                 f"📡 Sincronização offline: {result['successful']} ok, "
-                f"{result['failed']} falha(s) pendente(s)"
+                f"{result['failed']} falha(s) no ciclo; consulte offline_sync_queue.json "
+                "para entradas pendentes e arquivadas"
             )
 
     # Show active sources

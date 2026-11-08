@@ -101,6 +101,7 @@ class TestPlayEpisodeWithFallback:
         assert len(result.sources_tried) == 2
         assert result.sources_tried[0] == ("anitube", 2)
         assert result.sources_tried[1] == ("animefire", 0)
+        assert result.player_url == "https://url2.mp4"
         assert player.play_episode.call_count == 2
 
     def test_all_sources_fail(self):

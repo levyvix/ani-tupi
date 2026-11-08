@@ -295,9 +295,10 @@ class OfflineSyncQueueEntry(BaseModel):
 
 
 class OfflineSyncQueue(BaseModel):
-    """Database of pending offline sync operations.
+    """Database of pending and terminal offline sync operations.
 
-    Persisted to JSON for retry on app startup.
+    Persisted to JSON for retries and a small audit trail of exhausted or
+    non-retryable operations.
 
     Attributes:
         version: Schema version for migrations
@@ -308,6 +309,9 @@ class OfflineSyncQueue(BaseModel):
     version: int = Field(default=1, description="Schema version for migrations")
     entries: list[OfflineSyncQueueEntry] = Field(
         default_factory=list, description="Pending sync operations"
+    )
+    failed_entries: list[OfflineSyncQueueEntry] = Field(
+        default_factory=list, description="Operations that will not be retried automatically"
     )
     last_updated: datetime = Field(
         default_factory=datetime.now, description="Last update timestamp"

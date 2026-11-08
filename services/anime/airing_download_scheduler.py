@@ -21,6 +21,9 @@ from pydantic import BaseModel, Field, field_validator
 from models.config import get_data_path, settings
 from services.anilist.client import anilist_client
 from services.repository import rep
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 __all__ = [
     "AiringDownloadScheduler",
@@ -241,12 +244,31 @@ class AiringDownloadScheduler:
                 active=True,
                 error="Outra execução do monitor já está ativa.",
             )
-            self._append_log("cycle skipped: another run is active")
+            try:
+                self._append_log("cycle skipped: another run is active")
+            except Exception:
+                logger.exception("Could not log skipped airing monitor cycle")
             return result
 
         try:
             result = self._run_locked(started_at)
-            self._write_state(result)
+            try:
+                self._write_state(result)
+            except Exception as exc:
+                error = f"Falha ao persistir estado do ciclo: {_safe_error(exc)}"
+                result = CycleResult(
+                    exit_code=1,
+                    status="failed",
+                    started_at=result.started_at,
+                    finished_at=_now(),
+                    active=False,
+                    animes=result.animes,
+                    error=error,
+                )
+                try:
+                    self._append_log(f"cycle state persistence failed: {_safe_error(exc)}")
+                except Exception:
+                    logger.exception("Could not log airing monitor state persistence failure")
             return result
         finally:
             lock.release()

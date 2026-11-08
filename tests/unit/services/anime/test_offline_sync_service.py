@@ -160,6 +160,8 @@ class TestAddToQueue:
         )
         q = _load_queue()
         assert q.entries == []
+        assert len(q.failed_entries) == 1
+        assert "401" in (q.failed_entries[0].last_error or "")
 
     def test_add_offline_with_none_error(self, tmp_path, monkeypatch):
         """None error = went offline; still queues because _classify_error(None) is True."""
@@ -256,7 +258,7 @@ class TestRetryOfflineSyncs:
         assert len(q.entries) == 1
         assert q.entries[0].retry_count == 1
 
-    def test_entry_exceeding_max_retries_is_dropped(self, tmp_path, monkeypatch):
+    def test_entry_exceeding_max_retries_is_archived(self, tmp_path, monkeypatch):
         _redirect_queue_to(tmp_path, monkeypatch)
         from services.anime.offline_sync_service import retry_offline_syncs, _load_queue
         from models.models import OfflineSyncQueueEntry, OfflineSyncQueue
@@ -277,10 +279,12 @@ class TestRetryOfflineSyncs:
         ):
             result = retry_offline_syncs()
 
-        # Entry is dropped because retry_count >= max_retry_count
+        # Entry is archived because retry_count >= max_retry_count
         assert result["failed"] == 1
         loaded = _load_queue()
         assert loaded.entries == []
+        assert len(loaded.failed_entries) == 1
+        assert loaded.failed_entries[0].retry_count == 3
 
     def test_exception_during_sync_increments_retry_count(self, tmp_path, monkeypatch):
         _redirect_queue_to(tmp_path, monkeypatch)

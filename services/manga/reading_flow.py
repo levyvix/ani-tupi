@@ -670,21 +670,33 @@ def _process_chapter(
         if pdf_path is None:
             return
 
-        open_pdf_reader(pdf_path)
-        history.update(
-            selected_manga.title,
-            selected_chapter.number,
-            chapter_id=selected_chapter.id,
-            manga_id=selected_manga.id,
-        )
+        reader_process = open_pdf_reader(pdf_path)
+        if reader_process is None:
+            ui_bridge.show_warning(
+                f"⚠️  Não foi possível abrir o leitor de PDF. O capítulo foi salvo em: {pdf_path}"
+            )
+            return
 
+        ui_bridge.prompt("📖 Feche o leitor de PDF e pressione Enter para continuar...")
+        reader_exit_code = reader_process.wait()
+        if reader_exit_code != 0:
+            ui_bridge.show_warning(
+                f"⚠️  O leitor de PDF encerrou com erro. O capítulo foi salvo em: {pdf_path}"
+            )
+            return
         if is_zathura_running():
             ui_bridge.show_info("📖 Feche o Zathura para continuar.")
             while is_zathura_running():
                 import time
 
                 time.sleep(1)
-            ui_bridge.show_info("✓ Zathura fechado. Continuando...")
+        ui_bridge.show_info("✓ Leitor fechado. Continuando...")
+        history.update(
+            selected_manga.title,
+            selected_chapter.number,
+            chapter_id=selected_chapter.id,
+            manga_id=selected_manga.id,
+        )
 
         _sync_read_to_anilist(selected_manga, selected_chapter, pdf_path, menu)
 

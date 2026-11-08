@@ -150,24 +150,9 @@ def add_to_queue(
         is_local: Whether episode came from local library
         file_path: Path to local episode file (for cleanup after sync)
     """
-    # Check if error is retryable
-    if not _classify_error(error):
-        logger.warning(
-            f"Not queuing non-retryable error for {anime_title} ep {episode_number}: {error}"
-        )
-        return
-
     # Load current queue
     queue = _load_queue()
 
-    # Check if entry already exists
-    existing_idx = None
-    for i, entry in enumerate(queue.entries):
-        if entry.anilist_id == anilist_id and entry.episode_number == episode_number:
-            existing_idx = i
-            break
-
-    # Create new entry or update existing
     entry = OfflineSyncQueueEntry(
         anime_title=anime_title,
         episode_number=episode_number,
@@ -177,6 +162,42 @@ def add_to_queue(
         file_path=str(file_path) if file_path else None,
     )
 
+    if not _classify_error(error):
+        queue.entries = [
+            pending
+            for pending in queue.entries
+            if (pending.anilist_id, pending.episode_number) != (anilist_id, episode_number)
+        ]
+        queue.failed_entries = [
+            failed
+            for failed in queue.failed_entries
+            if (failed.anilist_id, failed.episode_number) != (anilist_id, episode_number)
+        ]
+        queue.failed_entries.append(entry)
+        logger.warning(
+            "Archived non-retryable sync failure for %s ep %s: %s",
+            anime_title,
+            episode_number,
+            error,
+        )
+        _save_queue(queue)
+        return
+
+    # A new failure for this episode starts a fresh retry lifecycle.
+    queue.failed_entries = [
+        failed
+        for failed in queue.failed_entries
+        if (failed.anilist_id, failed.episode_number) != (anilist_id, episode_number)
+    ]
+
+    # Check if entry already exists
+    existing_idx = None
+    for i, pending in enumerate(queue.entries):
+        if pending.anilist_id == anilist_id and pending.episode_number == episode_number:
+            existing_idx = i
+            break
+
+    # Create new entry or update existing
     if existing_idx is not None:
         queue.entries[existing_idx] = entry
         logger.debug(f"Updated queue entry for {anime_title} ep {episode_number}")
@@ -196,13 +217,19 @@ def retry_offline_syncs() -> dict[str, int]:
     Retries each entry:
     - If successful: removes from queue, deletes local file if configured
     - If failed: increments retry_count, updates last_error
-    - If max_retry_count exceeded: removes from queue
+    - If max_retry_count exceeded: archives the entry as terminal
 
     Returns:
         Dictionary with {"successful": N, "failed": M} counts
     """
     queue = _load_queue()
     if not queue.entries:
+        if queue.failed_entries:
+            logger.warning(
+                "Offline sync has %s archived failure(s) in %s",
+                len(queue.failed_entries),
+                _get_queue_path(),
+            )
         return {"successful": 0, "failed": 0}
 
     successful_count = 0
@@ -210,6 +237,7 @@ def retry_offline_syncs() -> dict[str, int]:
 
     # Process each entry
     entries_to_keep = []
+    failed_entries = list(queue.failed_entries)
 
     for entry in queue.entries:
         # Check if max retries exceeded
@@ -218,6 +246,7 @@ def retry_offline_syncs() -> dict[str, int]:
                 f"Giving up on {entry.anime_title} ep {entry.episode_number} "
                 f"after {entry.retry_count} retries"
             )
+            failed_entries.append(entry)
             failed_count += 1
             continue
 
@@ -285,10 +314,15 @@ def retry_offline_syncs() -> dict[str, int]:
 
     # Update queue with remaining entries
     queue.entries = entries_to_keep
+    queue.failed_entries = failed_entries
 
-    if entries_to_keep:
+    if entries_to_keep or failed_entries:
         _save_queue(queue)
-        logger.info(f"Offline sync queue has {len(entries_to_keep)} remaining entries")
+        logger.info(
+            "Offline sync state: %s pending, %s archived failure(s)",
+            len(entries_to_keep),
+            len(failed_entries),
+        )
     else:
         # Queue is empty, delete file
         try:
