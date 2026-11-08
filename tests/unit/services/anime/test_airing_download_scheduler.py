@@ -115,6 +115,7 @@ def test_state_write_failure_returns_failed_result_and_releases_lock(tmp_path: P
 
     assert result.exit_code == 1
     assert result.status == "failed"
+    assert result.error is not None
     assert "disk unavailable" in result.error
     assert "state persistence failed" in (tmp_path / "monitor.log").read_text()
 
