@@ -5,10 +5,12 @@ from threading import Event
 
 import httpx
 import pytest
+from diskcache_community import Disk, FanoutCache
 
 from models.models import AnimeMetadata, ScrapedEpisodes
 from utils import cache as cache_module
 from utils.cache import DiskCache
+from utils.title_normalization import normalize_search_cache_key
 
 
 @dataclass
@@ -64,3 +66,35 @@ def test_search_repository_smoke_returns_metadata_without_network(search_reposit
     assert anime.sources == (
         ("https://example.test/anime/dandadan", "search-smoke", {"language": "subtitled"}),
     )
+
+
+def _create_marker(path: str) -> list:
+    with open(path, "w") as marker:
+        marker.write("ran")
+    return []
+
+
+class _PlantedSearchEntry:
+    def __init__(self, path: str) -> None:
+        self.path = path
+
+    def __reduce__(self):
+        return (_create_marker, (self.path,))
+
+
+def test_search_cache_entry_that_runs_code_is_a_miss(search_repository, temp_dir):
+    repository, plugin = search_repository
+    marker = temp_dir / "marker"
+
+    repository.search_anime("Dandadan", verbose=False)
+    repository.search_anime("Dandadan", verbose=False)
+    assert plugin.queries == ["Dandadan"]
+
+    with FanoutCache(str(temp_dir / "cache"), shards=4, disk=Disk) as other_writer:
+        other_writer.set(normalize_search_cache_key("Dandadan"), _PlantedSearchEntry(str(marker)))
+
+    results = repository.search_anime("Dandadan", verbose=False)
+
+    assert not marker.exists()
+    assert plugin.queries == ["Dandadan", "Dandadan"]
+    assert results.results[0].title == "Dandadan"
