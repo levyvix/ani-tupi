@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 
 from utils import cache as cache_module
-from utils.cache import DiskCache
+from utils.cache import DiskCache, MemoryCache
 from models.models import AniListAnime, AniListTitle, AniListSearchResult
 from services.anilist import anilist_service as discovery
 
@@ -206,13 +206,13 @@ class TestGetAniListMetadata:
         assert result is not None
         assert result.id == 1
 
-    def test_returns_cached_anilistanime_object(self, temp_dir, monkeypatch):
+    def test_returns_cached_anilistanime_object(self, monkeypatch):
         """Cached AniListAnime object is returned directly."""
-        disk_cache = DiskCache(cache_dir=temp_dir / "cache")
-        monkeypatch.setattr(cache_module, "_global_cache", disk_cache)
+        memory_cache = MemoryCache()
+        monkeypatch.setattr(cache_module, "_global_cache", memory_cache)
 
         anime = _anime(1, "Naruto")
-        disk_cache.set("anilist_meta:1", anime, ttl=1000)
+        memory_cache.set("anilist_meta:1", anime, ttl=1000)
 
         result = discovery.get_anilist_metadata(1)
         assert result is not None

@@ -17,7 +17,7 @@ from enum import Enum
 
 from utils.logging import get_logger
 
-from diskcache import FanoutCache
+from diskcache_community import FanoutCache, SafeDisk
 from models.config import settings
 from models.models import CacheStats
 
@@ -198,6 +198,7 @@ class DiskCache(Cache):
             directory=str(cache_dir),
             shards=4,  # 4 SQLite files for concurrency
             timeout=1.0,
+            disk=SafeDisk.with_options(on_error="miss"),
         )
         self._default_ttl = default_ttl
 
