@@ -71,9 +71,7 @@ openspec/
 # ── GSD baseline (auto-generated) ──
 *.code-workspace
 .env.*
-!.env.example
 node_modules/
-.next/
 *.pyc
 target/
 vendor/
@@ -81,6 +79,3 @@ coverage/
 .coverage
 htmlcov/
 .cache/
-tmp/
-/.pi
-/.pi-subagents/artifacts

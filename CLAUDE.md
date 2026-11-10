@@ -118,7 +118,7 @@ cache_ttl = settings.cache_duration_hours
 reader = settings.manga.pdf_reader
 ```
 
-Why? Environment variables override defaults (`ANI_TUPI__CACHE__DURATION_HOURS=48`), no scattered `.env` files, type validation on boot, configuration is self-documenting.
+Why? User preferences persist in `~/.config/ani-tupi/settings.json`, with type validation on boot and self-documenting settings.
 
 ### Pattern: Automatic Discovery and Explicit Plugin Entry Point
 

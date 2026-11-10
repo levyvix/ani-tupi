@@ -1,44 +1,28 @@
-"""Application configuration using Pydantic v2.
+"""Application configuration using Pydantic v2 and a local JSON settings file."""
 
-Centralized settings for ani-tupi including:
-- API endpoints and credentials
-- Cache settings
-- Search configuration
-- OS-specific data paths
-
-Configuration can be overridden via environment variables:
-    ANI_TUPI__ANILIST__CLIENT_ID=12345
-    ANI_TUPI__CACHE__DURATION_HOURS=12
-    ANI_TUPI__SEARCH__PROGRESSIVE_SEARCH_MIN_WORDS=2
-"""
-
-import os
 import json
+import os
 from pathlib import Path
 
-from pydantic import AliasChoices, BaseModel, Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, Field, field_validator
 
 
 def get_data_path() -> Path:
     """Get OS-specific data directory for ani-tupi.
 
     Returns:
-        Path: ~/.local/state/ani-tupi (Linux/macOS) or C:\\Program Files\\ani-tupi (Windows)
+        Path: user-local application data directory for the current platform
     """
     if os.name == "nt":
-        return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "ani-tupi"
-    return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "ani-tupi"
+        return Path.home() / "AppData" / "Local" / "ani-tupi"
+    return Path.home() / ".local" / "state" / "ani-tupi"
 
 
 def get_user_config_path() -> Path:
     """Get OS-specific user configuration directory for ani-tupi."""
     if os.name == "nt":
-        appdata = os.environ.get("APPDATA")
-        if appdata:
-            return Path(appdata) / "ani-tupi"
         return Path.home() / "AppData" / "Roaming" / "ani-tupi"
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "ani-tupi"
+    return Path.home() / ".config" / "ani-tupi"
 
 
 def get_user_settings_file() -> Path:
@@ -65,7 +49,9 @@ def save_user_settings_overrides(overrides: dict) -> None:
     settings_file = get_user_settings_file()
     settings_file.parent.mkdir(parents=True, exist_ok=True)
     temp_file = settings_file.with_suffix(".json.tmp")
-    temp_file.write_text(json.dumps(overrides, indent=2, ensure_ascii=False), encoding="utf-8")
+    temp_file.write_text(
+        json.dumps(overrides, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
+    )
     temp_file.replace(settings_file)
 
 
@@ -74,42 +60,45 @@ class AniListSettings(BaseModel):
 
     api_url: str = Field(
         "https://graphql.anilist.co",
-        description="AniList GraphQL API endpoint",
+        description="Endereço da API GraphQL do AniList",
+        json_schema_extra={"editable": False},
     )
     auth_url: str = Field(
         "https://anilist.co/api/v2/oauth/authorize",
-        description="OAuth authorization URL",
+        description="Endereço de autorização OAuth",
+        json_schema_extra={"editable": False},
     )
     client_id: int = Field(
         38122,
         gt=0,
-        description="OAuth client ID (public)",
+        description="ID público do cliente OAuth",
+        json_schema_extra={"editable": False},
     )
     token_file: Path = Field(
         default_factory=lambda: get_data_path() / "anilist_token.json",
-        description="Path to stored access token",
+        description="Caminho do arquivo que armazena o token de acesso",
     )
     prefer_english_title: bool = Field(
         False,
-        description="Use English title for searches (True) or Romaji (False)",
+        description="Usar o título em inglês nas buscas (sim) ou em romaji (não)",
     )
     manga_prefer_english_title: bool = Field(
         False,
-        description="Use English title for manga searches (True) or Romaji (False)",
+        description="Usar o título em inglês nas buscas de mangá (sim) ou em romaji (não)",
     )
     manga_auto_sync: bool = Field(
         True,
-        description="Automatically sync manga progress with AniList when confirmed",
+        description="Sincronizar automaticamente o progresso do mangá com o AniList após a confirmação",
     )
     manga_progress_confirmation: bool = Field(
         True,
-        description="Ask for chapter completion confirmation after reading",
+        description="Pedir confirmação ao terminar de ler um capítulo",
     )
     request_timeout_seconds: float = Field(
         30.0,
         gt=0,
         le=120,
-        description="HTTP timeout for AniList API requests in seconds",
+        description="Tempo limite, em segundos, das solicitações à API do AniList",
     )
 
 
@@ -118,58 +107,58 @@ class CacheSettings(BaseModel):
 
     cache_dir: Path = Field(
         default_factory=lambda: get_data_path() / "cache",
-        description="Path to cache directory (unified backends)",
+        description="Caminho da pasta de cache",
     )
     anilist_auto_discover: bool = Field(
         True,
-        description="Auto-discover AniList ID for manual searches via fuzzy matching",
+        description="Encontrar automaticamente o ID do AniList em buscas manuais por similaridade",
     )
     anilist_fuzzy_threshold: int = Field(
         90,
         ge=70,
         le=100,
-        description="Minimum fuzzy match score (0-100) for AniList ID auto-discovery",
+        description="Pontuação mínima de similaridade (0 a 100) para encontrar o ID do AniList",
     )
     episodes_cache_enabled: bool = Field(
         False,
-        description="Enable episodes cache (disabled by default due to new episode needed to be fetched)",
+        description="Guardar listas de episódios em cache (desativado por padrão para buscar episódios novos)",
     )
     # TTL Configuration
     search_cache_ttl_seconds: int = Field(
         3600,
         ge=60,
-        description="Time-to-live for search results cache in seconds (default: 1 hour)",
+        description="Tempo de validade do cache de buscas, em segundos (padrão: 1 hora)",
     )
     episodes_cache_ttl_seconds: int = Field(
         1800,
         ge=60,
-        description="Time-to-live for episode lists cache in seconds (default: 30 minutes)",
+        description="Tempo de validade do cache de episódios, em segundos (padrão: 30 minutos)",
     )
     video_url_cache_ttl_seconds: int = Field(
         7200,
         ge=60,
-        description="Time-to-live for video URLs cache in seconds (default: 2 hours)",
+        description="Tempo de validade do cache de links de vídeo, em segundos (padrão: 2 horas)",
     )
     cache_max_size_bytes: int = Field(
         50 * 1024 * 1024,  # 50 MB
         ge=1_000_000,
-        description="Maximum cache size in bytes before LRU eviction (default: 50 MB)",
+        description="Tamanho máximo do cache em bytes antes de remover os itens menos usados (padrão: 50 MB)",
     )
     # Background refresh configuration
     background_refresh_enabled: bool = Field(
         False,
-        description="Enable background refresh of stale cache entries (default: disabled for conservative behavior)",
+        description="Atualizar em segundo plano itens vencidos do cache (desativado por padrão)",
     )
     background_refresh_threshold_seconds: int = Field(
         2700,  # 45 minutes
         ge=60,
-        description="Threshold for background refresh: refresh cache older than this (seconds)",
+        description="Idade mínima, em segundos, para atualizar itens do cache em segundo plano",
     )
     background_refresh_max_workers: int = Field(
         2,
         ge=1,
         le=16,
-        description="Maximum parallel background refresh workers",
+        description="Número máximo de tarefas paralelas para atualizar o cache",
     )
 
 
@@ -179,44 +168,44 @@ class SearchSettings(BaseModel):
     progressive_search_min_words: int = Field(
         1,  # Changed from 2 to support single-word anime like "Dandadan"
         ge=1,
-        description="Minimum words to use in progressive search",
+        description="Número mínimo de palavras usadas na busca progressiva",
     )
     incremental_max_results: int = Field(
         20,
         ge=1,
-        description="Result-count threshold that stops incremental search word expansion",
+        description="Quantidade de resultados que interrompe a ampliação gradual dos termos da busca",
     )
     top_results_limit: int = Field(
         10,
         ge=5,
         le=50,
-        description="Maximum results to show initially (before 'Show all' button)",
+        description="Número máximo de resultados exibidos inicialmente, antes de mostrar todos",
     )
     preferred_audio: str = Field(
         "dublado",
         pattern="^(dublado|legendado)$",
-        description="Preferred audio type for AnimesDigital: 'dublado' or 'legendado'",
+        description="Áudio preferido no AnimesDigital: dublado ou legendado",
     )
     enable_title_resolution: bool = Field(
         True,
-        description="Retry manual anime searches with externally resolved titles when direct search fails",
+        description="Tentar novamente buscas manuais usando títulos encontrados externamente quando a busca direta falhar",
     )
     title_resolution_timeout_seconds: float = Field(
         8.0,
         gt=0,
         le=30,
-        description="Timeout for each external title resolution provider",
+        description="Tempo limite de consulta a cada serviço externo de busca de títulos",
     )
     title_resolution_cache_ttl_seconds: int = Field(
         7 * 24 * 3600,
         ge=60,
-        description="TTL for cached resolved anime titles in seconds",
+        description="Validade do cache de títulos de anime encontrados, em segundos",
     )
     title_resolution_min_confidence: int = Field(
         75,
         ge=0,
         le=100,
-        description="Minimum confidence required before retrying search with an externally resolved title",
+        description="Confiança mínima para tentar novamente a busca com um título encontrado externamente",
     )
 
 
@@ -225,7 +214,7 @@ class PluginSettings(BaseModel):
 
     disabled_plugins: list[str] = Field(
         default_factory=list,
-        description="List of disabled plugin names (e.g., ['sushianimes'])",
+        description="Lista de fontes desativadas (por exemplo: ['sushianimes'])",
     )
     priority_order: list[str] = Field(
         default_factory=lambda: [
@@ -240,7 +229,7 @@ class PluginSettings(BaseModel):
             "anroll",
             "animesonlinecc",
         ],
-        description="Priority order for scraper sources (first = highest priority)",
+        description="Ordem de preferência das fontes (a primeira tem maior prioridade)",
     )
 
     @field_validator("priority_order")
@@ -262,25 +251,25 @@ class PerformanceSettings(BaseModel):
         15,
         ge=5,
         le=60,
-        description="Default timeout for HTTP requests (seconds)",
+        description="Tempo limite padrão das solicitações HTTP, em segundos",
     )
     http_pool_connections: int = Field(
         10,
         ge=5,
         le=50,
-        description="Number of connection pools to cache",
+        description="Número de conjuntos de conexões mantidos em cache",
     )
     http_pool_maxsize: int = Field(
         20,
         ge=10,
         le=100,
-        description="Maximum connections per pool",
+        description="Número máximo de conexões por conjunto",
     )
     http_retry_attempts: int = Field(
         3,
         ge=1,
         le=5,
-        description="Number of retry attempts for failed HTTP requests",
+        description="Número de tentativas para solicitações HTTP que falharem",
     )
 
     # Cache Settings (additional to existing cache settings)
@@ -288,31 +277,31 @@ class PerformanceSettings(BaseModel):
         300,
         ge=60,
         le=1800,
-        description="TTL for search results cache (seconds, 5 minutes default)",
+        description="Validade do cache de resultados de busca, em segundos (padrão: 5 minutos)",
     )
     episodes_cache_ttl: int = Field(
         1800,
         ge=300,
         le=3600,
-        description="TTL for episode list cache (seconds, 30 minutes default)",
+        description="Validade do cache de listas de episódios, em segundos (padrão: 30 minutos)",
     )
     video_url_cache_ttl_seconds: int = Field(
         3600,
         ge=300,
         le=86400,
-        description="TTL for video URL cache (seconds, 1 hour default)",
+        description="Validade do cache de links de vídeo, em segundos (padrão: 1 hora)",
     )
     smart_cache_max_size_mb: int = Field(
         100,
         ge=50,
         le=500,
-        description="Maximum size of smart cache (MB)",
+        description="Tamanho máximo do cache inteligente, em MB",
     )
 
     # Unified Cache Settings
     cache_type: str = Field(
         "disk",
-        description="Cache backend: memory, disk, or hybrid",
+        description="Tipo de cache: memória, disco ou híbrido",
     )
 
     # Consolidated Cache TTL Settings (replaces duplicate duration_hours fields)
@@ -320,7 +309,7 @@ class PerformanceSettings(BaseModel):
         168,
         ge=1,
         le=720,
-        description="Default cache TTL in hours (7 days, max 30 days)",
+        description="Validade padrão do cache, em horas (7 dias; máximo de 30 dias)",
     )
     source_ttls: dict[str, int] = Field(
         default_factory=lambda: {
@@ -330,7 +319,7 @@ class PerformanceSettings(BaseModel):
             "manga": 24,  # 24 hours for manga chapters
             "anilist_meta": 720,  # 30 days for AniList metadata
         },
-        description="Source-specific TTL in hours",
+        description="Validade do cache em horas para cada tipo de dado",
     )
 
 
@@ -339,21 +328,21 @@ class AnimeDownloadSettings(BaseModel):
 
     download_directory: Path = Field(
         default_factory=lambda: Path.home() / ".local" / "share" / "ani-tupi" / "anime",
-        description="Where to save downloaded anime episodes",
+        description="Pasta onde os episódios de anime baixados serão salvos",
     )
     max_parallel_downloads: int = Field(
         3,
         ge=1,
         le=16,
-        description="Maximum parallel episode downloads (1 = sequential, 16 = max)",
+        description="Número máximo de episódios baixados ao mesmo tempo (1 = um por vez; 16 = máximo)",
     )
     video_format: str = Field(
         "mkv",
-        description="Default video format for downloads (mkv, mp4, etc)",
+        description="Formato padrão dos vídeos baixados (mkv, mp4 etc.)",
     )
     skip_already_downloaded: bool = Field(
         True,
-        description="Skip already-downloaded episodes in batch operations",
+        description="Ignorar episódios já baixados em operações em lote",
     )
 
 
@@ -364,19 +353,19 @@ class OfflineSyncConfig(BaseModel):
         default=3,
         ge=1,
         le=10,
-        description="Maximum retries before giving up on failed sync",
+        description="Número máximo de tentativas antes de desistir de uma sincronização",
     )
     enable_auto_retry: bool = Field(
         default=True,
-        description="Automatically retry offline syncs on app startup",
+        description="Tentar novamente sincronizações pendentes ao iniciar o aplicativo",
     )
     enable_file_cleanup: bool = Field(
         default=True,
-        description="Automatically delete local episode files after successful sync",
+        description="Excluir arquivos locais dos episódios após uma sincronização bem-sucedida",
     )
     delete_after_watch: bool = Field(
         default=True,
-        description="Delete local files after watching (regardless of AniList sync)",
+        description="Excluir arquivos locais após assistir, mesmo sem sincronizar com o AniList",
     )
 
 
@@ -385,75 +374,76 @@ class MangaSettings(BaseModel):
 
     api_url: str = Field(
         "https://api.mangadex.org",
-        description="MangaDex API base URL",
+        description="Endereço base da API do MangaDex",
+        json_schema_extra={"editable": False},
     )
 
     output_directory: Path = Field(
         default_factory=lambda: Path.home() / ".manga_tupi",
-        description="Where to save downloaded manga chapters",
+        description="Pasta onde os capítulos de mangá serão salvos",
     )
     preferred_sources: list[str] = Field(
         default_factory=lambda: ["mangalivre", "mugiwaras", "mangadex"],
-        description="Preferred manga sources in priority order",
+        description="Fontes de mangá preferidas, em ordem de prioridade",
     )
     pdf_reader: str | None = Field(
         None,
-        description="PDF reader to use (zathura, evince, okular, mupdf). None = auto-detect",
+        description="Leitor de PDF (zathura, evince, okular ou mupdf). Vazio = detectar automaticamente",
     )
     pdf_reader_priority: list[str] = Field(
         default_factory=lambda: ["zathura", "evince", "okular", "mupdf", "xdg-open"],
-        description="Priority list for PDF reader auto-detection",
+        description="Ordem de preferência para detectar leitores de PDF",
     )
     delete_images_after_pdf: bool = Field(
         True,
-        description="Delete PNG images after PDF creation (keeps only PDF)",
+        description="Excluir as imagens PNG após criar o PDF e manter apenas o arquivo PDF",
     )
     pdf_quality: int = Field(
         85,
         ge=1,
         le=100,
-        description="JPEG quality for images inside PDF (0-100, lower = smaller file)",
+        description="Qualidade JPEG das imagens no PDF (0 a 100; valores menores geram arquivos menores)",
     )
     auto_create_pdf: bool = Field(
         True,
-        description="Automatically create PDF after downloading images",
+        description="Criar um PDF automaticamente após baixar as imagens",
     )
     zathura_auto_config: bool = Field(
         True,
-        description="Automatically configure Zathura for fit-width zoom",
+        description="Configurar o Zathura automaticamente para ajustar a página à largura da tela",
     )
     # Download for later settings
     default_download_range: int = Field(
         5,
         ge=1,
         le=100,
-        description="Default chapters to download when user selects 'download'",
+        description="Número padrão de capítulos para baixar ao escolher a opção de download",
     )
     auto_open_after_download: bool = Field(
         False,
-        description="Auto-open PDF reader after downloading (False = stay in menu)",
+        description="Abrir o leitor de PDF após o download (não = permanecer no menu)",
     )
     skip_already_downloaded: bool = Field(
         True,
-        description="Skip already-downloaded chapters in batch operations",
+        description="Ignorar capítulos já baixados em operações em lote",
     )
     download_storage_dir: str | None = Field(
         None,
-        description="Custom directory for downloaded PDFs (None = use output_directory)",
+        description="Pasta personalizada para os PDFs baixados (vazio = usar a pasta de saída)",
     )
     auto_delete_read_chapters: bool = Field(
         True,
-        description="Automatically delete chapter files after marking as read (saves disk space)",
+        description="Excluir os arquivos dos capítulos após marcá-los como lidos para liberar espaço",
     )
     debug_download_failures: bool = Field(
         False,
-        description="Enable detailed logging for download failures (helps debug issues)",
+        description="Registrar detalhes quando um download falhar para ajudar a identificar o problema",
     )
     max_parallel_downloads: int = Field(
         0,
         ge=0,
         le=16,
-        description="Maximum parallel chapter downloads (0 = use CPU count, 1 = sequential)",
+        description="Número máximo de capítulos baixados ao mesmo tempo (0 = usar os núcleos da CPU; 1 = um por vez)",
     )
 
 
@@ -464,7 +454,7 @@ class AiringSettings(BaseModel):
         60,
         ge=1,
         le=365,
-        description="Days after a show finishes airing to keep it visible in the New Episodes tab (default: 60)",
+        description="Dias para manter um anime visível na aba Novos episódios após o fim da exibição (padrão: 60)",
     )
 
 
@@ -473,7 +463,7 @@ class AiringDownloadsSettings(BaseModel):
 
     poll_interval_minutes: int = Field(
         30,
-        description="Monitor interval in minutes; must divide one hour evenly",
+        description="Intervalo do monitor em minutos; deve dividir uma hora sem resto",
     )
 
     @field_validator("poll_interval_minutes")
@@ -495,67 +485,48 @@ class UpdateCheckSettings(BaseModel):
 
     enabled: bool = Field(
         True,
-        description="Enable automatic update checks on startup",
+        description="Verificar atualizações automaticamente ao iniciar o aplicativo",
     )
     interval_hours: int = Field(
         24,
         ge=1,
         le=720,
-        description="Minimum hours between successful remote update checks",
+        description="Intervalo mínimo, em horas, entre verificações de atualização bem-sucedidas",
     )
     request_timeout_seconds: float = Field(
         2.0,
         gt=0,
         le=30,
-        description="HTTP timeout for update-check requests",
+        description="Tempo limite das solicitações HTTP para verificar atualizações",
     )
     release_source_url: str = Field(
         "https://api.github.com/repos/levyvix/ani-tupi/releases/latest",
-        description="Canonical endpoint used to fetch latest release version",
+        description="Endereço oficial usado para consultar a versão mais recente",
+        json_schema_extra={"editable": False},
     )
     update_command: str = Field(
         "curl -sSL https://raw.githubusercontent.com/levyvix/ani-tupi/master/install.sh | bash",
-        description="Command shown to users when an update is available",
+        description="Comando exibido quando houver uma atualização disponível",
+        json_schema_extra={"editable": False},
     )
 
 
-class AppSettings(BaseSettings):
-    """Root application settings with environment variable support.
+class RuntimeSettings(BaseModel):
+    """Runtime diagnostics and player options, persisted in settings.json."""
 
-    Environment variables use the prefix ANI_TUPI__ with nested delimiters:
-    - ANI_TUPI__ANILIST__CLIENT_ID=12345
-    - ANI_TUPI__CACHE__DURATION_HOURS=12
-    - ANI_TUPI__SEARCH__PROGRESSIVE_SEARCH_MIN_WORDS=2
-
-    Can also be configured via .env file in project root.
-    """
-
-    model_config = SettingsConfigDict(
-        env_nested_delimiter="__",  # ANI_TUPI__ANILIST__CLIENT_ID
-        env_prefix="ANI_TUPI__",
-        case_sensitive=False,
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",  # Ignore unknown env vars
+    debug_incremental_search: bool = Field(
+        False, description="Registrar detalhes das buscas progressivas de anime"
+    )
+    debug_mpv: bool = Field(False, description="Registrar detalhes da reprodução no MPV")
+    disable_ipc: bool = Field(False, description="Desativar a integração IPC com o MPV")
+    mpv_log_file: str | None = Field(
+        None,
+        description="Caminho personalizado do arquivo de registros do MPV (vazio = usar o padrão)",
     )
 
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        _settings_cls,
-        init_settings,
-        env_settings,
-        dotenv_settings,
-        file_secret_settings,
-    ):
-        """Apply source precedence: init > env/.env > persisted overrides > defaults."""
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            load_user_settings_overrides,
-            file_secret_settings,
-        )
+
+class AppSettings(BaseModel):
+    """Root application settings; user overrides are stored in settings.json."""
 
     anilist: AniListSettings = AniListSettings()  # type: ignore[call-arg]
     cache: CacheSettings = CacheSettings()  # type: ignore[call-arg]
@@ -568,53 +539,25 @@ class AppSettings(BaseSettings):
     airing: AiringSettings = AiringSettings()  # type: ignore[call-arg]
     airing_downloads: AiringDownloadsSettings = AiringDownloadsSettings()  # type: ignore[call-arg]
     updates: UpdateCheckSettings = UpdateCheckSettings()  # type: ignore[call-arg]
-
-    # Legacy single-underscore debug/runtime flags.
-    # Kept as top-level fields with explicit aliases to preserve the exact
-    # historical env var names. Stored as raw strings so the "== '1'" truthiness
-    # is replicated precisely (only the literal "1" enables the flag).
-    debug_incremental_search_raw: str | None = Field(
-        None,
-        validation_alias=AliasChoices("ANI_TUPI_DEBUG_INCREMENTAL_SEARCH"),
-        description='Raw value of ANI_TUPI_DEBUG_INCREMENTAL_SEARCH (enabled when "1")',
-    )
-    debug_mpv_raw: str | None = Field(
-        None,
-        validation_alias=AliasChoices("ANI_TUPI_DEBUG_MPV"),
-        description='Raw value of ANI_TUPI_DEBUG_MPV (enabled when "1")',
-    )
-    disable_ipc_raw: str | None = Field(
-        None,
-        validation_alias=AliasChoices("ANI_TUPI_DISABLE_IPC"),
-        description='Raw value of ANI_TUPI_DISABLE_IPC (enabled when "1")',
-    )
-    mpv_log_file_raw: str | None = Field(
-        None,
-        validation_alias=AliasChoices("ANI_TUPI_MPV_LOG_FILE"),
-        description="Raw value of ANI_TUPI_MPV_LOG_FILE (explicit MPV log file path)",
-    )
+    runtime: RuntimeSettings = RuntimeSettings()
 
     @property
     def debug_incremental_search(self) -> bool:
-        """True when ANI_TUPI_DEBUG_INCREMENTAL_SEARCH is exactly '1'."""
-        return self.debug_incremental_search_raw == "1"
+        return self.runtime.debug_incremental_search
 
     @property
     def debug_mpv(self) -> bool:
-        """True when ANI_TUPI_DEBUG_MPV is exactly '1'."""
-        return self.debug_mpv_raw == "1"
+        return self.runtime.debug_mpv
 
     @property
     def disable_ipc(self) -> bool:
-        """True when ANI_TUPI_DISABLE_IPC is exactly '1'."""
-        return self.disable_ipc_raw == "1"
+        return self.runtime.disable_ipc
 
     @property
     def mpv_log_file(self) -> str | None:
-        """Configured MPV log file path, or None if unset/blank."""
-        stripped = (self.mpv_log_file_raw or "").strip()
-        return stripped or None
+        value = self.runtime.mpv_log_file
+        return value.strip() or None if value else None
 
 
 # Singleton instance - import and use throughout the app
-settings = AppSettings()
+settings = AppSettings.model_validate(load_user_settings_overrides())
