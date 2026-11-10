@@ -22,6 +22,12 @@
 - Design for the most common use case first
 - Keep component coupling loose through well-defined interfaces
 
+### Feature Design
+
+- Build code cleanly and modularly, with proper architecture and separation of concerns.
+- Never bolt on a feature without considering how it fits the existing design.
+- If a feature cannot be added naturally and cleanly, and a refactor is the better approach, stop before implementing it and explain the recommended refactor.
+
 ---
 
 ## Core Values
