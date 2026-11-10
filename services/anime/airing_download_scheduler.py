@@ -56,12 +56,7 @@ class AiringDownloadSettings(BaseModel):
 
     @classmethod
     def from_application(cls, persisted: dict[str, Any] | None = None) -> "AiringDownloadSettings":
-        """Read the new settings model, environment overrides, and persisted values.
-
-        Environment variables intentionally win over persisted values, matching
-        the application's settings precedence.  Secret-looking environment
-        values are never copied into scheduler state or launcher files.
-        """
+        """Read application defaults and persisted monitor settings."""
         values: dict[str, Any] = {}
         app_value = getattr(settings, "airing_downloads", None)
         if app_value is not None:
@@ -70,9 +65,6 @@ class AiringDownloadSettings(BaseModel):
                     values[name] = getattr(app_value, name)
         values.update(persisted or {})
 
-        env_name = "ANI_TUPI__AIRING_DOWNLOADS__POLL_INTERVAL_MINUTES"
-        if os.environ.get(env_name):
-            values["poll_interval_minutes"] = int(os.environ[env_name])
         return cls.model_validate(values)
 
 

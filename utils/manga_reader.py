@@ -107,7 +107,7 @@ def find_pdf_reader() -> str | None:
     """Find available PDF reader on system.
 
     Follows priority order:
-    1. User configuration (ANI_TUPI__MANGA__PDF_READER env var)
+    1. User configuration (ani-tupi config → MangaSettings → pdf_reader)
     2. Zathura (lightweight, keyboard-focused, perfect for manga)
     3. Evince (GNOME default, widely available)
     4. Okular (KDE default, feature-rich)
@@ -151,7 +151,7 @@ def open_pdf_reader(pdf_path: Path) -> subprocess.Popen | None:
         message = (
             "⚠️  Nenhum leitor de PDF encontrado.\n"
             "   Instale um destes: zathura, evince, okular, ou mupdf\n"
-            "   Ou configure manualmente: export ANI_TUPI__MANGA__PDF_READER=seu_leitor"
+            "   Configure o leitor preferido em ani-tupi config → MangaSettings → pdf_reader"
         )
         logger.info(message)
         logger.warning(f"PDF reader not found: {message}")

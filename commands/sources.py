@@ -36,7 +36,7 @@ def plugin_management_menu() -> None:
 
     menu_navigate(
         options,
-        msg="Fontes configuradas via ANI_TUPI__PLUGINS__DISABLED_PLUGINS / PRIORITY_ORDER",
+        msg="Fontes configuradas em ani-tupi config",
     )
 
 
