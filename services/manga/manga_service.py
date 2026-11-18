@@ -83,18 +83,44 @@ class MangaHistory:
 
     @classmethod
     def load(cls) -> dict[str, MangaHistoryEntry]:
-        """Load history from file."""
-        cls._ensure_dir()
+        """Load history from file.
 
+        Returns:
+            Dictionary mapping manga titles to history entries
+        """
+        cls._ensure_dir()
+        try:
+            data = cls._load_raw()
+            return {title: MangaHistoryEntry(**entry) for title, entry in data.items()}
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return {}
+
+    @classmethod
+    def _load_raw(cls) -> dict:
+        cls._ensure_dir()
         if not cls._history_file.exists():
             return {}
 
-        try:
-            with cls._history_file.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-                return {title: MangaHistoryEntry(**entry) for title, entry in data.items()}
-        except (json.JSONDecodeError, ValueError):
-            return {}
+        with cls._history_file.open("r", encoding="utf-8") as history_file:
+            data = json.load(history_file)
+        return data if isinstance(data, dict) else {}
+
+    @classmethod
+    def get_recent(cls, limit: int = 10) -> list[tuple[str, str]]:
+        """Return recent manga and display-ready chapter labels."""
+        if limit <= 0:
+            return []
+
+        recent = []
+        for title, entry in list(cls._load_raw().items())[:limit]:
+            if isinstance(entry, dict) and "last_chapter" in entry:
+                chapter = entry["last_chapter"]
+            elif isinstance(entry, list) and len(entry) > 1:
+                chapter = entry[1] + 1
+            else:
+                chapter = "Desconhecido"
+            recent.append((title, str(chapter)))
+        return recent
 
     @classmethod
     def save(cls, history: dict[str, MangaHistoryEntry]) -> None:

@@ -54,30 +54,22 @@ def _handle_planning_list(service: UnifiedMangaService) -> None:
 
 def _handle_recent_history(service: UnifiedMangaService) -> None:
     """Handle recent manga reading history using the MangaHistory service."""
-    history = MangaHistory.load()
-    if not history:
-        show_info("Nenhum histórico recente", title="Histórico")
+    recent_manga = MangaHistory.get_recent()
+    if not recent_manga:
+        show_info("Nenhum hist\u00f3rico recente", title="Hist\u00f3rico")
         pause()
         return
 
-    recent_manga = list(history.items())[:10]
-
-    options = []
-    for i, (title, entry) in enumerate(recent_manga, 1):
-        try:
-            chapter = int(float(entry.last_chapter)) + 1
-        except (TypeError, ValueError) as e:
-            logger.debug(f"Parse error capítulo: {e}")
-            chapter = "Desconhecido"
-        options.append(f"{i:2d}. {title} - Cap. {chapter}")
-
+    options = [
+        f"{index:2d}. {title} - Cap. {chapter}"
+        for index, (title, chapter) in enumerate(recent_manga, 1)
+    ]
     selection = menu_navigate(options, "Recent - Manga")
-    if selection and selection != "← Voltar":
+    if selection and selection != "\u2190 Voltar":
         try:
-            idx = int(selection.split(".")[0]) - 1
-            if 0 <= idx < len(recent_manga):
-                title, _ = recent_manga[idx]
-                start_manga_search(service, title)
+            index = int(selection.split(".")[0]) - 1
+            if 0 <= index < len(recent_manga):
+                start_manga_search(service, recent_manga[index][0])
         except (ValueError, IndexError):
             pass
 
