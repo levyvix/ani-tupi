@@ -73,6 +73,7 @@ def _handle_recent_history(service: UnifiedMangaService) -> None:
         except (ValueError, IndexError):
             pass
 
+
 def _handle_trending(service: UnifiedMangaService) -> None:
     """Handle trending manga from AniList."""
     with loading("Carregando trending manga..."):
