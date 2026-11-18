@@ -6,10 +6,9 @@ import os
 import shutil
 import subprocess
 import tempfile
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from models.config import get_data_path, get_user_config_path, settings
 
@@ -64,7 +63,6 @@ class AiringDownloadSystemd:
         project_root: Path | None = None,
         executable: str | None = None,
         uv_executable: str | None = None,
-        environment: dict[str, str] | None = None,
         user_unit_dir: Path | None = None,
     ) -> None:
         self.state_dir = (state_dir or get_data_path() / "airing-downloads").absolute()
@@ -74,7 +72,6 @@ class AiringDownloadSystemd:
         self.project_root = project_root
         self.executable = executable
         self.uv_executable = uv_executable
-        self.environment = environment if environment is not None else dict(os.environ)
         self.user_unit_dir = (
             user_unit_dir or get_user_config_path().parent / "systemd" / "user"
         ).absolute()
@@ -110,7 +107,6 @@ class AiringDownloadSystemd:
             project_root=self.project_root,
             executable=self.executable,
             uv_executable=self.uv_executable,
-            environment=self.environment,
             state_path=self.state_path,
         )
         try:

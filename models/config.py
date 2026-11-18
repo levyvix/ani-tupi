@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 def get_data_path() -> Path:
@@ -14,18 +14,15 @@ def get_data_path() -> Path:
         Path: user-local application data directory for the current platform
     """
     if os.name == "nt":
-        return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "ani-tupi"
-    return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "ani-tupi"
+        return Path.home() / "AppData" / "Local" / "ani-tupi"
+    return Path.home() / ".local" / "state" / "ani-tupi"
 
 
 def get_user_config_path() -> Path:
     """Get OS-specific user configuration directory for ani-tupi."""
     if os.name == "nt":
-        appdata = os.environ.get("APPDATA")
-        if appdata:
-            return Path(appdata) / "ani-tupi"
         return Path.home() / "AppData" / "Roaming" / "ani-tupi"
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "ani-tupi"
+    return Path.home() / ".config" / "ani-tupi"
 
 
 def get_user_settings_file() -> Path:
@@ -543,41 +540,6 @@ class AppSettings(BaseModel):
     airing_downloads: AiringDownloadsSettings = AiringDownloadsSettings()  # type: ignore[call-arg]
     updates: UpdateCheckSettings = UpdateCheckSettings()  # type: ignore[call-arg]
     runtime: RuntimeSettings = RuntimeSettings()
-
-    @model_validator(mode="before")
-    @classmethod
-    def apply_environment_overrides(cls, values):
-        """Keep the previous environment-variable configuration contract."""
-        values = dict(values or {})
-        search = dict(values.get("search") or {})
-        airing_downloads = dict(values.get("airing_downloads") or {})
-        runtime = dict(values.get("runtime") or {})
-
-        nested_overrides = {
-            "ANI_TUPI__SEARCH__INCREMENTAL_MAX_RESULTS": (search, "incremental_max_results"),
-            "ANI_TUPI__AIRING_DOWNLOADS__POLL_INTERVAL_MINUTES": (
-                airing_downloads,
-                "poll_interval_minutes",
-            ),
-        }
-        for env_name, (section, key) in nested_overrides.items():
-            if env_name in os.environ:
-                section[key] = os.environ[env_name]
-        values["search"] = search
-        values["airing_downloads"] = airing_downloads
-
-        for env_name, key in (
-            ("ANI_TUPI_DEBUG_INCREMENTAL_SEARCH", "debug_incremental_search"),
-            ("ANI_TUPI_DEBUG_MPV", "debug_mpv"),
-            ("ANI_TUPI_DISABLE_IPC", "disable_ipc"),
-        ):
-            if env_name in os.environ:
-                runtime[key] = os.environ[env_name] == "1"
-        if "ANI_TUPI_MPV_LOG_FILE" in os.environ:
-            value = os.environ["ANI_TUPI_MPV_LOG_FILE"].strip()
-            runtime["mpv_log_file"] = value or None
-        values["runtime"] = runtime
-        return values
 
     @property
     def debug_incremental_search(self) -> bool:

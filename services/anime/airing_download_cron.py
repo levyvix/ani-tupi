@@ -8,10 +8,9 @@ import shlex
 import shutil
 import subprocess
 import tempfile
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from models.config import get_data_path, get_user_config_path, settings
 
@@ -91,14 +90,12 @@ class AiringDownloadLauncher:
         project_root: Path | None = None,
         executable: str | None = None,
         uv_executable: str | None = None,
-        environment: dict[str, str] | None = None,
         state_path: Path | None = None,
     ) -> None:
         self.path = path.expanduser().absolute()
         self.project_root = (project_root or _project_root()).absolute()
         self.executable = executable
         self.uv_executable = uv_executable
-        self.environment = environment if environment is not None else dict(os.environ)
         self.state_path = (state_path or self.path.parent / "airing_download_state.json").absolute()
 
     def command(self) -> list[str]:
@@ -126,38 +123,11 @@ class AiringDownloadLauncher:
         os.chmod(self.path.parent, 0o700)
         command = " ".join(shlex.quote(part) for part in self.command())
         lines = ["#!/bin/sh", "umask 077", "set -eu"]
-        for key, value in self._xdg_environment().items():
-            lines.append(f"export {key}={shlex.quote(value)}")
-        for key, value in sorted(self._safe_overrides().items()):
-            lines.append(f"export {key}={shlex.quote(value)}")
         lines.append(f"exec {command}")
         content = "\n".join(lines) + "\n"
         self.path.write_text(content, encoding="utf-8")
         os.chmod(self.path, 0o700)
         return content
-
-    def _xdg_environment(self) -> dict[str, str]:
-        config_path = get_user_config_path().absolute()
-        state_root = get_data_path().parent.absolute()
-        data_root = Path(
-            self.environment.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
-        ).absolute()
-        return {
-            "XDG_CONFIG_HOME": str(config_path.parent),
-            "XDG_STATE_HOME": str(state_root),
-            "XDG_DATA_HOME": str(data_root),
-        }
-
-    def _safe_overrides(self) -> dict[str, str]:
-        allowed = {
-            "ANI_TUPI__AIRING_DOWNLOADS__POLL_INTERVAL_MINUTES",
-            "ANI_TUPI__SEARCH__PREFERRED_AUDIO",
-        }
-        return {
-            key: value
-            for key, value in self.environment.items()
-            if key in allowed and isinstance(value, str)
-        }
 
 
 class AiringDownloadCron:
@@ -173,7 +143,6 @@ class AiringDownloadCron:
         project_root: Path | None = None,
         executable: str | None = None,
         uv_executable: str | None = None,
-        environment: dict[str, str] | None = None,
     ) -> None:
         self.state_dir = (state_dir or get_data_path() / "airing-downloads").absolute()
         self.config_store = config_store or AiringDownloadConfigStore()
@@ -182,7 +151,6 @@ class AiringDownloadCron:
         self.project_root = project_root
         self.executable = executable
         self.uv_executable = uv_executable
-        self.environment = environment if environment is not None else dict(os.environ)
         self.launcher_path = self.state_dir / "airing-download-launcher"
         self.state_path = self.state_dir / "airing_download_state.json"
 
@@ -229,7 +197,6 @@ class AiringDownloadCron:
             project_root=self.project_root,
             executable=self.executable,
             uv_executable=self.uv_executable,
-            environment=self.environment,
             state_path=self.state_path,
         )
         launcher.render()

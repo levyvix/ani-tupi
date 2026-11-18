@@ -11,11 +11,10 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -56,7 +55,7 @@ class AiringDownloadSettings(BaseModel):
         return value
 
     @classmethod
-    def from_application(cls, persisted: dict[str, Any] | None = None) -> AiringDownloadSettings:
+    def from_application(cls, persisted: dict[str, Any] | None = None) -> "AiringDownloadSettings":
         """Read application defaults and persisted monitor settings."""
         values: dict[str, Any] = {}
         app_value = getattr(settings, "airing_downloads", None)
@@ -65,10 +64,6 @@ class AiringDownloadSettings(BaseModel):
                 if hasattr(app_value, name):
                     values[name] = getattr(app_value, name)
         values.update(persisted or {})
-
-        env_name = "ANI_TUPI__AIRING_DOWNLOADS__POLL_INTERVAL_MINUTES"
-        if os.environ.get(env_name):
-            values["poll_interval_minutes"] = int(os.environ[env_name])
 
         return cls.model_validate(values)
 
