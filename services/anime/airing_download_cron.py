@@ -8,9 +8,10 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from models.config import get_data_path, get_user_config_path, settings
 

@@ -7,9 +7,9 @@ Strategy: NO mocking of internal services/storage. Mock ONLY externals:
 File I/O uses real temp directories via tmp_path/monkeypatch.
 """
 
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-import threading
 
 import pytest
 
@@ -19,7 +19,6 @@ from models.download import (
     DownloadedEpisode,
 )
 from utils.range_parser import RangeParseError
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -32,17 +31,18 @@ def _make_service(tmp_path: Path, monkeypatch, max_parallel: int = 1) -> object:
     dl_dir.mkdir(parents=True, exist_ok=True)
     db_path = tmp_path / "db" / "anime_downloads.json"
 
-    monkeypatch.setenv("ANI_TUPI__ANIME_DOWNLOAD__DOWNLOAD_DIRECTORY", str(dl_dir))
-    monkeypatch.setenv("ANI_TUPI__ANIME_DOWNLOAD__MAX_PARALLEL_DOWNLOADS", str(max_parallel))
-    monkeypatch.setenv("ANI_TUPI__ANIME_DOWNLOAD__SKIP_ALREADY_DOWNLOADED", "true")
-    monkeypatch.setenv("ANI_TUPI__ANIME_DOWNLOAD__VIDEO_FORMAT", "mkv")
-
-    # Reload settings so the new env vars take effect
-    from importlib import reload
     import models.config
     import services.anime.download_service as ds_mod
 
-    reload(models.config)
+    monkeypatch.setattr(models.config.settings.anime_download, "download_directory", dl_dir)
+    monkeypatch.setattr(
+        models.config.settings.anime_download, "max_parallel_downloads", max_parallel
+    )
+    monkeypatch.setattr(models.config.settings.anime_download, "skip_already_downloaded", True)
+    monkeypatch.setattr(models.config.settings.anime_download, "video_format", "mkv")
+
+    from importlib import reload
+
     reload(ds_mod)
 
     svc = ds_mod.AnimeDownloadService()
@@ -59,7 +59,7 @@ def _make_valid_video(path: Path) -> None:
 
 def _noop_url_getter(ep_num: int):
     """Fallback get_episode_url that returns None (nothing to download)."""
-    return None
+    return
 
 
 # ---------------------------------------------------------------------------
@@ -94,8 +94,8 @@ class TestDownloadTask:
 
 
 class TestValidateFile:
-    def test_nonexistent_file_invalid(self, tmp_path):
-        svc = _make_service(tmp_path, pytest.MonkeyPatch())
+    def test_nonexistent_file_invalid(self, tmp_path, monkeypatch):
+        svc = _make_service(tmp_path, monkeypatch)
         result = svc._validate_file(tmp_path / "missing.mkv")
         assert result is False
 

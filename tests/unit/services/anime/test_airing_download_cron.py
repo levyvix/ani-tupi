@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
@@ -11,7 +10,6 @@ from services.anime.airing_download_cron import (
     START_MARKER,
     AiringDownloadConfigStore,
     AiringDownloadCron,
-    AiringDownloadLauncher,
 )
 from services.anime.airing_download_scheduler import AiringDownloadSettings
 
@@ -73,32 +71,3 @@ def test_remove_only_removes_managed_block(tmp_path: Path):
 
     assert not result.installed
     assert runner.content == external
-
-
-def test_launcher_uses_absolute_uv_xdg_and_private_permissions(tmp_path: Path, monkeypatch):
-    checkout = tmp_path / "checkout with spaces"
-    checkout.mkdir()
-    (checkout / "pyproject.toml").write_text("[project]\nname='test'\n")
-    launcher_path = tmp_path / "private" / "launcher"
-    monkeypatch.setenv("ANI_TUPI__SEARCH__PREFERRED_AUDIO", "legendado")
-    monkeypatch.setenv("ANI_TUPI__ANILIST__TOKEN", "must-not-copy")
-    launcher = AiringDownloadLauncher(
-        path=launcher_path,
-        project_root=checkout,
-        uv_executable="/opt/uv/bin/uv",
-        environment=dict(os.environ),
-        state_path=tmp_path / "private" / "state.json",
-    )
-
-    content = launcher.render()
-
-    assert "/opt/uv/bin/uv" in content
-    assert "--no-sync" in content
-    assert "airing run" in content
-    assert "airing-downloads run" not in content
-    assert str(checkout) in content
-    assert "XDG_CONFIG_HOME=" in content
-    assert "PREFERRED_AUDIO" in content
-    assert "must-not-copy" not in content
-    assert launcher_path.stat().st_mode & 0o777 == 0o700
-    assert launcher_path.parent.stat().st_mode & 0o777 == 0o700

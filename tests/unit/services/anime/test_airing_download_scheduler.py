@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -39,12 +39,12 @@ class FakeClient:
         return self.entries
 
 
-def test_settings_default_and_allowed_intervals(monkeypatch):
-    monkeypatch.delenv("ANI_TUPI__AIRING_DOWNLOADS__POLL_INTERVAL_MINUTES", raising=False)
+def test_settings_default_and_allowed_intervals():
     assert AiringDownloadSettings().poll_interval_minutes == 30
-
-    monkeypatch.setenv("ANI_TUPI__AIRING_DOWNLOADS__POLL_INTERVAL_MINUTES", "60")
-    assert AiringDownloadSettings.from_application().poll_interval_minutes == 60
+    assert (
+        AiringDownloadSettings.from_application({"poll_interval_minutes": 60}).poll_interval_minutes
+        == 60
+    )
 
     with pytest.raises(ValueError):
         AiringDownloadSettings(poll_interval_minutes=7)

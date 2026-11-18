@@ -48,7 +48,6 @@ def _monitor(tmp_path: Path, runner: FakeSystemd) -> AiringDownloadSystemd:
         config_store=config,
         runner=runner,
         which=lambda name: "/usr/bin/systemctl" if name == "systemctl" else None,
-        environment={},
         project_root=tmp_path / "published",
         executable="/opt/ani-tupi/bin/ani-tupi",
         user_unit_dir=tmp_path / "user-units",
