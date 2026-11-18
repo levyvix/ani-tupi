@@ -108,7 +108,7 @@ def _select_from_dual_search_results(
 # === Fluxo de busca incremental ===
 
 
-# Sourced from user-tunable settings (ANI_TUPI__SEARCH__INCREMENTAL_MAX_RESULTS).
+# Sourced from user-tunable settings (ani-tupi config → SearchSettings).
 INCREMENTAL_SEARCH_MAX_RESULTS = settings.search.incremental_max_results
 
 

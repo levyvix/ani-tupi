@@ -201,9 +201,9 @@ ani-tupi update
 
 O monitor prepara episódios de animes que estão em `Watching` no AniList e
 continuam com status `RELEASING`. A primeira execução também tenta baixar o
-backlog acima do seu progresso atual. Os arquivos usam o mesmo destino da
-biblioteca local configurado em `ANI_TUPI__ANIME_DOWNLOAD__DOWNLOAD_DIRECTORY`
-(por padrão, `~/.local/share/ani-tupi/anime`).
+backlog acima do seu progresso atual. Os arquivos usam o destino configurado em
+`ani-tupi config` → `AnimeDownloadSettings` (por padrão,
+`~/.local/share/ani-tupi/anime`).
 
 ```bash
 # Escolher e salvar a fonte de cada anime em lançamento
@@ -267,15 +267,8 @@ No menu `ani-tupi config`:
 - você informa o novo valor e confirma salvamento
 - as alterações são persistidas no usuário em `~/.config/ani-tupi/settings.json`
 
-### Precedência de configuração
-
-O carregamento segue esta ordem:
-
-1. Variáveis de ambiente (`ANI_TUPI__...`)
-2. Configuração salva via `ani-tupi config`
-3. Valores padrão da aplicação
-
-Se uma chave tiver variável de ambiente ativa, o menu mostra aviso de precedência.
+As alterações ficam em `~/.config/ani-tupi/settings.json` e substituem os valores
+padrão da aplicação. Configure todas as opções pelo menu `ani-tupi config`.
 
 **💡 Dica para melhores resultados de busca:**
 Tente usar o nome do anime em japonês ou romaji para maior precisão. Por exemplo:
@@ -312,12 +305,7 @@ Tente usar o nome do anime em japonês ou romaji para maior precisão. Por exemp
 - Suporta range de download (`5`, `1-12`, `5-`, `-12`)
 - Paralelismo configurável para acelerar downloads
 
-**Configuração rápida:**
-```bash
-export ANI_TUPI__ANIME__DOWNLOAD_DIRECTORY="~/Videos/Anime"
-export ANI_TUPI__ANIME__MAX_PARALLEL_DOWNLOADS=4
-export ANI_TUPI__ANIME__VIDEO_FORMAT="mp4"
-```
+Configure o diretório, paralelismo e formato em `ani-tupi config` → `AnimeDownloadSettings`.
 
 ---
 
@@ -367,12 +355,8 @@ Leia mangá do MangaDex direto do terminal com integração AniList!
 
 **Leitores suportados:** Zathura (⭐ recomendado), Evince, Okular, MuPDF, macOS Preview, xdg-open
 
-**Configuração:**
-```bash
-export ANI_TUPI__MANGA__PDF_READER=zathura
-export ANI_TUPI__MANGA__OUTPUT_DIRECTORY=~/Mangas
-export ANI_TUPI__MANGA__CACHE_DURATION_HOURS=48
-```
+**Configuração:** use `ani-tupi config` → `MangaSettings` para escolher o leitor de PDF e
+o diretório de saída.
 
 ---
 

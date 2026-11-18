@@ -588,7 +588,9 @@ class IPCHandler:
                             logger.info(f"   ❌ {error_line.strip()[:100]}")
                     if "400" in stderr_output:
                         logger.info("\n   ℹ️  AnimesonlineCC: Token expirado (URLs temporárias)")
-                logger.info("   Tente ativar debug: ANI_TUPI_DEBUG_MPV=1 uv run ani-tupi")
+                logger.info(
+                    "   Ative o debug do MPV em ani-tupi config → RuntimeSettings → debug_mpv"
+                )
 
             if self._player.autoplay and exit_code == 0:
                 from services.core.history_service import save_history_from_event

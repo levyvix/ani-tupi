@@ -6,9 +6,10 @@ import os
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from models.config import get_data_path, get_user_config_path, settings
 
@@ -60,7 +61,6 @@ class AiringDownloadSystemd:
         config_store: AiringDownloadConfigStore | None = None,
         runner: Callable[..., subprocess.CompletedProcess] | None = None,
         which: Callable[[str], str | None] = shutil.which,
-        environment: dict[str, str] | None = None,
         project_root: Path | None = None,
         executable: str | None = None,
         uv_executable: str | None = None,
@@ -70,7 +70,6 @@ class AiringDownloadSystemd:
         self.config_store = config_store or AiringDownloadConfigStore()
         self.runner = runner or subprocess.run
         self.which = which
-        self.environment = environment if environment is not None else dict(os.environ)
         self.project_root = project_root
         self.executable = executable
         self.uv_executable = uv_executable
@@ -109,7 +108,6 @@ class AiringDownloadSystemd:
             project_root=self.project_root,
             executable=self.executable,
             uv_executable=self.uv_executable,
-            environment=self.environment,
             state_path=self.state_path,
         )
         try:

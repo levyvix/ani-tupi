@@ -26,19 +26,13 @@ def temp_dir():
 def test_settings(temp_dir, monkeypatch):
     """Provide real AppSettings configured for testing.
 
-    Uses environment variables with test-specific paths.
+    Injects test-specific paths into the persisted-settings model.
     """
-    # Use temporary directory for cache and storage
-    monkeypatch.setenv("ANI_TUPI__CACHE__DIRECTORY", str(temp_dir / "cache"))
-    monkeypatch.setenv("ANI_TUPI__ANIME__DOWNLOAD_DIRECTORY", str(temp_dir / "downloads"))
-    monkeypatch.setenv("ANI_TUPI__LOG_LEVEL", "debug")
+    from models.config import settings
 
-    # Return fresh settings instance
-    from importlib import reload
-    import models.config
-
-    reload(models.config)
-    return models.config.settings
+    monkeypatch.setattr(settings.cache, "cache_dir", temp_dir / "cache")
+    monkeypatch.setattr(settings.anime_download, "download_directory", temp_dir / "downloads")
+    return settings
 
 
 @pytest.fixture

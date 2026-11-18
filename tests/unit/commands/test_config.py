@@ -10,7 +10,13 @@ class _FakeService:
         self.saved = None
 
     def categories(self):
-        return [("cache", "CacheSettings")]
+        return [("cache", "Cache e desempenho")]
+
+    def fields_in_category(self, category_key: str):
+        return [("cache", "episodes_cache_enabled")]
+
+    def category_description(self, category_key: str):
+        return "Validade dos dados guardados e limites de desempenho."
 
     def fields_for_category(self, category_key: str):
         return ["episodes_cache_enabled"]
@@ -19,7 +25,7 @@ class _FakeService:
         return False
 
     def field_description(self, category_key: str, field_key: str):
-        return "Enable episodes cache"
+        return "Guardar listas de episódios em cache"
 
     def env_var_name(self, category_key: str, field_key: str):
         return "ANI_TUPI__CACHE__EPISODES_CACHE_ENABLED"
@@ -46,10 +52,11 @@ def test_config_save_flow(monkeypatch):
 
     choices = iter(
         [
-            "CacheSettings",  # top menu
-            "episodes_cache_enabled = False :: Enable episodes cache",  # category field
+            "Cache e desempenho",  # top menu
+            "Guardar listas de episódios em cache · atual: False",  # category field
             None,  # back from category
             config_module.SAVE_OPTION,  # save
+            config_module.CONFIRM_SAVE,  # confirm save
         ]
     )
 
@@ -86,8 +93,8 @@ def test_config_invalid_input_shows_error_and_keeps_running(monkeypatch):
 
     choices = iter(
         [
-            "CacheSettings",
-            "episodes_cache_enabled = False :: Enable episodes cache",
+            "Cache e desempenho",
+            "Guardar listas de episódios em cache · atual: False",
             None,
             config_module.DISCARD_OPTION,
         ]

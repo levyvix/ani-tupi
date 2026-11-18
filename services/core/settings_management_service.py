@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
@@ -20,6 +19,18 @@ from models.config import (
 class SettingsManagementService:
     """Manage runtime-editable settings with validation and persistence."""
 
+    _sections = (
+        ("account", "Conta e AniList", ("anilist", "offline_sync")),
+        ("search", "Busca de animes", ("search",)),
+        ("sources", "Fontes de anime", ("plugins",)),
+        ("anime_download", "Downloads de anime", ("anime_download", "airing_downloads")),
+        ("manga", "Leitura e downloads de mangá", ("manga",)),
+        ("cache", "Cache e desempenho", ("cache", "performance")),
+        ("airing", "Novos episódios", ("airing",)),
+        ("updates", "Atualizações", ("updates",)),
+        ("player", "Player e diagnóstico", ("runtime",)),
+    )
+
     def __init__(self) -> None:
         self._category_types = {
             name: field.annotation
@@ -28,12 +39,43 @@ class SettingsManagementService:
         }
 
     def categories(self) -> list[tuple[str, str]]:
-        """Return tuples of (settings_key, category_label)."""
-        return [(key, model.__name__) for key, model in self._category_types.items()]
+        """Return user-facing sections of related settings."""
+        return [(key, label) for key, label, _ in self._sections]
+
+    def fields_in_category(self, category_key: str) -> list[tuple[str, str]]:
+        """Return (settings group, field name) pairs for a user-facing section."""
+        groups = next(groups for key, _, groups in self._sections if key == category_key)
+        return [
+            (group, field_name)
+            for group in groups
+            for field_name in self.fields_for_category(group)
+        ]
+
+    def category_description(self, category_key: str) -> str:
+        """Return a short explanation for a settings section."""
+        descriptions = {
+            "account": "Preferências do AniList e sincronização quando estiver offline.",
+            "search": "Como os resultados de anime são encontrados e exibidos.",
+            "sources": "Ative fontes e defina a ordem de preferência.",
+            "anime_download": "Pastas, formato e comportamento dos downloads de anime.",
+            "manga": "Fontes, leitor de PDF e comportamento dos downloads de mangá.",
+            "cache": "Validade dos dados guardados e limites de desempenho.",
+            "airing": "Exibição de animes com episódios recentes.",
+            "updates": "Verificação de novas versões do ani-tupi.",
+            "player": "Opções do player e registros para diagnóstico.",
+        }
+        return descriptions[category_key]
 
     def fields_for_category(self, category_key: str) -> list[str]:
         model = self._category_types[category_key]
-        return list(model.model_fields.keys())
+        return [
+            field_name
+            for field_name, field in model.model_fields.items()
+            if not (
+                isinstance(field.json_schema_extra, dict)
+                and field.json_schema_extra.get("editable") is False
+            )
+        ]
 
     def field_description(self, category_key: str, field_key: str) -> str:
         model = self._category_types[category_key]
@@ -45,12 +87,6 @@ class SettingsManagementService:
     def get_effective_value(self, category_key: str, field_key: str) -> Any:
         category = getattr(settings, category_key)
         return getattr(category, field_key)
-
-    def env_var_name(self, category_key: str, field_key: str) -> str:
-        return f"ANI_TUPI__{category_key.upper()}__{field_key.upper()}"
-
-    def is_env_override_active(self, category_key: str, field_key: str) -> bool:
-        return self.env_var_name(category_key, field_key) in os.environ
 
     def parse_input_value(
         self,

@@ -38,7 +38,7 @@ def test_field_description_exposes_pydantic_field_docs():
 
     description = svc.field_description("cache", "search_cache_ttl_seconds")
 
-    assert "Time-to-live for search results cache" in description
+    assert "validade do cache de buscas" in description
 
 
 def test_priority_order_partial_reorder_keeps_unspecified_tail():
