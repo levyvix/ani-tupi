@@ -15,7 +15,12 @@ from models.config import settings
 from models.models import AnimeMetadataEntry
 from utils.logging import get_logger
 
-__all__ = ["AnimeMetadataProvider", "get_metadata_provider"]
+__all__ = [
+    "AnimeMetadataProvider",
+    "JikanMetadataProvider",
+    "TenraiMetadataProvider",
+    "get_metadata_provider",
+]
 
 logger = get_logger(__name__)
 
@@ -33,15 +38,15 @@ class AnimeMetadataProvider(Protocol):
         ...
 
 
-# === Implementação concreta: Jikan/MyAnimeList ===
+# === Implementação concreta: Tenrai ===
 
 
-class JikanMetadataProvider:
-    """``AnimeMetadataProvider`` backed by the Jikan (MyAnimeList) API."""
+class TenraiMetadataProvider:
+    """``AnimeMetadataProvider`` backed by Tenrai's public catalogue API."""
 
     def __init__(
         self,
-        base_url: str = "https://api.jikan.moe/v4",
+        base_url: str = "https://api.tenrai.org/v1",
         timeout: float | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
@@ -54,21 +59,26 @@ class JikanMetadataProvider:
         full_url = f"{url}?{urlencode(params)}"
 
         try:
-            response = http_get_with_retry(full_url, timeout=self.timeout)
+            response = http_get_with_retry(
+                full_url,
+                timeout=self.timeout,
+                max_retries=1,
+                backoff_base=0.25,
+            )
             data = response.json()
         except httpx.HTTPStatusError as e:
-            logger.warning(f"Jikan API error: {e.response.status_code} for '{query}'")
+            logger.warning(f"Tenrai API error: {e.response.status_code} for '{query}'")
             return []
         except httpx.TimeoutException:
-            logger.warning(f"Jikan API timeout for '{query}'")
+            logger.warning(f"Tenrai API timeout for '{query}'")
             return []
         except Exception as e:
-            logger.warning(f"Jikan API request failed for '{query}': {e}")
+            logger.warning(f"Tenrai API request failed for '{query}': {e}")
             return []
 
         raw_items = data.get("data")
         if raw_items is None:
-            logger.warning(f"Jikan API resposta inesperada. Keys: {list(data.keys())}")
+            logger.warning(f"Tenrai API resposta inesperada. Keys: {list(data.keys())}")
             return []
         results: list[AnimeMetadataEntry] = []
         for item in raw_items:
@@ -79,9 +89,14 @@ class JikanMetadataProvider:
         return results
 
 
-_provider: AnimeMetadataProvider = JikanMetadataProvider()
+_provider: AnimeMetadataProvider = TenraiMetadataProvider()
 
 
 def get_metadata_provider() -> AnimeMetadataProvider:
     """Return the configured anime metadata provider."""
     return _provider
+
+
+# Backward-compatible import for callers that used the former provider name.
+# The implementation now targets Tenrai; it never calls the retired Jikan API.
+JikanMetadataProvider = TenraiMetadataProvider

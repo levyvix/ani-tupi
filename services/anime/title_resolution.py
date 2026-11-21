@@ -20,6 +20,7 @@ __all__ = [
     "AniListTitleResolver",
     "AnimeTitleResolver",
     "MetadataProviderTitleResolver",
+    "TenraiTitleResolver",
     "TitleResolverProvider",
 ]
 
@@ -131,10 +132,10 @@ class AniListTitleResolver:
 
 
 @dataclass(frozen=True)
-class MetadataProviderTitleResolver:
-    """Resolve titles using the external anime metadata provider as fallback."""
+class TenraiTitleResolver:
+    """Resolve titles using Tenrai as a fallback provider."""
 
-    name: str = "jikan"
+    name: str = "tenrai"
 
     def resolve(self, query: str) -> AnimeTitleResolution | None:
         try:
@@ -186,6 +187,10 @@ class MetadataProviderTitleResolver:
         )
 
 
+# Backward-compatible name for callers using the former generic resolver.
+MetadataProviderTitleResolver = TenraiTitleResolver
+
+
 class AnimeTitleResolver:
     """Resolve anime titles with cache and provider fallback."""
 
@@ -194,7 +199,7 @@ class AnimeTitleResolver:
         providers: list[TitleResolverProvider] | None = None,
         cache=None,
     ) -> None:
-        self.providers = providers or [MetadataProviderTitleResolver()]
+        self.providers = providers or [AniListTitleResolver(), TenraiTitleResolver()]
         self.cache = cache or get_cache()
 
     def resolve(self, query: str) -> AnimeTitleResolution | None:
