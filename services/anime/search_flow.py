@@ -606,6 +606,7 @@ def _resolve_search_query(query: str) -> AnimeTitleResolution | None:
     if not settings.search.enable_title_resolution:
         return None
 
+    logger.info(f"🧭 Procurando um título oficial para '{query}'...")
     resolver = AnimeTitleResolver()
     resolution = resolver.resolve(query)
     if resolution and resolution.resolved_title.casefold() != query.strip().casefold():

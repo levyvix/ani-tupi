@@ -6,6 +6,7 @@ import subprocess
 
 from models.config import settings
 from services.core.update_check_service import UpdateCheckService
+from ui.components import loading
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -14,7 +15,8 @@ logger = get_logger(__name__)
 def run_startup_update_check() -> None:
     """Check for updates and render a startup notice when one is available."""
     try:
-        result = UpdateCheckService().check_for_updates()
+        with loading("Verificando atualizações..."):
+            result = UpdateCheckService().check_for_updates()
         if result.update_available and result.message:
             logger.info(result.message)
     except Exception as exc:

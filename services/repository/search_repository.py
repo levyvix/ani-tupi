@@ -5,7 +5,7 @@ import re
 import threading
 from collections import defaultdict
 from os import cpu_count
-from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 
 from models.config import settings
@@ -347,7 +347,7 @@ class SearchRepository:
         """Search anime with incremental results respecting configured priority order."""
         state = state or self._visible_state
         if verbose:
-            logger.info(f"⠼ Buscando '{query}'...")
+            logger.info(f"🔎 Buscando '{query}' em {len(self.sources)} fonte(s)...")
 
         n_cpu = cpu_count() or 10
         executor = ThreadPoolExecutor(max_workers=min(len(self.sources), n_cpu))
@@ -362,18 +362,32 @@ class SearchRepository:
                 executor.submit(self._search_source, plugin, query, deadline): name
                 for name, plugin in sources
             }
+            pending = set(future_to_source)
+            completed = 0
+            progress_milestones = sorted({1, max(2, len(sources) // 2), len(sources)})
 
-            done, not_done = wait(
-                future_to_source.keys(),
-                timeout=max(0.0, deadline - time.monotonic()),
-                return_when=ALL_COMPLETED,
-            )
+            while pending:
+                done, pending = wait(
+                    pending,
+                    timeout=max(0.0, deadline - time.monotonic()),
+                    return_when=FIRST_COMPLETED,
+                )
+                if not done:
+                    break
 
+                completed += len(done)
+                if verbose:
+                    while progress_milestones and completed >= progress_milestones[0]:
+                        milestone = progress_milestones.pop(0)
+                        logger.info(f"   ⏳ {milestone}/{len(sources)} fontes responderam...")
+
+            not_done = pending
+            done = set(future_to_source) - not_done
             if not_done:
                 has_pending_sources = True
                 timed_out_sources.extend(future_to_source[future] for future in not_done)
                 if verbose:
-                    logger.info(f"   Usando resultados parciais de {len(done)} fonte(s)")
+                    logger.info(f"   ⏱️  Prazo atingido; usando respostas de {len(done)} fonte(s)")
                 for future in not_done:
                     future.cancel()
 
@@ -387,25 +401,18 @@ class SearchRepository:
                     timed_out_sources.append(source)
                     continue
                 if outcome.error is not None:
-                    if verbose:
-                        logger.info(f"❌ Erro em {source}: {outcome.error}")
                     continue
 
                 for anime in outcome.results:
                     self._add_anime_to_state(
                         state, anime.title, anime.url, anime.source, anime.params
                     )
-                if verbose and len(self.sources) > 1:
-                    logger.info(f"✓ {source} ({len(state.anime_to_urls)} resultados)", end="\r")
 
             timed_out_sources = list(dict.fromkeys(timed_out_sources))
             if timed_out_sources:
                 logger.warning(
                     "Timeout ao buscar fontes de anime: {}", ", ".join(timed_out_sources)
                 )
-
-            if verbose and len(self.sources) > 1:
-                logger.info(" " * 70 + "\r", end="")
 
             if verbose:
                 count = len(state.anime_to_urls)
@@ -560,7 +567,7 @@ class SearchRepository:
             last_used_words = num_words
             attempt_state = _SearchState()
             timed_out_sources = self._search_with_incremental_results(
-                partial_query, verbose=False, state=attempt_state
+                partial_query, verbose=verbose, state=attempt_state
             )
             state = attempt_state
 

@@ -187,7 +187,9 @@ def cli() -> None:
     run_startup_update_check()
 
     # Load plugins once at startup
+    logger.info("🔌 Carregando fontes de anime...")
     loader.load_plugins(rep.register)
+    logger.info(f"✅ {len(rep.get_active_sources())} fonte(s) carregada(s).")
 
     # Retry offline AniList syncs on startup
     from models.config import settings
@@ -195,6 +197,7 @@ def cli() -> None:
     if settings.offline_sync.enable_auto_retry:
         from services.anime.offline_sync_service import retry_offline_syncs
 
+        logger.info("📡 Verificando sincronizações pendentes com o AniList...")
         result = retry_offline_syncs()
         if result["successful"] > 0 or result["failed"] > 0:
             logger.info(
