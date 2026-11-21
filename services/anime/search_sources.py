@@ -33,6 +33,7 @@ def perform_scraper_search(
     anilist_reference_title: str | None = None
     anilist_results = None
     try:
+        log.info("🔍 Conferindo correspondência e progresso no AniList...")
         anilist_results = discover_anilist(used_query)
         if anilist_results:
             ranking_query = anilist_results[0].title

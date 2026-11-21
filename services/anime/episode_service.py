@@ -465,7 +465,8 @@ def load_episode_list(
             for src, url in saved_urls.items():
                 rep.add_anime(selected_anime, url, src)
 
-    with ui_bridge.loading("Carregando episódios..."):
+    logger.info(f"📺 Carregando episódios de '{selected_anime}'...")
+    with ui_bridge.loading("Consultando fontes e carregando episódios..."):
         if search_results is None:
             rep.search_episodes(selected_anime, source_filter=source_filter)
         else:
