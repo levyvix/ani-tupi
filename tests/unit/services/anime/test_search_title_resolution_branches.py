@@ -617,7 +617,7 @@ class TestMetadataProviderTitleResolver:
             result = MetadataProviderTitleResolver().resolve("naruto")
         assert result is not None
         assert result.resolved_title == "Naruto"
-        assert result.provider == "jikan"
+        assert result.provider == "tenrai"
 
     def test_multiple_results_picks_highest_confidence(self):
         """When multiple results are returned, the one with best alias match wins."""
