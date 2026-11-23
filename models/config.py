@@ -213,7 +213,7 @@ class PluginSettings(BaseModel):
     """Plugin/scraper management settings."""
 
     disabled_plugins: list[str] = Field(
-        default_factory=list,
+        default_factory=lambda: ["goyabu"],
         description="Lista de fontes desativadas (por exemplo: ['sushianimes'])",
     )
     priority_order: list[str] = Field(
