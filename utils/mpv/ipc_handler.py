@@ -237,10 +237,11 @@ class IPCHandler:
         # Purely reactive: the loop never blocks on a get_property round-trip.
         self.send_mpv_command(sock, "observe_property", [1, "time-pos"])
         last_time_pos: float | None = None
+        playback_started = False
 
         try:
             buffer = ""
-            while mpv_process.poll() is None:
+            while True:
                 try:
                     chunk = sock.recv(1024).decode("utf-8", errors="ignore")
                     if not chunk:
@@ -259,6 +260,7 @@ class IPCHandler:
                                     pos = msg.get("data")
                                     if isinstance(pos, (int, float)):
                                         last_time_pos = float(pos)
+                                        playback_started = True
                                 continue
                             if msg.get("event") == "client-message":
                                 args = msg.get("args", [])
@@ -520,6 +522,8 @@ class IPCHandler:
                         except json.JSONDecodeError:
                             continue
                 except TimeoutError:
+                    if mpv_process.poll() is not None:
+                        break
                     continue
                 except Exception as e:
                     logger.info(f"IPC error: {e}")
@@ -548,6 +552,12 @@ class IPCHandler:
             if exit_code == 0 and self._launcher._log_manager.has_mpv_load_error(
                 stderr_output, log_output
             ):
+                exit_code = 2
+            elif exit_code == 0 and not playback_started:
+                # MPV can exit successfully when a source closes before it
+                # ever starts playback. Treat that as a failed source so the
+                # caller can continue its normal fallback flow.
+                logger.info("⚠️  MPV encerrou sem iniciar a reprodução da mídia")
                 exit_code = 2
 
             error_hint = self._launcher._log_manager.classify_mpv_error(stderr_output, log_output)
